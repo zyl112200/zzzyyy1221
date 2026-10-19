@@ -1,0 +1,16 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Comic Sans MS", "Chalkboard SE", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+html, body, #app {
+  min-height: 100vh;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 45%, #01579b 100%);
+}

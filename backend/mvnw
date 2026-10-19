@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# ============================================================
+#  Lightweight Maven launcher for the spongebob backend.
+#  Prefers "mvn" on PATH, then falls back to common install
+#  locations (including the WorkBuddy isolated Maven).
+#  Usage:  ./mvnw <any mvn args>
+# ============================================================
+set -e
+
+MVN_BIN=""
+
+if command -v mvn >/dev/null 2>&1; then
+  MVN_BIN="mvn"
+elif [ -x "$HOME/.workbuddy/binaries/maven/apache-maven-3.9.9/bin/mvn" ]; then
+  MVN_BIN="$HOME/.workbuddy/binaries/maven/apache-maven-3.9.9/bin/mvn"
+elif [ -x "/opt/maven/bin/mvn" ]; then
+  MVN_BIN="/opt/maven/bin/mvn"
+elif [ -x "/usr/share/maven/bin/mvn" ]; then
+  MVN_BIN="/usr/share/maven/bin/mvn"
+fi
+
+if [ -z "$MVN_BIN" ]; then
+  echo "[ERROR] Maven not found. Install Maven 3.6+ and add it to PATH,"
+  echo "        or place it at the WorkBuddy fallback path:"
+  echo "        \$HOME/.workbuddy/binaries/maven/apache-maven-3.9.9"
+  exit 1
+fi
+
+exec "$MVN_BIN" "$@"

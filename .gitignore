@@ -1,0 +1,19 @@
+# 前端
+node_modules/
+dist/
+
+# 后端
+backend/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地调试脚本
+e2e_test.py
+*.log
