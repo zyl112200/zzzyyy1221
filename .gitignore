@@ -17,3 +17,7 @@ Thumbs.db
 # 本地调试脚本
 e2e_test.py
 *.log
+
+# 网页上传的旧压缩包
+*.zip
+*.rar
