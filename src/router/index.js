@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import HomeView from '../views/HomeView.vue'
@@ -7,7 +7,8 @@ import InventoryView from '../views/InventoryView.vue'
 import { getSession } from '../store/session'
 
 const router = createRouter({
-  history: createWebHistory(),
+  // 使用 hash 路由，保证直接双击 index.html（file:// 协议）时也能正常切换页面
+  history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
