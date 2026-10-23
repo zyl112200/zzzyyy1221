@@ -22,6 +22,7 @@ CREATE TABLE `user` (
   `shells`      INT          NOT NULL DEFAULT 50     COMMENT '贝壳余额（游戏货币）',
   `strength`    INT          NOT NULL DEFAULT 10     COMMENT '力量（影响收线与可抗衡鱼重）',
   `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（升级力量的材料）',
+  `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '力量境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
@@ -64,6 +65,52 @@ CREATE TABLE `user_item` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci
   COMMENT ='用户背包';
+
+-- 后台管理员账号
+DROP TABLE IF EXISTS `admin_account`;
+CREATE TABLE `admin_account` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+  `username`    VARCHAR(50)  NOT NULL                COMMENT '管理员用户名',
+  `password`    VARCHAR(100) NOT NULL                COMMENT '密码（BCrypt 加密）',
+  `role`        VARCHAR(20)  NOT NULL DEFAULT 'ADMIN' COMMENT '角色',
+  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_admin_username` (`username`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT ='后台管理员账号';
+
+-- AI 对话预设
+DROP TABLE IF EXISTS `ai_dialog`;
+CREATE TABLE `ai_dialog` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+  `scene`       VARCHAR(100) NOT NULL                COMMENT '触发词 / 场景名',
+  `reply`       VARCHAR(1000) NOT NULL               COMMENT '回复内容',
+  `enabled`     TINYINT      NOT NULL DEFAULT 1      COMMENT '是否启用（1=启用）',
+  `sort_order`  INT          NOT NULL DEFAULT 0      COMMENT '排序',
+  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT ='AI 对话预设';
+
+-- 钓鱼爆率配置
+DROP TABLE IF EXISTS `catch_rate`;
+CREATE TABLE `catch_rate` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+  `tier_code`   VARCHAR(20)  NOT NULL                COMMENT '品级编码',
+  `tier_name`   VARCHAR(20)  NOT NULL                COMMENT '品级中文名',
+  `base_weight` INT          NOT NULL DEFAULT 0      COMMENT '相对权重（爆率权重）',
+  `enabled`     TINYINT      NOT NULL DEFAULT 1      COMMENT '是否启用',
+  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tier_code` (`tier_code`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT ='钓鱼爆率配置';
 
 -- 示例数据（密码均为 BCrypt 加密后的 123456）
 -- spongebob 为体验号：20 万贝壳 + 200 金石，可直接体验巨物玩法；patrick 为纯新号

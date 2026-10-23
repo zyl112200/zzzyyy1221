@@ -47,6 +47,9 @@ public class CastResult {
     /** 力量值 */
     private Integer strength;
 
+    /** 当前力量境界对钓鱼收益的加成百分比（1 重天为 0%），用于搏鱼时展示 */
+    private Integer realmBonusPct;
+
     /** 收线难度系数（约 0.12 ~ 5，越大越吃力） */
     private Double difficulty;
 

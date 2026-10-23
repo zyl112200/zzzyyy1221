@@ -5,7 +5,9 @@ import { clearSession, getSession } from '../store/session'
 const props = defineProps({
   shells: { type: Number, default: 0 },
   goldStones: { type: Number, default: 0 },
-  strength: { type: Number, default: 10 }
+  strength: { type: Number, default: 10 },
+  powerRealm: { type: Number, default: 1 },
+  realmTitle: { type: String, default: '比奇堡萌新' }
 })
 
 const router = useRouter()
@@ -25,11 +27,13 @@ function logout() {
       <router-link to="/home">🎣 码头</router-link>
       <router-link to="/shop">🛒 商店</router-link>
       <router-link to="/inventory">🎒 背包</router-link>
+      <router-link to="/admin" class="admin-link">🛠 后台</router-link>
     </nav>
     <div class="right">
       <span class="chip shell">🐚 {{ shells }}</span>
       <span class="chip gold">🪙 {{ goldStones }}</span>
       <span class="chip str">💪 {{ strength }}</span>
+      <span class="chip realm" :title="powerRealm + ' 重天'">🌟 {{ realmTitle }}</span>
       <span class="user">{{ username }}</span>
       <button class="logout" @click="logout">退出</button>
     </div>
@@ -75,6 +79,11 @@ function logout() {
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
 }
+.nav a.admin-link {
+  background: rgba(255, 213, 79, 0.30);
+  color: #fff3c4;
+}
+.nav a.admin-link:hover { background: rgba(255, 213, 79, 0.45); }
 .right {
   display: flex;
   align-items: center;
@@ -93,6 +102,7 @@ function logout() {
 .chip.shell { background: rgba(255, 193, 7, 0.28); }
 .chip.gold { background: rgba(255, 215, 0, 0.22); color: #ffe082; }
 .chip.str { background: rgba(102, 187, 106, 0.28); }
+.chip.realm { background: rgba(186, 104, 200, 0.30); color: #f3e5f5; }
 .user { color: #e3f4ff; opacity: .9; }
 .logout {
   background: #ff6b6b;

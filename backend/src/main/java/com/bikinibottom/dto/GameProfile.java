@@ -22,6 +22,15 @@ public class GameProfile {
     /** 力量值（影响收线速度与可抗衡的鱼重） */
     private Integer strength;
 
+    /** 力量境界（修仙式层级，1 起步，最高 999） */
+    private Integer powerRealm;
+
+    /** 突破到下一重天所需贝壳（已达 999 则为 null） */
+    private Long nextRealmCost;
+
+    /** 力量境界带来的钓鱼收益加成百分比（每级 +5%） */
+    private Integer realmBonusPct;
+
     /** 已装备钓竿名称 */
     private String equippedRodName;
 

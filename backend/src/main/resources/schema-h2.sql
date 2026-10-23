@@ -13,6 +13,7 @@ CREATE TABLE user (
   shells      INT          NOT NULL DEFAULT 50,
   strength    INT          NOT NULL DEFAULT 10,
   gold_stones INT          NOT NULL DEFAULT 0,
+  power_realm INT          NOT NULL DEFAULT 1,
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);
@@ -41,3 +42,34 @@ CREATE TABLE user_item (
   equipped  TINYINT NOT NULL DEFAULT 0  -- 仅钓竿：1=已装备
 );
 CREATE INDEX idx_user_item_user ON user_item (user_id);
+
+-- 后台管理员账号
+CREATE TABLE admin_account (
+  id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  username    VARCHAR(50)  NOT NULL,
+  password    VARCHAR(100) NOT NULL,
+  role        VARCHAR(20)  NOT NULL DEFAULT 'ADMIN',
+  create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX uk_admin_username ON admin_account (username);
+
+-- AI 对话预设（后台可维护「触发词 -> 回复」）
+CREATE TABLE ai_dialog (
+  id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  scene       VARCHAR(100) NOT NULL,
+  reply       VARCHAR(1000) NOT NULL,
+  enabled     TINYINT      NOT NULL DEFAULT 1,
+  sort_order  INT          NOT NULL DEFAULT 0,
+  create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 钓鱼爆率配置（各品级相对权重，后台可实时修改）
+CREATE TABLE catch_rate (
+  id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  tier_code   VARCHAR(20)  NOT NULL,
+  tier_name   VARCHAR(20)  NOT NULL,
+  base_weight INT          NOT NULL DEFAULT 0,
+  enabled     TINYINT      NOT NULL DEFAULT 1,
+  create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX uk_tier_code ON catch_rate (tier_code);

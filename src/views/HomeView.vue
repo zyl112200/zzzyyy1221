@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
-import { meApi, castApi, settleApi, trainApi } from '../api/game'
+import { meApi, castApi, settleApi, trainApi, realmUpApi } from '../api/game'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -13,6 +13,9 @@ const profile = reactive({
   shells: 0,
   goldStones: 0,
   strength: 10,
+  powerRealm: 1,
+  nextRealmCost: 2,
+  realmBonusPct: 0,
   equippedRodName: '无',
   equippedRodPower: 0,
   equippedLineName: '无',
@@ -365,6 +368,7 @@ function closeResult() {
 // ---------------- 力量升级 ----------------
 const showTrain = ref(false)
 const training = ref(false)
+const training2 = ref(false)
 const trainCost = computed(() => 20 + (profile.strength || 10) * 2)
 
 async function train() {
@@ -384,6 +388,72 @@ async function train() {
     showToast(e.message || '升级失败 🌊')
   } finally {
     training.value = false
+  }
+}
+
+// ---------------- 力量境界 ----------------
+const realmMax = 999
+const realmIsMax = computed(() => profile.powerRealm >= realmMax)
+const realmProgressPct = computed(() => Math.min(100, (profile.powerRealm / realmMax) * 100))
+const nextRealmCostText = computed(() => {
+  if (realmIsMax.value) return '已圆满'
+  const c = profile.nextRealmCost
+  return c == null ? '—' : fmtNum(c)
+})
+
+/** 大数格式化：万 / 亿，便于展示天文数字般的突破成本 */
+function fmtNum(n) {
+  if (n == null) return '—'
+  if (n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + ' 亿'
+  if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + ' 万'
+  return String(n)
+}
+
+/** 力量境界称号（海绵宝宝主题），按重天数分 10 个段位 */
+const REALM_TITLES = ['', '比奇堡萌新', '蟹堡奇兵', '菠萝屋渔夫', '水母捕手', '痞老板克星', '深海勇士', '海洋传说', '蟹黄堡宗师', '神话钓神', '比奇堡之巅']
+function realmTierIndex(realm) {
+  if (realm >= 999) return 10
+  if (realm >= 900) return 9
+  if (realm >= 600) return 8
+  if (realm >= 400) return 7
+  if (realm >= 200) return 6
+  if (realm >= 100) return 5
+  if (realm >= 60) return 4
+  if (realm >= 30) return 3
+  if (realm >= 10) return 2
+  return 1
+}
+function realmTitle(realm) {
+  return REALM_TITLES[realmTierIndex(realm)] || REALM_TITLES[1]
+}
+function realmTierClass(realm) {
+  return 'rt' + realmTierIndex(realm)
+}
+
+async function realmUp() {
+  if (training2.value || realmIsMax.value) return
+  if (profile.shells < (profile.nextRealmCost || 0)) {
+    showToast('贝壳不够啦，突破需要 ' + nextRealmCostText.value + ' 🐚')
+    return
+  }
+  training2.value = true
+  try {
+    const res = await realmUpApi(username)
+    if (res.code === 200) {
+      profile.powerRealm = res.data.powerRealm
+      profile.shells = res.data.shells
+      profile.goldStones = res.data.goldStones
+      profile.nextRealmCost = res.data.nextRealmCost
+      profile.realmBonusPct = res.data.realmBonusPct
+      showToast(res.data.message)
+      beep(660, 0.1, 'triangle'); setTimeout(() => beep(880, 0.12, 'triangle'), 100); setTimeout(() => beep(1040, 0.2, 'triangle'), 220)
+    } else {
+      showToast(res.message || '突破失败')
+    }
+  } catch (e) {
+    showToast(e.message || '突破失败 🌊')
+  } finally {
+    training2.value = false
   }
 }
 
@@ -410,7 +480,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="fishing-page" :class="{ shake: shaking, 'is-berserk': berserk && phase === 'fight' }">
-    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :strength="profile.strength" />
+    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :strength="profile.strength" :power-realm="profile.powerRealm" :realm-title="realmTitle(profile.powerRealm)" />
 
     <!-- ================= 场景 ================= -->
     <div class="scene">
@@ -515,6 +585,7 @@ onBeforeUnmount(() => {
       <span class="tname">{{ encounter.fishIcon }} {{ encounter.fishName }}</span>
       <span class="tweight">{{ fmtWeight(encounter.weight) }}</span>
       <span class="trisk">断线风险 {{ Math.round(encounter.breakRisk * 100) }}%</span>
+      <span class="trealm" v-if="(encounter.realmBonusPct || 0) > 0">🌟 境界 +{{ encounter.realmBonusPct }}%</span>
     </div>
 
     <!-- 暴走横幅 -->
@@ -572,8 +643,8 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 力量升级悬浮按钮 -->
-    <button class="train-fab" @click="showTrain = !showTrain" title="力量修炼">
-      💪<span class="fab-label">力量</span>
+    <button class="train-fab" @click="showTrain = !showTrain" title="力量修炼 / 境界突破">
+      💪<span class="fab-label">修炼</span>
     </button>
 
     <div class="train-panel" v-if="showTrain">
@@ -581,9 +652,26 @@ onBeforeUnmount(() => {
       <p class="tp-row"><span>当前力量</span><b>{{ profile.strength }}</b></p>
       <p class="tp-row"><span>金石</span><b>🪙 {{ profile.goldStones }}</b></p>
       <p class="tp-row"><span>下次消耗</span><b>{{ trainCost }} 金石</b></p>
-      <p class="tp-note">力量越高，收线越稳、能抗衡的鱼越重。钓到越稀有越重的鱼，得到的金石越多。</p>
       <button class="train-btn" :disabled="training || profile.goldStones < trainCost" @click="train">
         {{ training ? '修炼中…' : (profile.goldStones < trainCost ? '金石不足' : '力量 +5') }}
+      </button>
+
+      <div class="tp-divider"></div>
+
+      <h4>🌟 力量境界</h4>
+      <div class="realm-title-badge" :class="realmTierClass(profile.powerRealm)">
+        <span class="rt-name">{{ realmTitle(profile.powerRealm) }}</span>
+        <span class="rt-lv">{{ profile.powerRealm }} / {{ realmMax }} 重天</span>
+      </div>
+      <div class="realm-bar"><div class="realm-fill" :class="realmTierClass(profile.powerRealm)" :style="{ width: realmProgressPct + '%' }"></div></div>
+      <p class="tp-row"><span>钓鱼收益加成</span><b class="realm-bonus">+{{ profile.realmBonusPct }}%</b></p>
+      <p class="tp-row"><span>下一重天需</span><b>🐚 {{ nextRealmCostText }}</b></p>
+      <p class="tp-note">突破消耗贝壳逐重天翻倍（1→2→4→8…），境界越高，钓到的贝壳与金石越丰厚。</p>
+      <button class="realm-btn" :disabled="training2 || realmIsMax || profile.shells < (profile.nextRealmCost || 0)" @click="realmUp">
+        <template v-if="realmIsMax">已臻巅峰 ✨</template>
+        <template v-else-if="training2">突破中…</template>
+        <template v-else-if="profile.shells < (profile.nextRealmCost || 0)">贝壳不足</template>
+        <template v-else>突破到 {{ profile.powerRealm + 1 }} 重天 🌟</template>
       </button>
     </div>
 
@@ -603,6 +691,7 @@ onBeforeUnmount(() => {
             <span class="rw">🐚 +{{ result.rewardShells }}</span>
             <span class="rg">🪙 +{{ result.rewardGold }}</span>
           </div>
+          <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0">🌟 力量境界加成 +{{ result.realmBonusPct }}%</div>
         </template>
         <div class="r-broken" v-if="result.rodBroken">💥 鱼竿被拽断了！请去背包换一根</div>
         <p class="r-msg">{{ result.message }}</p>
@@ -931,6 +1020,68 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 0 #2e7d32;
 }
 .train-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+/* ---------- 力量境界 ---------- */
+.tp-divider { height: 1px; background: rgba(255,255,255,.16); margin: 12px 0; }
+.realm-bar {
+  height: 10px; border-radius: 8px; background: rgba(2, 24, 44, .7);
+  border: 1px solid rgba(255,255,255,.2); overflow: hidden; margin: 0 0 8px;
+}
+.realm-fill {
+  height: 100%; border-radius: 8px;
+  background: linear-gradient(90deg, #ba68c8, #7e57c2);
+  box-shadow: 0 0 10px rgba(186,104,200,.6);
+  transition: width .35s ease;
+}
+.realm-bonus { color: #f3e5f5 !important; }
+.realm-btn {
+  width: 100%; padding: 11px; border: none; border-radius: 12px;
+  font-weight: bold; font-size: 15px; color: #fff; cursor: pointer;
+  background: linear-gradient(180deg, #ce93d8, #8e24aa);
+  box-shadow: 0 4px 0 #6a1b9a;
+}
+.realm-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #6a1b9a; }
+.realm-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.realm-title-badge {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 9px 10px; border-radius: 12px; margin-bottom: 8px;
+  background: rgba(2, 24, 44, .55); border: 1px solid rgba(255, 255, 255, .18);
+}
+.realm-title-badge .rt-name { font-weight: 800; font-size: 16px; letter-spacing: 1px; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+.realm-title-badge .rt-lv { font-size: 11px; color: #d7c4ef; }
+/* 段位配色：徽标与进度条共用 .rt1~.rt10 */
+.rt1  { --rt: #90a4ae; }
+.rt2  { --rt: #66bb6a; }
+.rt3  { --rt: #26a69a; }
+.rt4  { --rt: #29b6f6; }
+.rt5  { --rt: #ab47bc; }
+.rt6  { --rt: #5c6bc0; }
+.rt7  { --rt: #ffa726; }
+.rt8  { --rt: #ffca28; }
+.rt9  { --rt: #ef5350; }
+.rt10 { --rt: #ec407a; }
+.realm-title-badge.rt1  { background: linear-gradient(180deg, rgba(144,164,174,.30), rgba(2,24,44,.55)); }
+.realm-title-badge.rt2  { background: linear-gradient(180deg, rgba(102,187,106,.30), rgba(2,24,44,.55)); }
+.realm-title-badge.rt3  { background: linear-gradient(180deg, rgba(38,166,154,.32), rgba(2,24,44,.55)); }
+.realm-title-badge.rt4  { background: linear-gradient(180deg, rgba(41,182,246,.32), rgba(2,24,44,.55)); }
+.realm-title-badge.rt5  { background: linear-gradient(180deg, rgba(171,71,188,.34), rgba(2,24,44,.55)); }
+.realm-title-badge.rt6  { background: linear-gradient(180deg, rgba(92,107,192,.34), rgba(2,24,44,.55)); }
+.realm-title-badge.rt7  { background: linear-gradient(180deg, rgba(255,167,38,.34), rgba(2,24,44,.55)); }
+.realm-title-badge.rt8  { background: linear-gradient(180deg, rgba(255,202,40,.36), rgba(2,24,44,.55)); }
+.realm-title-badge.rt9  { background: linear-gradient(180deg, rgba(239,83,80,.36), rgba(2,24,44,.55)); }
+.realm-title-badge.rt10 { background: linear-gradient(180deg, rgba(236,64,122,.42), rgba(2,24,44,.55)); border-color: rgba(255,255,255,.4); }
+.realm-fill.rt1  { background: linear-gradient(90deg, #90a4ae, #607d8b); box-shadow: 0 0 10px rgba(144,164,174,.6); }
+.realm-fill.rt2  { background: linear-gradient(90deg, #66bb6a, #388e3c); box-shadow: 0 0 10px rgba(102,187,106,.6); }
+.realm-fill.rt3  { background: linear-gradient(90deg, #26a69a, #00897b); box-shadow: 0 0 10px rgba(38,166,154,.6); }
+.realm-fill.rt4  { background: linear-gradient(90deg, #29b6f6, #0288d1); box-shadow: 0 0 10px rgba(41,182,246,.6); }
+.realm-fill.rt5  { background: linear-gradient(90deg, #ab47bc, #7b1fa2); box-shadow: 0 0 10px rgba(171,71,188,.6); }
+.realm-fill.rt6  { background: linear-gradient(90deg, #5c6bc0, #3949ab); box-shadow: 0 0 10px rgba(92,107,192,.6); }
+.realm-fill.rt7  { background: linear-gradient(90deg, #ffa726, #f57c00); box-shadow: 0 0 10px rgba(255,167,38,.6); }
+.realm-fill.rt8  { background: linear-gradient(90deg, #ffca28, #ff8f00); box-shadow: 0 0 10px rgba(255,202,40,.6); }
+.realm-fill.rt9  { background: linear-gradient(90deg, #ef5350, #c62828); box-shadow: 0 0 10px rgba(239,83,80,.6); }
+.realm-fill.rt10 { background: linear-gradient(90deg, #ec407a, #ad1457); box-shadow: 0 0 12px rgba(236,64,122,.8); }
+.r-realm { margin: 6px 0 2px; font-size: 13px; font-weight: bold; color: #ffd54f; text-align: center; }
+.trealm { color: #ffd54f; font-weight: bold; font-size: 12px; }
 
 /* ---------- 结算 ---------- */
 .overlay {

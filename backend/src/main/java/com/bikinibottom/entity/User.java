@@ -39,6 +39,9 @@ public class User {
     /** 金石：升级力量的稀有材料，钓到越稀有越重的鱼给得越多 */
     private Integer goldStones;
 
+    /** 力量境界（修仙式层级，1 起步，最高 999；突破消耗贝壳按 2^(境界-1) 翻倍） */
+    private Integer powerRealm = 1;
+
     /** 注册时间（插入时自动填充） */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

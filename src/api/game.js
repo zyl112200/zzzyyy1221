@@ -27,3 +27,6 @@ export const equipApi = (username, userItemId) =>
 
 /** 金石升级力量：POST /api/game/train */
 export const trainApi = (username) => request('/api/game/train', { username })
+
+/** 贝壳突破力量境界：POST /api/game/realm-up */
+export const realmUpApi = (username) => request('/api/game/realm-up', { username })

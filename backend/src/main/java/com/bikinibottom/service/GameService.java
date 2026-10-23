@@ -5,6 +5,7 @@ import com.bikinibottom.common.Result;
 import com.bikinibottom.dto.CastResult;
 import com.bikinibottom.dto.GameProfile;
 import com.bikinibottom.dto.OwnedItemDto;
+import com.bikinibottom.dto.RealmUpResult;
 import com.bikinibottom.dto.SettleRequest;
 import com.bikinibottom.dto.SettleResult;
 import com.bikinibottom.dto.TrainResult;
@@ -14,6 +15,7 @@ import com.bikinibottom.entity.UserItem;
 import com.bikinibottom.mapper.ItemMapper;
 import com.bikinibottom.mapper.UserItemMapper;
 import com.bikinibottom.mapper.UserMapper;
+import com.bikinibottom.service.DropRateService;
 import lombok.Data;
 import org.springframework.stereotype.Service;
 
@@ -37,17 +39,25 @@ public class GameService {
     private final UserMapper userMapper;
     private final ItemMapper itemMapper;
     private final UserItemMapper userItemMapper;
+    private final DropRateService dropRateService;
     private final Random random = new Random();
+
+    /** 力量境界上限（重天数） */
+    private static final int REALM_MAX = 999;
+    /** 每突破一重天带来的钓鱼收益加成（百分比），境界越高收获越丰 */
+    private static final int REALM_BONUS_PER_LEVEL = 5;
 
     /** 待结算的咬钩遭遇（encounterId -> encounter） */
     private final Map<String, PendingEncounter> pending = new LinkedHashMap<>();
 
     private static final long ENCOUNTER_TTL_MS = 10 * 60 * 1000L;
 
-    public GameService(UserMapper userMapper, ItemMapper itemMapper, UserItemMapper userItemMapper) {
+    public GameService(UserMapper userMapper, ItemMapper itemMapper, UserItemMapper userItemMapper,
+                       DropRateService dropRateService) {
         this.userMapper = userMapper;
         this.itemMapper = itemMapper;
         this.userItemMapper = userItemMapper;
+        this.dropRateService = dropRateService;
     }
 
     // ==========================================================
@@ -64,6 +74,24 @@ public class GameService {
 
     private int goldOf(User u) {
         return u.getGoldStones() == null ? 0 : u.getGoldStones();
+    }
+
+    private int realmOf(User u) {
+        return u.getPowerRealm() == null ? 1 : u.getPowerRealm();
+    }
+
+    /**
+     * 突破到下一重天所需贝壳：规律为 2^当前境界（即 1→2、2→4、3→8…）。
+     * 已达上限返回 0；超过 long 安全范围时返回 Long.MAX_VALUE（玩家实际无法企及）。
+     */
+    private long realmNextCost(int realm) {
+        if (realm >= REALM_MAX) {
+            return 0L;
+        }
+        if (realm >= 63) {
+            return Long.MAX_VALUE;
+        }
+        return 1L << realm; // 2^realm
     }
 
     /** 玩家档案（含钓竿兜底，保证新手永远有一把可用的竿） */
@@ -136,6 +164,12 @@ public class GameService {
         p.setShells(u.getShells() == null ? 0 : u.getShells());
         p.setStrength(strengthOf(u));
         p.setGoldStones(goldOf(u));
+
+        int realm = realmOf(u);
+        p.setPowerRealm(realm);
+        long nextCost = realmNextCost(realm);
+        p.setNextRealmCost(nextCost > 0 ? nextCost : null);
+        p.setRealmBonusPct((realm - 1) * REALM_BONUS_PER_LEVEL);
 
         Map<Long, Item> itemMap = itemMapper.selectList(null).stream()
                 .collect(Collectors.toMap(Item::getId, i -> i));
@@ -336,6 +370,14 @@ public class GameService {
         int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75)));
         int rewardGold = (int) Math.max(1, Math.round(td.goldMul() * Math.pow(weight, 0.45)));
 
+        // 力量境界加成：境界越高，钓到的贝壳 / 金石越多（每重天 +5%）
+        int realmLvl = realmOf(u);
+        if (realmLvl > 1) {
+            double realmMul = 1 + (realmLvl - 1) * REALM_BONUS_PER_LEVEL / 100.0;
+            rewardShells = (int) Math.round(rewardShells * realmMul);
+            rewardGold = (int) Math.round(rewardGold * realmMul);
+        }
+
         double powerScore = 1500 + strength * 600.0 + rodPower * 2500.0;
         double difficulty = clamp(weight / powerScore, 0.12, 5.0);
         double breakRisk = weight <= lineStrength
@@ -381,6 +423,7 @@ public class GameService {
         r.setTotalBait(profile.getTotalBait() - 1);
         r.setShells(profile.getShells());
         r.setGoldStones(profile.getGoldStones());
+        r.setRealmBonusPct((realmLvl - 1) * REALM_BONUS_PER_LEVEL);
         r.setMessage("有东西咬钩了！握紧鱼竿，开始收线！");
         return Result.success(r);
     }
@@ -452,6 +495,7 @@ public class GameService {
         r.setShells(u.getShells() == null ? 0 : u.getShells());
         r.setGoldStones(goldOf(u));
         r.setStrength(strengthOf(u));
+        r.setRealmBonusPct((realmOf(u) - 1) * REALM_BONUS_PER_LEVEL);
         return Result.success(r);
     }
 
@@ -506,6 +550,44 @@ public class GameService {
         r.setGoldStones(u.getGoldStones());
         r.setGained(gained);
         r.setMessage("💪 力量 +" + gained + "！现在能更稳地拉起巨物了");
+        return Result.success(r);
+    }
+
+    // ==========================================================
+    //  力量境界：用贝壳突破（成本翻倍 2^境界）
+    // ==========================================================
+
+    /**
+     * 力量境界突破：消耗贝壳升级到下一重天，成本 = 2^当前境界（1→2→4→8…），最高 999 重天。
+     * 突破后钓鱼收益按每重天 +5% 永久提升。
+     */
+    public Result<RealmUpResult> realmUp(String username) {
+        User u = getUser(username);
+        if (u == null) {
+            return Result.error("比奇堡查无此人 🐙");
+        }
+        int realm = realmOf(u);
+        if (realm >= REALM_MAX) {
+            return Result.error("力量境界已臻至 999 重天巅峰，无需再突破 ✨");
+        }
+        long cost = realmNextCost(realm);
+        int shells = u.getShells() == null ? 0 : u.getShells();
+        if (shells < cost) {
+            return Result.error("贝壳不足，突破到 " + (realm + 1) + " 重天需要 " + cost + " 🐚");
+        }
+        u.setShells(shells - (int) cost);
+        u.setPowerRealm(realm + 1);
+        userMapper.updateById(u);
+
+        RealmUpResult r = new RealmUpResult();
+        r.setPowerRealm(u.getPowerRealm());
+        r.setCost(cost);
+        r.setShells(u.getShells());
+        r.setGoldStones(goldOf(u));
+        r.setRealmBonusPct((u.getPowerRealm() - 1) * REALM_BONUS_PER_LEVEL);
+        long nextCost = realmNextCost(u.getPowerRealm());
+        r.setNextRealmCost(nextCost > 0 ? nextCost : null);
+        r.setMessage("🌟 突破！力量境界升至 " + u.getPowerRealm() + " 重天，钓鱼收益 +" + r.getRealmBonusPct() + "%");
         return Result.success(r);
     }
 
@@ -612,7 +694,8 @@ public class GameService {
             if (t.minW() > maxCatch) {
                 continue; // 装备承重根本够不到这个品级
             }
-            double base = t.baseWeight();
+            // 爆率权重优先取后台配置（catch_rate 表），缺省回退到内置默认值
+            double base = dropRateService.getWeightMap().getOrDefault(t.code(), t.baseWeight());
             if (!"COMMON".equals(t.code())) {
                 base *= luckFactor;
             }

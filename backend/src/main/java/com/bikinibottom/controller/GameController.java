@@ -7,6 +7,7 @@ import com.bikinibottom.dto.GameProfile;
 import com.bikinibottom.dto.SettleRequest;
 import com.bikinibottom.dto.SettleResult;
 import com.bikinibottom.dto.TrainResult;
+import com.bikinibottom.dto.RealmUpResult;
 import com.bikinibottom.service.GameService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,5 +59,11 @@ public class GameController {
     @PostMapping("/train")
     public Result<TrainResult> train(@RequestBody Map<String, String> body) {
         return gameService.train(body.get("username"));
+    }
+
+    /** 用贝壳突破力量境界：POST /api/game/realm-up { "username": "xxx" } */
+    @PostMapping("/realm-up")
+    public Result<RealmUpResult> realmUp(@RequestBody Map<String, String> body) {
+        return gameService.realmUp(body.get("username"));
     }
 }
