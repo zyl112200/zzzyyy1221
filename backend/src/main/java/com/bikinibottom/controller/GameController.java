@@ -1,6 +1,7 @@
 package com.bikinibottom.controller;
 
 import com.bikinibottom.common.Result;
+import com.bikinibottom.dto.AiChatResult;
 import com.bikinibottom.dto.CastResult;
 import com.bikinibottom.dto.EquipRequest;
 import com.bikinibottom.dto.GameProfile;
@@ -8,7 +9,10 @@ import com.bikinibottom.dto.SettleRequest;
 import com.bikinibottom.dto.SettleResult;
 import com.bikinibottom.dto.TrainResult;
 import com.bikinibottom.dto.RealmUpResult;
+import com.bikinibottom.entity.AiDialog;
+import com.bikinibottom.service.AiDialogService;
 import com.bikinibottom.service.GameService;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,9 +30,11 @@ import java.util.Map;
 public class GameController {
 
     private final GameService gameService;
+    private final AiDialogService aiDialogService;
 
-    public GameController(GameService gameService) {
+    public GameController(GameService gameService, AiDialogService aiDialogService) {
         this.gameService = gameService;
+        this.aiDialogService = aiDialogService;
     }
 
     /** 获取玩家档案：GET /api/game/me?username=xxx */
@@ -65,5 +71,17 @@ public class GameController {
     @PostMapping("/realm-up")
     public Result<RealmUpResult> realmUp(@RequestBody Map<String, String> body) {
         return gameService.realmUp(body.get("username"));
+    }
+
+    /** AI 对话预设列表（游戏内助手用，无需登录）：POST /api/game/ai-dialogs */
+    @PostMapping("/ai-dialogs")
+    public Result<List<AiDialog>> aiDialogs() {
+        return Result.success(aiDialogService.listEnabled());
+    }
+
+    /** AI 对话：POST /api/game/ai-chat { "username", "message" }，按触发词匹配后台预设回复 */
+    @PostMapping("/ai-chat")
+    public Result<AiChatResult> aiChat(@RequestBody Map<String, String> body) {
+        return Result.success(aiDialogService.match(body.get("message")));
     }
 }

@@ -30,3 +30,10 @@ export const trainApi = (username) => request('/api/game/train', { username })
 
 /** 贝壳突破力量境界：POST /api/game/realm-up */
 export const realmUpApi = (username) => request('/api/game/realm-up', { username })
+
+/** AI 对话预设列表（游戏内助手，无需登录）：POST /api/game/ai-dialogs */
+export const aiDialogsApi = () => request('/api/game/ai-dialogs')
+
+/** AI 对话：POST /api/game/ai-chat { username, message } */
+export const aiChatApi = (username, message) =>
+  request('/api/game/ai-chat', { username, message })

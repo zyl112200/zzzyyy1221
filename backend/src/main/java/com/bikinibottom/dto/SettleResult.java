@@ -52,4 +52,7 @@ public class SettleResult {
 
     /** 提示文案 */
     private String message;
+
+    /** 钓到神话/山海级稀有鱼时，AI 助手的祝贺台词（前端自动唤起助手播报） */
+    private String celebrateMessage;
 }

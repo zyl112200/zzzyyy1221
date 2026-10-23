@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, trainApi, realmUpApi } from '../api/game'
+import { aiCelebrate } from '../store/aiAssistant'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -345,6 +346,10 @@ async function settleOutcome(landed, breakType) {
         sfxWin()
         burst.value = { icon: res.data.fishIcon, name: res.data.fishName }
         setTimeout(() => { burst.value = null }, 1400)
+      }
+      // 钓到神话 / 山海级稀有鱼：自动唤起 AI 助手播报祝贺
+      if (res.data.celebrateMessage) {
+        setTimeout(() => aiCelebrate(res.data.celebrateMessage), 600)
       }
     } else {
       showToast(res.message || '结算失败')

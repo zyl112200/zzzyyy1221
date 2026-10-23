@@ -36,16 +36,13 @@ if "%JAVA_OK%"=="0" (
   exit /b 1
 )
 
-REM ---- locate Maven ----
-set "MVN=mvn"
-where mvn >nul 2>nul || (
-  if exist "C:\Users\Administrator\.workbuddy\binaries\maven\apache-maven-3.9.9\bin\mvn.cmd" (
-    set "MVN=C:\Users\Administrator\.workbuddy\binaries\maven\apache-maven-3.9.9\bin\mvn.cmd"
-  ) else (
-    echo [ERROR] Maven not found. Install it and add to PATH (https://maven.apache.org).
-    pause
-    exit /b 1
-  )
+REM ---- locate Maven (use the project's bundled mvnw.bat launcher,
+REM      which finds the cached Maven distribution automatically) ----
+set "MVN=%ROOT%backend\mvnw.bat"
+if not exist "%MVN%" (
+  echo [ERROR] backend\mvnw.bat 缺失，无法启动后端。
+  pause
+  exit /b 1
 )
 
 REM ---- locate Node ----

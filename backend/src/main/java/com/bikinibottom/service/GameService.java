@@ -47,6 +47,14 @@ public class GameService {
     /** 每突破一重天带来的钓鱼收益加成（百分比），境界越高收获越丰 */
     private static final int REALM_BONUS_PER_LEVEL = 5;
 
+    /** 钓到神话 / 山海级稀有鱼时，AI 助手的随机祝贺台词（{fish} 占位鱼名） */
+    private static final String[] RARE_CHEERS = {
+            "🎉 哇哦！你竟然把「{fish}」这种传说级的存在钓了上来，整个比奇堡都要为你欢呼啦！",
+            "🌟 不得了！「{fish}」成功上岸，这可是能写进蟹堡王传奇的鱼！",
+            "🐠 稀世珍宝「{fish}」被你收入囊中，海绵宝宝都看呆了！",
+            "👑 神话 / 山海级的「{fish}」！你这钓技，蟹老板都得拜你为师！"
+    };
+
     /** 待结算的咬钩遭遇（encounterId -> encounter） */
     private final Map<String, PendingEncounter> pending = new LinkedHashMap<>();
 
@@ -471,6 +479,11 @@ public class GameService {
             r.setRewardGold(pe.getRewardGold());
             r.setMessage("钓起来了！" + pe.getFishName() + " " + pe.getWeight() + " 斤，"
                     + "获得 " + pe.getRewardShells() + " 🐚 与 " + pe.getRewardGold() + " 金石 🪙");
+            // 神话 / 山海级稀有鱼上岸：给 AI 助手一句随机祝贺台词（前端自动唤起播报）
+            if ("MYTHIC".equals(pe.getTier()) || "SHANHAI".equals(pe.getTier())) {
+                r.setCelebrateMessage(RARE_CHEERS[random.nextInt(RARE_CHEERS.length)]
+                        .replace("{fish}", pe.getFishName()));
+            }
         } else {
             r.setLanded(false);
             r.setRewardShells(0);
@@ -695,7 +708,8 @@ public class GameService {
                 continue; // 装备承重根本够不到这个品级
             }
             // 爆率权重优先取后台配置（catch_rate 表），缺省回退到内置默认值
-            double base = dropRateService.getWeightMap().getOrDefault(t.code(), t.baseWeight());
+            int defaultW = (int) Math.round(t.baseWeight());
+            double base = dropRateService.getWeightMap().getOrDefault(t.code(), defaultW);
             if (!"COMMON".equals(t.code())) {
                 base *= luckFactor;
             }

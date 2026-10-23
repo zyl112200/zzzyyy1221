@@ -28,6 +28,14 @@ public class Result<T> {
         return r;
     }
 
+    /** 无业务数据的成功返回（等价 Result<Void>） */
+    public static Result<Void> success() {
+        Result<Void> r = new Result<>();
+        r.setCode(200);
+        r.setMessage("success");
+        return r;
+    }
+
     public static <T> Result<T> error(String message) {
         Result<T> r = new Result<>();
         r.setCode(400);
