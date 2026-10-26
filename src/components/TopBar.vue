@@ -27,7 +27,6 @@ function logout() {
       <router-link to="/home">🎣 码头</router-link>
       <router-link to="/shop">🛒 商店</router-link>
       <router-link to="/inventory">🎒 背包</router-link>
-      <router-link to="/admin" class="admin-link">🛠 后台</router-link>
     </nav>
     <div class="right">
       <span class="chip shell">🐚 {{ shells }}</span>

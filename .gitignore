@@ -41,3 +41,6 @@ Thumbs.db
 # ===================== 打包/压缩临时产物 =====================
 *.zip
 *.tar.gz
+
+# Vite 配置加载残留（进程被强杀时留下）
+vite.config.js.timestamp-*.mjs

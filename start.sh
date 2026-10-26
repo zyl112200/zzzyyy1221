@@ -1,43 +1,49 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Bikini Bottom Fishing - Linux / macOS one-click launcher
-#  Requires: Node.js 18+, JDK 17+, Maven 3.6+ (all on PATH)
-#  Backend runs on H2 in-memory DB, no MySQL needed
+#  Bikini Bottom Fishing - Linux / macOS launcher (offline)
+#  直接打开单文件离线版，无需 Node / Java / Maven / 网络
+#  若还没有构建产物，且本机有 Node，会自动构建一次
 # ============================================================
 set -e
 
-# ---- clear injected port override ---------------------------------
-# Some sandboxes / cloud shells inject SERVER__PORT, which Spring Boot
-# reads as server.port and hijacks our 8080. Clear it so application.yml
-# (server.port: 8080) takes effect.
-unset SERVER__PORT 2>/dev/null
-
-command -v java >/dev/null 2>&1 || { echo "[ERROR] Java not found. Install JDK 17+."; exit 1; }
-command -v mvn  >/dev/null 2>&1 || { echo "[ERROR] Maven not found. Install and add to PATH."; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "[ERROR] Node.js not found. Install from https://nodejs.org"; exit 1; }
-
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+HTML="$ROOT/spongebob-offline.html"
 
-echo "============================================================"
-echo "  Bikini Bottom Fishing is starting ..."
-echo "    backend : http://localhost:8080  (H2 in-memory, no MySQL)"
-echo "    frontend: http://localhost:5173"
-echo "    account : spongebob / 123456"
-echo "============================================================"
+if [ ! -f "$HTML" ] && [ -f "$ROOT/dist/spongebob-standalone.html" ]; then
+  HTML="$ROOT/dist/spongebob-standalone.html"
+fi
 
-# backend (background)
-# --server.port=8080 is a command-line argument (highest Spring Boot precedence)
-# so it always wins over any injected SERVER__PORT env variable.
-( cd "$ROOT/backend" && mvn -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run ) &
-BACK_PID=$!
+if [ ! -f "$HTML" ]; then
+  echo "[i] 未找到离线版，尝试构建 ..."
+  if command -v node >/dev/null 2>&1 && [ -d "$ROOT/node_modules" ]; then
+    ( cd "$ROOT" && npm run build:standalone )
+    HTML="$ROOT/spongebob-offline.html"
+  fi
+fi
 
-# frontend (background): install deps then serve
-( cd "$ROOT" && npm install && npm run dev ) &
-FRONT_PID=$!
+if [ ! -f "$HTML" ]; then
+  echo "[X] 找不到离线版页面，也没有构建环境。"
+  echo "    离线文件应为: spongebob-offline.html"
+  echo "    构建需要 Node.js 并执行一次 npm install（需要网络）。"
+  exit 1
+fi
 
-echo "Both services started in background (backend PID=$BACK_PID, frontend PID=$FRONT_PID)."
-echo "First run downloads dependencies (~1-3 min). Then open http://localhost:5173"
-echo "Press Ctrl+C to stop both services."
+echo "[OK] 打开: $HTML"
+echo "[i] 默认账号 spongebob / 123456，存档保存在当前浏览器"
 
-trap "kill $BACK_PID $FRONT_PID 2>/dev/null" EXIT INT TERM
-wait
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    # Windows 下的 Git Bash：用资源管理器按默认浏览器打开
+    explorer.exe "$(cygpath -w "$HTML" 2>/dev/null || echo "$HTML")" || true
+    ;;
+  Darwin*)
+    open "$HTML"
+    ;;
+  *)
+    if command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "$HTML"
+    else
+      echo "[i] 请手动用浏览器打开上面的文件"
+    fi
+    ;;
+esac

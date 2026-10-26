@@ -17,52 +17,70 @@
 | 端 | 技术 |
 | --- | --- |
 | 前端 | Vue 3 + Vite + Vue Router |
-| 后端 | Spring Boot 3 + MyBatis-Plus + BCrypt |
-| 数据库 | MySQL 8（生产） / **H2 内存库（本地免装，默认）** |
+| 离线引擎 | 浏览器内本地游戏引擎（`localStorage` 存档），**无需任何服务端** |
+| 分发 | 单文件 HTML（JS / CSS / 数据全内联，零外部请求） |
+| 后端（可选） | Spring Boot 3 + MyBatis-Plus + BCrypt |
+| 数据库（可选） | MySQL 8 / H2 内存库 |
 
 ---
 
-## 一键启动（推荐）
+## 一键启动（离线，推荐）
 
-仓库内置启动脚本，**自动并行拉起前后端**（后端使用 H2 内存库，无需安装 MySQL），并会检测 / 兜底 Java、Maven、Node 环境：
+**不需要后端、不需要数据库、不需要 Java / Maven、不需要网络。**
 
 | 系统 | 操作 |
 | --- | --- |
-| Windows | 双击 `start.bat`，或在项目根目录执行 `start.bat` |
-| Linux / macOS | 先赋予执行权限：`chmod +x start.sh`，再运行 `./start.sh` |
+| Windows | 双击 `start.bat`（自动用 Chrome / Edge 打开离线版） |
+| Linux / macOS | `chmod +x start.sh` 后运行 `./start.sh` |
+| 任意系统 | 直接用浏览器打开根目录的 `spongebob-offline.html` |
 
-脚本会自动检测 `node` / `java` / `mvn` 是否就绪（缺失会给出提示）。启动完成后：
+- 离线版是一个 **单文件 HTML**（约 195 KB），Vue 运行时、样式、游戏数据、本地存档引擎全部内联，**零外部请求**（无 CDN、无字体、无接口调用）。
+- 默认账号：`spongebob` / `123456`（预置 20 万贝壳 + 200 金石，买得起顶级渔具直接钓巨物）；也可以直接注册新号（50 贝壳 + 5 鱼饵）。
+- 存档保存在**当前浏览器**（`localStorage`），换浏览器 / 清缓存会丢失。
 
-- 后端：http://localhost:8080
-- 前端：http://localhost:5173 （浏览器打开即可游玩）
-- 默认账号：`spongebob` / `123456`（预置 200 金石，可立刻体验力量升级）
+> 离线版如何实现？前端内置了一套浏览器端游戏引擎 `src/api/localEngine.js`，
+> 按后端 `GameService` 的规则（品级权重、重量抽样、贝壳 / 金石结算、暴走与断竿、力量与境界、商店与装备）
+> 完整复刻了全部接口，因此不需要任何服务端进程。
 
-> 说明：Windows 脚本在 `PATH` 中找不到 Maven 时会兜底尝试 WorkBuddy 隔离目录下的 Maven；找不到 JDK 时会尝试常见 Zulu / Adoptium 安装路径。标准环境下（已安装并加入 `PATH`）无需任何改动。
-> 两个启动脚本都会自动清除环境中可能注入的 `SERVER__PORT` 变量，确保后端稳定监听 8080（否则部分沙箱 / 云环境会把后端端口劫持到其它端口，导致前端 `/api` 代理连不上）。
+## 开发模式（需要 Node.js）
 
-## 快速开始（本地，无需安装 MySQL）
+```bash
+npm install      # 仅首次需要网络
+npm run dev      # http://localhost:5173
+```
 
-### 1) 启动后端（端口 8080）
+前端默认也走本地引擎，所以**没有后端也能开发调试**。想要连真实后端时，在地址后加 `?api=server`：
+
+```
+http://localhost:5173/?api=server
+```
+
+## 重新打包离线单文件
+
+```bash
+npm run build:standalone
+# 产物：dist/spongebob-standalone.html  +  根目录 spongebob-offline.html
+```
+
+---
+
+## 可选：Spring Boot 后端（已修复，可正常编译启动）
+
+后端目录 `backend/` 是完整的 Spring Boot 3 工程（Controller / Service / Mapper / DTO / H2 脚本齐全），
+使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（`mvnw.bat` 会自动使用 Wrapper 缓存的 Maven 发行版）。
 
 ```bash
 cd backend
-# 先清空可能被环境注入的端口变量，避免后端被劫持到其它端口：
-#   Windows  : set SERVER__PORT=
-#   Linux/mac: unset SERVER__PORT
-./mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
+unset SERVER__PORT   # Windows: set SERVER__PORT=
+./mvnw.bat -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
 ```
 
-> 说明：`mvnw`（Windows 为 `mvnw.bat`）会自动在 `PATH` 与常见安装目录中查找 Maven，无需手动配置 PATH；若你已把 `mvn` 加入 `PATH`，也可直接写 `mvn`。
-> 生产环境用 MySQL：直接 `./mvnw spring-boot:run`（读默认 `application.yml`）。
+- 后端地址：http://localhost:8080 （H2 控制台：http://localhost:8080/h2-console）
+- 前端连后端：开发模式 `npm run dev` 后访问 `http://localhost:5173/?api=server`，或控制台执行
+  `localStorage.setItem('bikini_api_mode', 'server')`
+- 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）都已写入 H2 初始化脚本
+- 不启动后端也完全不影响游玩：前端默认走离线本地引擎，两套模式的接口契约完全一致
 
-### 2) 启动前端（端口 5173）
-
-```bash
-npm install
-npm run dev
-```
-
-浏览器打开 http://localhost:5173 ，前端通过 Vite 代理把 `/api` 转发到 8080 后端。
 
 ---
 
@@ -126,7 +144,10 @@ npm run dev
 | `/shop` | 渔具商店 | 需登录 |
 | `/inventory` | 我的背包 | 需登录 |
 
-## 后端接口
+## 接口约定（本地引擎与后端同构）
+
+前端所有 `/api/*` 请求默认由 `src/api/localEngine.js` 在浏览器内处理，**请求 / 返回结构与下表完全一致**，
+所以页面代码在「离线模式」与「后端模式」之间可以无缝切换。
 
 | 接口 | 说明 | 请求体 / 参数 |
 | --- | --- | --- |
@@ -136,16 +157,20 @@ npm run dev
 | `POST /api/game/cast` | 抛竿，生成咬钩的鱼与搏鱼参数 | `{ "username" }` |
 | `POST /api/game/settle` | 搏鱼结算（成功入账 / 断线断竿） | `{ "username", "encounterId", "landed", "breakType" }` |
 | `POST /api/game/train` | 金石升级力量（+5） | `{ "username" }` |
+| `POST /api/game/realm-up` | 贝壳突破力量境界 | `{ "username" }` |
 | `GET  /api/shop/items` | 商店目录 | — |
 | `POST /api/shop/buy` | 购买道具 | `{ "username", "itemId", "quantity" }` |
 | `POST /api/game/equip` | 装备钓竿 / 鱼线 | `{ "username", "userItemId" }` |
+| `POST /api/game/ai-dialogs` | 助手预设问答列表 | — |
+| `POST /api/game/ai-chat` | 助手问答（按触发词匹配本地预设） | `{ "username", "message" }` |
 
-统一返回：`{ "code": 200/400, "message": "...", "data": {...} }`，密码 BCrypt 加密存储。
+统一返回：`{ "code": 200/400, "message": "...", "data": {...} }`。
 > 说明：本项目为演示用途，未引入鉴权框架，接口通过 `username` 定位玩家（前端会话存于 `localStorage`）。
+> 离线版的「AI 助手」是本地预设问答（`AI_DIALOGS`），不调用任何大模型接口，无网络也能用。
 
 ---
 
-## 初始化数据库（生产 / MySQL 模式）
+## 初始化数据库（可选 / MySQL 模式）
 
 ```bash
 mysql -uroot -p123456 < sql/spongebob_db.sql
@@ -156,7 +181,8 @@ mysql -uroot -p123456 < sql/spongebob_db.sql
 ## 前端打包
 
 ```bash
-npm run build     # 产物在 dist/
+npm run build              # 产物在 dist/（普通静态站点）
+npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 ```
 
 ---
@@ -166,12 +192,21 @@ npm run build     # 产物在 dist/
 ```
 ├── index.html
 ├── package.json
-├── vite.config.js            # Vite 配置（/api 代理到 8080）
-├── sql/spongebob_db.sql      # MySQL 初始化脚本
+├── vite.config.js            # Vite 配置（IIFE 打包，便于 file:// 直接打开）
+├── build-standalone.mjs      # 把 dist 内联成单文件离线版
+├── start.bat / start.sh      # 一键打开离线版（Windows / macOS·Linux）
+├── dev.bat                   # 开发服务器（Vite，无需后端）
+├── spongebob-offline.html    # ★ 构建产物：双击即玩，零外部依赖
+├── sql/spongebob_db.sql      # MySQL 初始化脚本（可选）
 ├── src/                      # 前端源码
 │   ├── main.js / App.vue
-│   ├── api/{auth,game,http}.js
-│   ├── store/session.js
+│   ├── api/
+│   │   ├── {auth,game,http}.js  # 接口封装 + 本地/后端双通道
+│   │   └── localEngine.js       # ★ 离线本地游戏引擎（localStorage 存档）
+│   ├── data/items.js            # 商店商品目录（与 SQL 保持一致）
+│   ├── store/
+│   │   ├── session.js           # 登录会话
+│   │   └── aiAssistant.js       # 助手状态（离线问答）
 │   ├── router/index.js
 │   ├── assets/main.css
 │   ├── views/
@@ -182,10 +217,11 @@ npm run build     # 产物在 dist/
 │   └── components/
 │       ├── OceanBackground.vue
 │       ├── TopBar.vue          # 顶栏（贝壳 / 金石 / 力量）
+│       ├── AiAssistant.vue     # 海绵宝宝助手（右下角悬浮，离线可用）
 │       ├── SpongeBob.vue / PatrickStar.vue
 │       ├── LoginCard.vue / RegisterCard.vue
 │       └── ToastMessage.vue
-└── backend/                  # Spring Boot 后端
+└── backend/                  # Spring Boot 后端（可选，可正常编译启动）
     ├── pom.xml
     ├── mvnw / mvnw.bat       # 轻量 Maven 启动器
     └── src/main/

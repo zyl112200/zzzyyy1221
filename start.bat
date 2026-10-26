@@ -1,72 +1,58 @@
 @echo off
-REM ============================================================
-REM  Bikini Bottom Fishing - Windows one-click launcher
-REM  Requires : Node.js 18+ (with npm) and JDK 17+
-REM  Maven    : uses PATH "mvn" if available, else a bundled
-REM             fallback path (WorkBuddy isolated Maven)
-REM  Backend   : runs on H2 in-memory DB, no MySQL needed
-REM ============================================================
-setlocal ENABLEEXTENSIONS
-
-REM ---- clear injected port override ---------------------------------
-REM Some sandboxes / cloud shells inject SERVER__PORT into the env,
-REM which Spring Boot reads as server.port and hijacks our 8080.
-REM Clear it so application.yml's server.port: 8080 takes effect.
-set "SERVER__PORT="
-
-REM ---- project root = folder containing this script ----
-set "ROOT=%~dp0"
-set "ROOT=%ROOT:~0,-1%"
-
-REM ---- locate Java (JAVA_HOME) ----
-set "JAVA_OK=0"
-where java >nul 2>nul && set "JAVA_OK=1"
-if "%JAVA_OK%"=="0" (
-  if exist "C:\Program Files\Zulu\zulu-21\bin\java.exe" (
-    set "JAVA_HOME=C:\Program Files\Zulu\zulu-21"
-    set "JAVA_OK=1"
-  ) else if exist "C:\Program Files\Eclipse Adoptium\jdk-21\bin\java.exe" (
-    set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21"
-    set "JAVA_OK=1"
-  )
-)
-if "%JAVA_OK%"=="0" (
-  echo [ERROR] Java not found. Install JDK 17+ and set JAVA_HOME.
-  pause
-  exit /b 1
-)
-
-REM ---- locate Maven (use the project's bundled mvnw.bat launcher,
-REM      which finds the cached Maven distribution automatically) ----
-set "MVN=%ROOT%backend\mvnw.bat"
-if not exist "%MVN%" (
-  echo [ERROR] backend\mvnw.bat 缺失，无法启动后端。
-  pause
-  exit /b 1
-)
-
-REM ---- locate Node ----
-where node >nul 2>nul || (
-  echo [ERROR] Node.js not found. Install from https://nodejs.org
-  pause
-  exit /b 1
-)
+setlocal enabledelayedexpansion
+title Bikini Bottom Fishing - Offline Launcher
+cd /d "%~dp0"
 
 echo ============================================================
-echo   Bikini Bottom Fishing is starting ...
-echo     backend : http://localhost:8080  (H2 in-memory, no MySQL)
-echo     frontend: http://localhost:5173
-echo     account : spongebob / 123456
+echo   Bikini Bottom Fishing  /  offline single-file build
 echo ============================================================
 
-REM backend in a new window (h2 profile)
-REM --server.port=8080 is passed as a command-line argument (highest Spring Boot
-REM precedence) so it always wins over any injected SERVER__PORT env variable.
-start "bikini-backend(8080)" cmd /k "cd /d ""%ROOT%backend"" && ""%MVN%"" -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run"
+set "HTML=%~dp0spongebob-offline.html"
+if exist "%HTML%" goto open
 
-REM frontend in a new window (install deps then serve)
-start "bikini-frontend(5173)" cmd /k "cd /d ""%ROOT%"" && call npm install && call npm run dev"
+set "HTML=%~dp0dist\spongebob-standalone.html"
+if exist "%HTML%" goto open
 
-echo Both services launched in separate windows. First run downloads deps (1-3 min).
-echo Open http://localhost:5173 when ready. Close both windows to stop.
+echo [i] Offline build not found, trying to build it...
+where node >nul 2>nul
+if errorlevel 1 goto nobuild
+if not exist "%~dp0node_modules" goto nobuild
+
+call npm run build:standalone
+if exist "%~dp0spongebob-offline.html" (
+  set "HTML=%~dp0spongebob-offline.html"
+  goto open
+)
+goto nobuild
+
+:nobuild
+echo.
+echo [X] Cannot find AND cannot build the offline page.
+echo     - The offline file should be: spongebob-offline.html
+echo     - To build it you need Node.js and one-time "npm install" (network).
+echo.
 pause
+exit /b 1
+
+:open
+echo [OK] Opening: !HTML!
+echo [i] No server, no network, no Java needed. Save data lives in this browser.
+echo.
+
+set "CHROME="
+if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" set "CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "CHROME=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if not defined CHROME if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "CHROME=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+
+if defined CHROME (
+  start "" "%CHROME%" "!HTML!"
+) else (
+  start "" "!HTML!"
+)
+
+echo [i] Default account: spongebob / 123456   (or register a new one)
+echo [i] You can close this window now.
+timeout /t 6 >nul
+exit /b 0
