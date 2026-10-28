@@ -13,6 +13,8 @@ const props = defineProps({
 const router = useRouter()
 const session = getSession()
 const username = session ? session.username : ''
+// 仅「管理员权限」（permission === 0）的用户才能在首页看到后台入口
+const isAdmin = !!(session && session.permission === 0)
 
 function logout() {
   clearSession()
@@ -27,6 +29,7 @@ function logout() {
       <router-link to="/home">🎣 码头</router-link>
       <router-link to="/shop">🛒 商店</router-link>
       <router-link to="/inventory">🎒 背包</router-link>
+      <router-link v-if="isAdmin" to="/admin" class="admin-link">🛠 后台</router-link>
     </nav>
     <div class="right">
       <span class="chip shell">🐚 {{ shells }}</span>

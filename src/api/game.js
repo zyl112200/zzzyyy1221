@@ -14,8 +14,12 @@ export const shopItemsApi = () => get('/api/shop/items')
 export const buyApi = (username, itemId, quantity = 1) =>
   request('/api/shop/buy', { username, itemId, quantity })
 
-/** 抛竿：POST /api/game/cast —— 返回咬钩的鱼与搏鱼参数 */
-export const castApi = (username) => request('/api/game/cast', { username })
+/** 抛竿：POST /api/game/cast —— 返回咬钩的鱼与搏鱼参数（baitId 为可选，指定使用的鱼饵） */
+export const castApi = (username, baitId = null) =>
+  request('/api/game/cast', { username, baitId })
+
+/** 鱼饵列表：POST /api/game/baits —— 返回当前玩家拥有的鱼饵（含库存），供切换鱼饵使用 */
+export const baitsApi = (username) => request('/api/game/baits', { username })
 
 /** 搏鱼结算：POST /api/game/settle */
 export const settleApi = (username, encounterId, landed, breakType = 'NONE') =>

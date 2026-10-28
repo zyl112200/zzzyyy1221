@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
-import { meApi, castApi, settleApi, trainApi, realmUpApi } from '../api/game'
+import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 
 const session = getSession()
@@ -35,6 +35,27 @@ const recent = ref([])
 const toastVisible = ref(false)
 const toastMessage = ref('')
 let toastTimer = null
+
+// 切换鱼饵
+const baits = ref([])
+const selectedBaitId = ref(null)
+const selectedBait = computed(() => baits.value.find((b) => b.itemId === selectedBaitId.value) || null)
+const hasBait = computed(() => baits.value.length > 0)
+
+async function loadBaits() {
+  try {
+    const res = await baitsApi(username)
+    if (res.code === 200) {
+      baits.value = res.data || []
+      // 当前选择无效（用完/不存在）时自动选第一个
+      if (!baits.value.find((b) => b.itemId === selectedBaitId.value)) {
+        selectedBaitId.value = baits.value.length ? baits.value[0].itemId : null
+      }
+    }
+  } catch (e) {
+    /* 鱼饵列表加载失败不阻断钓鱼 */
+  }
+}
 
 // 搏鱼状态
 const tension = ref(0)
@@ -96,6 +117,7 @@ async function loadProfile() {
     const res = await meApi(username)
     if (res.code === 200) {
       Object.assign(profile, res.data)
+      loadBaits()
     } else {
       showToast(res.message || '加载失败')
     }
@@ -134,7 +156,7 @@ function clearTimers() {
 
 async function cast() {
   if (phase.value !== 'idle' && phase.value !== 'result') return
-  if (profile.totalBait <= 0) {
+  if (!hasBait.value || profile.totalBait <= 0) {
     showToast('鱼饵用完啦，去商店买点 🪱')
     return
   }
@@ -150,16 +172,18 @@ async function cast() {
   sfxCast()
 
   try {
-    const res = await castApi(username)
+    const res = await castApi(username, selectedBaitId.value)
     if (res.code !== 200) {
       showToast(res.message || '抛竿失败')
       phase.value = 'idle'
+      loadBaits()
       return
     }
     encounter.value = res.data
     profile.totalBait = res.data.totalBait
     profile.shells = res.data.shells
     profile.goldStones = res.data.goldStones
+    loadBaits()
     // 抛竿动画后进入等待
     waitTimer = setTimeout(() => {
       phase.value = 'waiting'
@@ -569,7 +593,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="row sub">
           <span class="ico">🪱</span>
-          <span class="nm">鱼饵 {{ profile.totalBait }}</span>
+          <span class="nm">{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '鱼饵' }} × {{ profile.totalBait }}</span>
           <span class="badge">可钓 {{ fmtWeight(profile.maxCatchWeight) }}</span>
         </div>
       </div>
@@ -599,10 +623,24 @@ onBeforeUnmount(() => {
     <!-- ================= 底部操作 ================= -->
     <div class="controls">
       <template v-if="phase === 'idle' || phase === 'result'">
-        <button class="cast-btn" @click="cast" :disabled="profile.totalBait <= 0">
+        <div class="bait-bar" v-if="baits.length">
+          <span class="bait-label">🪱 鱼饵</span>
+          <button
+            v-for="b in baits"
+            :key="b.itemId"
+            class="bait-chip"
+            :class="{ active: b.itemId === selectedBaitId, premium: b.power > 0 }"
+            @click="selectedBaitId = b.itemId"
+          >
+            <span class="bc-icon">{{ b.icon }}</span>
+            <span class="bc-name">{{ b.name }}</span>
+            <span class="bc-qty">×{{ b.quantity }}</span>
+          </button>
+        </div>
+        <button class="cast-btn" @click="cast" :disabled="profile.totalBait <= 0 || !selectedBaitId">
           {{ profile.totalBait > 0 ? '抛竿钓鱼 🎣' : '鱼饵不足，去商店 🪱' }}
         </button>
-        <p class="tip">每次抛竿消耗 1 个鱼饵 · 按提示提竿 · 按住收线，松开泄力</p>
+        <p class="tip">当前鱼饵：{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '无' }} · 每次抛竿消耗 1 个 · 按住收线，松开泄力</p>
       </template>
 
       <div v-else-if="phase === 'casting'" class="status">抛竿中…</div>
@@ -934,6 +972,28 @@ onBeforeUnmount(() => {
 .cast-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 9px 0 #c17900; }
 .cast-btn:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 3px 0 #c17900; }
 .cast-btn:disabled { opacity: .6; cursor: not-allowed; }
+.bait-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  background: rgba(2, 32, 58, .55); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 16px;
+  padding: 8px 12px; max-width: 100%;
+}
+.bait-label { font-size: 13px; font-weight: bold; color: #ffe082; white-space: nowrap; }
+.bait-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 11px; border: 1.5px solid rgba(255,255,255,.22);
+  border-radius: 12px; background: rgba(255,255,255,.06);
+  color: #eaf6ff; font-size: 13px; cursor: pointer; transition: all .12s;
+}
+.bait-chip:hover { background: rgba(255,255,255,.16); }
+.bait-chip.active {
+  border-color: #ffd54f; background: rgba(255, 213, 79, .28);
+  box-shadow: 0 0 12px rgba(255, 213, 79, .5); color: #fff;
+}
+.bait-chip.premium.active { border-color: #ff8a65; background: rgba(255, 138, 101, .30); box-shadow: 0 0 12px rgba(255, 138, 101, .55); }
+.bait-chip .bc-icon { font-size: 16px; }
+.bait-chip .bc-name { font-weight: bold; white-space: nowrap; }
+.bait-chip .bc-qty { font-size: 11px; opacity: .85; }
 .tip { font-size: 12px; color: #cfe9ff; opacity: .85; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
 
 .status {
@@ -1141,6 +1201,8 @@ onBeforeUnmount(() => {
   .target { top: auto; bottom: 190px; right: 10px; font-size: 12px; padding: 7px 10px; }
   .berserk-banner { font-size: 20px; top: 22%; }
   .cast-btn { padding: 14px 36px; font-size: 17px; }
+  .bait-bar { padding: 6px 8px; gap: 6px; }
+  .bait-chip { padding: 5px 8px; font-size: 12px; }
   .train-fab { width: 50px; height: 50px; font-size: 22px; right: 12px; }
   .train-panel { right: 12px; bottom: 78px; width: 230px; }
 }

@@ -16,8 +16,22 @@
  *   POST /api/game/ai-dialogs POST /api/game/ai-chat
  */
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
+import { getAdminConfig } from '../admin/store.js'
 
-const DB_KEY = 'bikini_local_db_v2'
+const DB_KEY = 'bikini_local_db_v3'
+
+/**
+ * 读取后台配置的「安全壳」：后台管理配置存于独立的 localStorage 命名空间，
+ * 即使读取失败也回退为 null，不影响游戏本身逻辑。
+ */
+function safeAdminConfig() {
+  try {
+    const res = getAdminConfig()
+    return res && res.code === 200 ? res.data : null
+  } catch {
+    return null
+  }
+}
 
 // ============================================================
 //  存储层（localStorage 不可用时（隐私模式 / 严格 file://）退化为内存）
@@ -53,28 +67,26 @@ function persist() {
   }
 }
 
-/** 简易密码散列（离线版不追求密码学安全，仅避免明文存储） */
-function hash(pwd) {
-  let h = 5381
-  const s = 'bikini$' + pwd
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return 'local$' + h.toString(16)
-}
+// 说明：按需求，用户密码采用明文存储，不做任何加密处理。
 
 function seedDb() {
   const db = {
-    version: 2,
-    nextUserId: 3,
-    nextUserItemId: 5,
+    version: 3,
+    nextUserId: 4,
+    nextUserItemId: 7,
+    // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
-      { id: 1, username: 'spongebob', email: 'spongebob@bikini.bottom', password: hash('123456'), shells: 200000, strength: 10, goldStones: 200, powerRealm: 1 },
-      { id: 2, username: 'patrick', email: 'patrick@bikini.bottom', password: hash('123456'), shells: 50, strength: 10, goldStones: 0, powerRealm: 1 }
+      { id: 1, username: 'admin', email: 'admin@bikini.bottom', password: 'admin123', permission: 0, shells: 0, strength: 10, goldStones: 0, powerRealm: 1 },
+      { id: 2, username: 'spongebob', email: 'spongebob@bikini.bottom', password: '123456', permission: 1, shells: 200000, strength: 10, goldStones: 200, powerRealm: 1 },
+      { id: 3, username: 'patrick', email: 'patrick@bikini.bottom', password: '123456', permission: 1, shells: 50, strength: 10, goldStones: 0, powerRealm: 1 }
     ],
     userItems: [
       { id: 1, userId: 1, itemId: 1, quantity: 1, equipped: 1 },
       { id: 2, userId: 1, itemId: 5, quantity: 5, equipped: 0 },
       { id: 3, userId: 2, itemId: 1, quantity: 1, equipped: 1 },
-      { id: 4, userId: 2, itemId: 5, quantity: 5, equipped: 0 }
+      { id: 4, userId: 2, itemId: 5, quantity: 5, equipped: 0 },
+      { id: 5, userId: 3, itemId: 1, quantity: 1, equipped: 1 },
+      { id: 6, userId: 3, itemId: 5, quantity: 5, equipped: 0 }
     ]
   }
   return db
@@ -288,12 +300,15 @@ const ENCOUNTER_TTL = 10 * 60 * 1000
 
 function pickTier(maxCatch, rodPower, luck, premium) {
   const luckFactor = 1 + rodPower * 0.12 + (luck ? 0.5 : 0) + (premium ? 0.35 : 0)
+  // 后台可覆盖各品级的爆率权重
+  const admin = safeAdminConfig()
   const weights = []
   let total = 0
   for (const code of TIER_ORDER) {
     const t = TIERS[code]
     if (t.minW > maxCatch) continue // 装备承重够不到这个品级
     let base = t.baseWeight
+    if (admin && admin.dropRates && admin.dropRates[code] != null) base = admin.dropRates[code]
     if (code !== 'COMMON') base *= luckFactor
     weights.push([code, base])
     total += base
@@ -315,26 +330,33 @@ function sampleWeight(tier, maxCatch) {
   return round1(w)
 }
 
-function consumeBait(userId) {
+function consumeBait(userId, baitId) {
   const db = readDb()
-  let bait = findFirst(userId, 5)
-  let premium = false
-  if (!bait || (bait.quantity || 0) <= 0) {
-    const all = db.userItems.filter((ui) => ui.userId === userId)
-    for (const ui of all) {
-      const it = ITEM_MAP.get(ui.itemId)
-      if (it && it.type === 'BAIT' && (ui.quantity || 0) > 0) {
-        bait = ui
-        premium = (it.power || 0) > 0
-        break
+  let bait = null
+  // 指定鱼饵优先：若指定且库存充足则用之
+  if (baitId != null) {
+    const target = findFirst(userId, Number(baitId))
+    if (target && (target.quantity || 0) > 0) bait = target
+  }
+  // 未指定或指定鱼饵不足：沿用原逻辑（优先普通鱼饵，否则任意有库存鱼饵）
+  if (!bait) {
+    bait = findFirst(userId, 5)
+    if (!bait || (bait.quantity || 0) <= 0) {
+      const all = db.userItems.filter((ui) => ui.userId === userId)
+      for (const ui of all) {
+        const it = ITEM_MAP.get(ui.itemId)
+        if (it && it.type === 'BAIT' && (ui.quantity || 0) > 0) {
+          bait = ui
+          break
+        }
       }
     }
   }
-  if (bait) {
-    bait.quantity = (bait.quantity || 0) - 1
-    persist()
-  }
-  return premium
+  if (!bait) return null
+  bait.quantity = (bait.quantity || 0) - 1
+  persist()
+  const it = ITEM_MAP.get(bait.itemId)
+  return { itemId: bait.itemId, name: it ? it.name : '鱼饵', icon: it ? it.icon : '🪱', power: it ? it.power || 0 : 0 }
 }
 
 const RARE_CHEERS = [
@@ -344,7 +366,7 @@ const RARE_CHEERS = [
   '👑 神话 / 山海级的「{fish}」！你这钓技，蟹老板都得拜你为师！'
 ]
 
-function cast(username) {
+function cast(username, baitId) {
   const u = userByName(username)
   if (!u) return err('比奇堡查无此人 🐙')
   ensureStarterRod(u.id)
@@ -360,7 +382,9 @@ function cast(username) {
     if (profile.totalBait <= 0) return err('没有鱼饵了，去商店买点 🪱')
   }
 
-  const premiumBait = consumeBait(u.id)
+  const bait = consumeBait(u.id, baitId)
+  if (!bait) return err('该鱼饵不足或不存在，换一种或去商店买 🪱')
+  const premiumBait = bait.power > 0
   const rodPower = profile.equippedRodPower
   const luck = !!profile.luckOwned
   const maxCatch = profile.maxCatchWeight || 800
@@ -371,8 +395,13 @@ function cast(username) {
   const weight = sampleWeight(tier, maxCatch)
   const td = TIERS[tier]
 
-  let rewardShells = Math.round(td.shellMul * (10 + 3 * Math.pow(weight, 0.75)))
-  let rewardGold = Math.max(1, Math.round(td.goldMul * Math.pow(weight, 0.45)))
+  // 后台货币倍率（默认 1）
+  const admin = safeAdminConfig()
+  const shellMulAdj = admin && admin.currency ? admin.currency.shellMultiplier : 1
+  const goldMulAdj = admin && admin.currency ? admin.currency.goldMultiplier : 1
+
+  let rewardShells = Math.round(td.shellMul * (10 + 3 * Math.pow(weight, 0.75)) * (shellMulAdj || 1))
+  let rewardGold = Math.max(1, Math.round(td.goldMul * Math.pow(weight, 0.45) * (goldMulAdj || 1)))
 
   const realm = u.powerRealm == null ? 1 : u.powerRealm
   if (realm > 1) {
@@ -408,6 +437,9 @@ function cast(username) {
     rewardShells,
     rewardGold,
     lore: def.lore,
+    baitId: bait.itemId,
+    baitName: bait.name,
+    baitIcon: bait.icon,
     createdAt: now,
     settled: false
   })
@@ -422,6 +454,9 @@ function cast(username) {
     rewardShells,
     rewardGold,
     lore: def.lore,
+    baitId: bait.itemId,
+    baitName: bait.name,
+    baitIcon: bait.icon,
     rodPower,
     lineStrength,
     maxCatchWeight: maxCatch,
@@ -630,14 +665,19 @@ function register({ username, email, password }) {
   if (db.users.some((u) => u.email === mail)) return err('该邮箱已注册过，直接回菠萝屋登录吧 🐌')
 
   const id = db.nextUserId++
+  // 新玩家初始货币：后台可配置，默认贝壳 50 / 金石 0
+  const admin = safeAdminConfig()
+  const starterShells = admin && admin.currency ? admin.currency.starterShells : 50
+  const starterGold = admin && admin.currency ? admin.currency.starterGold : 0
   db.users.push({
     id,
     username: name,
     email: mail,
-    password: hash(password),
-    shells: 50,
+    password: password, // 按需求：明文存储，不做加密
+    permission: 1, // 注册用户默认权限：1 = 默认权限（普通玩家）
+    shells: starterShells,
     strength: 10,
-    goldStones: 0,
+    goldStones: starterGold,
     powerRealm: 1
   })
   // 新手礼包：1 把初级钓竿（已装备）+ 5 个普通鱼饵
@@ -646,7 +686,7 @@ function register({ username, email, password }) {
   persist()
   const u = userByName(name)
   return ok(
-    { id: u.id, username: u.username, email: u.email, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
+    { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
     '注册成功，欢迎加入比奇堡 🎉'
   )
 }
@@ -654,11 +694,41 @@ function register({ username, email, password }) {
 function login({ username, password }) {
   const u = userByName(String(username || '').trim())
   if (!u) return err('用户不存在，比奇堡查无此人 🐙')
-  if (u.password !== hash(password)) return err('密码错误，蟹黄堡秘方可不是这个 🦀')
+  if (u.password !== password) return err('密码错误，蟹黄堡秘方可不是这个 🦀')
   return ok(
-    { id: u.id, username: u.username, email: u.email, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
+    { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
     `登录成功，欢迎回到比奇堡 🎉`
   )
+}
+
+// ============================================================
+//  后台鉴权（基于用户表：permission 0 = 管理员，1 = 默认/普通）
+// ============================================================
+/** 后台登录：必须是权限为 0（管理员）的用户才能进入后台 */
+export function adminLogin({ username, password }) {
+  const u = userByName(String(username || '').trim())
+  if (!u || u.password !== password) {
+    return { code: 400, message: '账号或密码错误 🦀', data: null }
+  }
+  if (u.permission !== 0) {
+    return { code: 403, message: '无权限访问后台系统（当前账号不是管理员）', data: null }
+  }
+  return {
+    code: 200,
+    message: '管理员登录成功 🎉',
+    data: { username: u.username, permission: u.permission, loginAt: Date.now() }
+  }
+}
+
+/** 修改后台账号密码（明文，与用户表一致） */
+export function changeUserPassword({ username, oldPassword, newPassword }) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return { code: 400, message: '账号不存在' }
+  if (u.password !== oldPassword) return { code: 400, message: '原密码不正确' }
+  if (!newPassword || String(newPassword).length < 6) return { code: 400, message: '新密码至少 6 位' }
+  u.password = newPassword
+  persist()
+  return { code: 200, message: '密码已修改，请重新登录' }
 }
 
 // ============================================================
@@ -724,7 +794,9 @@ export function localCall(method, url, body) {
       return ok(buildProfile(u))
     }
     case '/api/game/cast':
-      return cast(b.username)
+      return cast(b.username, b.baitId)
+    case '/api/game/baits':
+      return listBaits(b.username)
     case '/api/game/settle':
       return settle(b)
     case '/api/game/train':
@@ -744,6 +816,26 @@ export function localCall(method, url, body) {
     default:
       return err('离线模式暂不支持该接口：' + M + ' ' + path)
   }
+}
+
+/** 列出当前玩家拥有的鱼饵（仅返回库存 > 0 的），供「切换鱼饵」功能使用 */
+export function listBaits(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return { code: 400, message: '比奇堡查无此人 🐙', data: [] }
+  const db = readDb()
+  const owned = db.userItems.filter((ui) => ui.userId === u.id)
+  const rows = []
+  for (const it of SHOP_ITEMS) {
+    if (it.type !== 'BAIT') continue
+    const own = owned.find((ui) => ui.itemId === it.id)
+    const qty = own ? own.quantity || 0 : 0
+    if (qty > 0) {
+      rows.push({ itemId: it.id, name: it.name, icon: it.icon, power: it.power || 0, quantity: qty })
+    }
+  }
+  // 普通鱼饵(power 0)在前，高级鱼饵在后
+  rows.sort((a, b) => a.power - b.power)
+  return { code: 200, message: 'success', data: rows }
 }
 
 /** 是否存在本地存档（用于首页提示） */
