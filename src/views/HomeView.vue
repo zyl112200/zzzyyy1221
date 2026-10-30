@@ -5,6 +5,7 @@ import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
+import { FISH_SPRITES } from '../data/fishSprites'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -62,7 +63,6 @@ const tension = ref(0)
 const progress = ref(0)
 const holding = ref(false)
 const berserk = ref(false)
-const shaking = ref(false)
 const flash = ref(false)
 const burst = ref(null)
 
@@ -73,7 +73,134 @@ let biteTimer = null
 let pullAcc = 0
 let pullInterval = 1.6
 let berserkRolled = false
-let shakeTimer = null
+
+// ---------------- 物理震动（屏幕抖动 + 手机振动） ----------------
+// 鱼会朝某个方向冲刺，屏幕抖动方向与手机震动节奏都跟随这个方向
+const shakeX = ref(0)
+const shakeY = ref(0)
+let shakeAmp = 0        // 当前震动强度（px），随时间指数衰减
+let shakeDirX = 1       // 鱼当前冲刺方向（单位向量）
+let shakeDirY = 0
+let shakeSeed = 0
+let berserkFlipAcc = 0  // 暴走换向计时
+let berserkFlipGap = 0.2
+
+const pageStyle = computed(() => ({
+  transform: shakeX.value || shakeY.value ? `translate(${shakeX.value}px, ${shakeY.value}px)` : undefined
+}))
+
+/** 手机振动能力（桌面浏览器不支持时自动降级为纯屏幕抖动） */
+const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
+const vibEnabled = ref(localStorage.getItem('fish_vibrate') !== '0')
+function vibrate(pattern) {
+  if (!vibEnabled.value || !canVibrate) return
+  try { navigator.vibrate(pattern) } catch { /* 部分浏览器需要用户手势后才可用 */ }
+}
+function stopVibrate() {
+  if (!canVibrate) return
+  try { navigator.vibrate(0) } catch { /* ignore */ }
+}
+function toggleVibrate() {
+  vibEnabled.value = !vibEnabled.value
+  localStorage.setItem('fish_vibrate', vibEnabled.value ? '1' : '0')
+  if (vibEnabled.value) vibrate(60)
+  else stopVibrate()
+  showToast(vibEnabled.value ? '📳 震动已开启' : '震动已关闭')
+}
+
+/** 随机一条鱼的冲刺方向：8 方向（左右、上下、四个斜向） */
+function randomFishDir() {
+  const dirs = [
+    { x: 1, y: 0 }, { x: -1, y: 0 },
+    { x: 0, y: -1 }, { x: 0, y: 1 },
+    { x: 0.7, y: -0.7 }, { x: -0.7, y: -0.7 },
+    { x: 0.7, y: 0.7 }, { x: -0.7, y: 0.7 }
+  ]
+  const d = dirs[(Math.random() * dirs.length) | 0]
+  shakeDirX = d.x
+  shakeDirY = d.y
+}
+
+/**
+ * 鱼发力：屏幕朝鱼移动方向猛震 + 手机短震
+ * @param amp  震动幅度（px）
+ * @param vib  振动节奏，单次数值或 [震,停,震…] 数组
+ */
+function kick(amp = 8, vib = 40) {
+  randomFishDir()
+  shakeAmp = Math.max(shakeAmp, amp)
+  shakeSeed = Math.random() * 1000
+  // 鱼也朝这个方向猛冲
+  fishVelX += shakeDirX * amp * 4.5
+  fishVelY += shakeDirY * amp * 1.6
+  vibrate(vib)
+}
+
+/** 暴走专属狂野震动节奏（随机组合，长短交替） */
+function berserkVibe() {
+  const vibes = [
+    [120, 40, 160], [60, 30, 60, 30, 140], [180, 60, 220],
+    [40, 20, 40, 20, 40, 20, 120], [90, 40, 90, 40, 200]
+  ]
+  return vibes[(Math.random() * vibes.length) | 0]
+}
+
+// ---------------- 水中可见的鱼（立绘游动 / 挣扎） ----------------
+// 位置为场景归一化坐标（0~1），left/top 百分比定位，transform 负责朝向/摆动/大小
+const fishPos = reactive({ x: 0.22, y: 0.7, face: 1, wig: 0 })
+let fishVelX = 0
+let fishVelY = 0
+let swimRaf = null
+
+const fishSprite = computed(() => {
+  const enc = encounter.value
+  return enc ? FISH_SPRITES[enc.fishName] || null : null
+})
+const burstSprite = computed(() => {
+  const b = burst.value
+  return b ? FISH_SPRITES[b.name] || null : null
+})
+/** 体型随重量对数增长：1 斤小鱼 ~0.8，百万斤巨物 ~2.6 */
+const fishScale = computed(() => {
+  const w = encounter.value ? encounter.value.weight : 1
+  const s = 0.55 + Math.log10(Math.max(0.5, w) + 1) * 0.34
+  return Math.min(2.6, Math.max(0.6, s))
+})
+const fishStyle = computed(() => ({
+  left: (fishPos.x * 100).toFixed(2) + '%',
+  top: (fishPos.y * 100).toFixed(2) + '%',
+  width: Math.round(110 * fishScale.value) + 'px',
+  transform: `translate(-50%, -50%) scaleX(${fishPos.face}) rotate(${fishPos.wig.toFixed(1)}deg)`
+}))
+
+/** 等待 / 咬钩阶段的巡游动画（此时搏鱼 RAF 尚未启动） */
+function swimLoop(ts) {
+  if (phase.value !== 'waiting' && phase.value !== 'bite') return
+  const t = ts / 1000
+  const biting = phase.value === 'bite'
+  const tx = 0.5 + Math.sin(t * (biting ? 1.6 : 0.7)) * (biting ? 0.14 : 0.3)
+  const ty = (biting ? 0.66 : 0.68) + Math.sin(t * 1.3) * 0.08
+  fishPos.x += (tx - fishPos.x) * 0.025
+  fishPos.y += (ty - fishPos.y) * 0.025
+  const dir = Math.cos(t * (biting ? 1.6 : 0.7))
+  if (Math.abs(dir) > 0.15) fishPos.face = dir > 0 ? 1 : -1
+  fishPos.wig = Math.sin(t * (biting ? 12 : 8)) * (biting ? 9 : 6)
+  swimRaf = requestAnimationFrame(swimLoop)
+}
+
+function stopSwim() {
+  if (swimRaf) cancelAnimationFrame(swimRaf)
+  swimRaf = null
+}
+
+function resetFish() {
+  fishPos.x = 0.22
+  fishPos.y = 0.7
+  fishPos.face = 1
+  fishPos.wig = 0
+  fishVelX = 0
+  fishVelY = 0
+}
 
 const BOB = { x: 800, y: 642 }
 
@@ -169,6 +296,11 @@ async function cast() {
   progress.value = 0
   berserk.value = false
   berserkRolled = false
+  shakeAmp = 0
+  shakeX.value = 0
+  shakeY.value = 0
+  resetFish()
+  stopVibrate()
   sfxCast()
 
   try {
@@ -187,6 +319,9 @@ async function cast() {
     // 抛竿动画后进入等待
     waitTimer = setTimeout(() => {
       phase.value = 'waiting'
+      resetFish()
+      stopSwim()
+      swimRaf = requestAnimationFrame(swimLoop)
       scheduleBite()
     }, 850)
   } catch (e) {
@@ -202,6 +337,7 @@ function scheduleBite() {
     if (phase.value !== 'waiting') return
     phase.value = 'bite'
     sfxBite()
+    vibrate(90)
     // 2.2 秒内不提竿就脱钩
     biteTimer = setTimeout(() => {
       if (phase.value === 'bite') {
@@ -221,6 +357,7 @@ function strike() {
 // ---------------- 搏鱼核心 ----------------
 function startFight() {
   phase.value = 'fight'
+  stopSwim()
   tension.value = 22
   progress.value = 0
   berserk.value = false
@@ -228,6 +365,16 @@ function startFight() {
   holding.value = false
   pullAcc = 0
   pullInterval = 1.5 + Math.random() * 1.1
+  berserkFlipAcc = 0
+  berserkFlipGap = 0.2
+  shakeAmp = 0
+  shakeX.value = 0
+  shakeY.value = 0
+  // 中钩瞬间鱼被拉向浮漂附近
+  fishPos.x = 0.5 + (Math.random() - 0.5) * 0.2
+  fishPos.y = 0.68
+  fishVelX = (Math.random() - 0.5) * 30
+  fishVelY = -8
   lastTs = 0
   cancelAnimationFrame(rafHandle)
   rafHandle = requestAnimationFrame(loop)
@@ -266,19 +413,28 @@ function loop(ts) {
     progress.value -= 0.35 * dt
   }
 
-  // 鱼的周期性挣扎
+  // 鱼的周期性挣扎：朝随机方向猛冲，屏幕跟随震动 + 手机短震
   pullAcc += dt
   if (pullAcc >= pullInterval) {
     pullAcc = 0
     pullInterval = 1.2 + Math.random() * 1.3
     tension.value += pullStrength * (0.7 + Math.random() * 0.7)
-    kick(berserk.value ? 520 : 260)
+    if (berserk.value) kick(10 + Math.random() * 6, [70, 30, 110])
+    else kick(5 + Math.random() * 4, 40)
     beep(90, 0.12, 'triangle', 0.03)
   }
 
   if (berserk.value) {
     // 暴走持续施压
     tension.value += pullStrength * 0.55 * dt
+    // 暴走狂震：鱼频繁换向乱冲，屏幕朝当前方向猛震 + 手机狂野节奏
+    berserkFlipAcc += dt
+    if (berserkFlipAcc >= berserkFlipGap) {
+      berserkFlipAcc = 0
+      berserkFlipGap = 0.14 + Math.random() * 0.2
+      kick(9 + Math.random() * 8, berserkVibe())
+      beep(60 + Math.random() * 60, 0.08, 'sawtooth', 0.04)
+    }
   }
 
   // 临界暴走：接近水面时触发
@@ -286,7 +442,7 @@ function loop(ts) {
     berserkRolled = true
     if (Math.random() < (enc ? enc.berserkChance : 0.3)) {
       berserk.value = true
-      kick(700)
+      kick(14, [200, 60, 260])
       beep(70, 0.5, 'sawtooth', 0.08, 40)
     }
   }
@@ -304,6 +460,33 @@ function loop(ts) {
   }
   if (progress.value < 0) progress.value = 0
 
+  // 屏幕震动衰减：抖动方向始终跟随鱼当前冲刺方向（沿方向往复 + 垂直微抖）
+  shakeAmp *= Math.exp(-7 * dt)
+  if (shakeAmp > 0.2) {
+    const t = ts / 1000 + shakeSeed
+    const along = Math.sin(t * 42) * shakeAmp
+    const across = Math.sin(t * 67) * shakeAmp * 0.35
+    shakeX.value = shakeDirX * along - shakeDirY * across
+    shakeY.value = shakeDirY * along + shakeDirX * across
+  } else {
+    shakeX.value = 0
+    shakeY.value = 0
+  }
+
+  // 鱼的游动挣扎：跟随冲刺方向猛冲 + 阻尼 + 边界反弹 + 缓慢巡游
+  fishVelX += Math.sin(ts / 1000 * 1.6 + shakeSeed) * 10 * dt
+  fishVelX *= Math.exp(-2.4 * dt)
+  fishVelY *= Math.exp(-2.6 * dt)
+  fishPos.x += fishVelX * dt * 0.012
+  fishPos.y += fishVelY * dt * 0.008
+  if (fishPos.x < 0.14) { fishPos.x = 0.14; fishVelX = Math.abs(fishVelX) }
+  if (fishPos.x > 0.86) { fishPos.x = 0.86; fishVelX = -Math.abs(fishVelX) }
+  if (fishPos.y < 0.52) { fishPos.y = 0.52; fishVelY = Math.abs(fishVelY) }
+  if (fishPos.y > 0.84) { fishPos.y = 0.84; fishVelY = -Math.abs(fishVelY) }
+  if (fishVelX > 4) fishPos.face = 1
+  else if (fishVelX < -4) fishPos.face = -1
+  fishPos.wig = Math.sin(ts / 1000 * (berserk.value ? 16 : 9)) * (berserk.value ? 14 : 7)
+
   rafHandle = requestAnimationFrame(loop)
 }
 
@@ -313,6 +496,7 @@ function onSnap() {
   flash.value = true
   setTimeout(() => { flash.value = false }, 420)
   sfxSnap()
+  vibrate([260, 80, 300])
   // 暴走后更容易挣断鱼竿
   const rodBreak = berserk.value && Math.random() < 0.6
   settleOutcome(false, rodBreak ? 'ROD' : 'LINE')
@@ -321,12 +505,18 @@ function onSnap() {
 function onLanded() {
   stopLoop()
   holding.value = false
+  vibrate([60, 50, 60, 50, 180])
   settleOutcome(true, 'NONE')
 }
 
 function stopLoop() {
   cancelAnimationFrame(rafHandle)
   rafHandle = null
+  stopSwim()
+  shakeAmp = 0
+  shakeX.value = 0
+  shakeY.value = 0
+  stopVibrate()
 }
 
 function startHold() {
@@ -336,12 +526,6 @@ function startHold() {
 
 function stopHold() {
   holding.value = false
-}
-
-function kick(ms) {
-  shaking.value = true
-  clearTimeout(shakeTimer)
-  shakeTimer = setTimeout(() => { shaking.value = false }, ms)
 }
 
 // ---------------- 结算 ----------------
@@ -392,6 +576,9 @@ function closeResult() {
   tension.value = 0
   progress.value = 0
   berserk.value = false
+  stopSwim()
+  resetFish()
+  stopVibrate()
 }
 
 // ---------------- 力量升级 ----------------
@@ -502,13 +689,14 @@ onMounted(loadProfile)
 onBeforeUnmount(() => {
   clearTimers()
   stopLoop()
+  stopSwim()
   clearTimeout(toastTimer)
-  clearTimeout(shakeTimer)
+  stopVibrate()
 })
 </script>
 
 <template>
-  <div class="fishing-page" :class="{ shake: shaking, 'is-berserk': berserk && phase === 'fight' }">
+  <div class="fishing-page" :class="{ 'is-berserk': berserk && phase === 'fight' }" :style="pageStyle">
     <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :strength="profile.strength" :power-realm="profile.powerRealm" :realm-title="realmTitle(profile.powerRealm)" />
 
     <!-- ================= 场景 ================= -->
@@ -526,6 +714,17 @@ onBeforeUnmount(() => {
         <div class="wave w2"></div>
         <div class="wave w3"></div>
         <div class="sea-glitter"></div>
+      </div>
+
+      <!-- 水中的鱼：等待时巡游，咬钩时逼近浮漂，搏鱼时挣扎乱窜 -->
+      <div
+        v-if="inWater && encounter"
+        class="fish-sprite"
+        :class="[`ph-${phase}`, { frantic: berserk && phase === 'fight' }]"
+        :style="fishStyle"
+      >
+        <img v-if="fishSprite" :src="fishSprite" :alt="encounter.fishName" draggable="false" />
+        <span v-else class="fish-emoji">{{ encounter.fishIcon }}</span>
       </div>
 
       <!-- 第一人称钓竿 + 鱼线 -->
@@ -571,7 +770,10 @@ onBeforeUnmount(() => {
 
       <!-- 上钩的水花 / 成功跃鱼 -->
       <div class="burst" v-if="burst">
-        <div class="burst-fish">{{ burst.icon }}</div>
+        <div class="burst-fish" :class="{ pic: !!burstSprite }">
+          <img v-if="burstSprite" :src="burstSprite" :alt="burst.name" draggable="false" />
+          <template v-else>{{ burst.icon }}</template>
+        </div>
         <div class="splash s1"></div>
         <div class="splash s2"></div>
         <div class="splash s3"></div>
@@ -596,6 +798,9 @@ onBeforeUnmount(() => {
           <span class="nm">{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '鱼饵' }} × {{ profile.totalBait }}</span>
           <span class="badge">可钓 {{ fmtWeight(profile.maxCatchWeight) }}</span>
         </div>
+        <button class="vib-toggle" :class="{ off: !vibEnabled }" @click="toggleVibrate" :title="canVibrate ? (vibEnabled ? '关闭震动' : '开启震动') : '当前设备不支持振动，仅屏幕抖动'">
+          {{ vibEnabled ? '📳 震动 开' : '🔕 震动 关' }}
+        </button>
       </div>
 
       <div class="recent" v-if="recent.length">
@@ -758,14 +963,6 @@ onBeforeUnmount(() => {
   color: #eaf6ff;
   user-select: none;
 }
-.fishing-page.shake { animation: screenShake .28s linear; }
-@keyframes screenShake {
-  0%,100% { transform: translate(0,0); }
-  20% { transform: translate(-6px, 3px); }
-  40% { transform: translate(5px, -4px); }
-  60% { transform: translate(-4px, -2px); }
-  80% { transform: translate(3px, 4px); }
-}
 
 /* ---------- 场景 ---------- */
 .scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
@@ -846,6 +1043,28 @@ onBeforeUnmount(() => {
   stroke-width: 2.2;
   filter: drop-shadow(0 0 4px rgba(255,255,255,.55));
 }
+/* ---------- 水中可见的鱼 ---------- */
+.fish-sprite {
+  position: absolute; z-index: 2;
+  pointer-events: none;
+  will-change: transform, left, top;
+}
+.fish-sprite img {
+  width: 100%; display: block;
+  transition: filter .35s, opacity .35s;
+}
+/* 等待：远远巡游，沉在水里较深处 */
+.fish-sprite.ph-waiting img { filter: brightness(.55) saturate(.65) blur(.6px); opacity: .55; }
+/* 咬钩：逼近浮漂 */
+.fish-sprite.ph-bite img { filter: brightness(.72) saturate(.85); opacity: .8; }
+/* 搏鱼：清晰可见地挣扎 */
+.fish-sprite.ph-fight img { filter: brightness(.82) saturate(.9); opacity: .95; }
+/* 暴走：发红光、更亮 */
+.fish-sprite.frantic img {
+  filter: brightness(.95) saturate(1.15) drop-shadow(0 0 16px rgba(255, 96, 48, .85));
+  opacity: 1;
+}
+.fish-emoji { font-size: 64px; display: block; filter: brightness(.8); }
 .bobber { animation: bobFloat 2.4s ease-in-out infinite; }
 .bobber.dip { animation: bobDip .35s ease-out infinite; }
 @keyframes bobFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
@@ -870,6 +1089,7 @@ onBeforeUnmount(() => {
 
 .burst { position: absolute; left: 50%; top: 56%; z-index: 9; transform: translate(-50%, -50%); pointer-events: none; }
 .burst-fish { font-size: 110px; animation: fishLeap 1.3s cubic-bezier(.2,.9,.2,1); filter: drop-shadow(0 12px 18px rgba(0,0,0,.35)); }
+.burst-fish.pic img { width: 210px; display: block; }
 @keyframes fishLeap {
   0% { transform: translateY(60px) rotate(0) scale(.6); opacity: 0; }
   35% { transform: translateY(-60px) rotate(-12deg) scale(1.15); opacity: 1; }
@@ -906,6 +1126,16 @@ onBeforeUnmount(() => {
 .hud-card .row.sub { opacity: .92; font-size: 13px; }
 .hud-card .ico { font-size: 18px; }
 .hud-card .nm { font-weight: bold; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vib-toggle {
+  align-self: flex-start;
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(79, 195, 247, .18);
+  color: #b3e5fc; font-size: 12px; font-weight: bold;
+  padding: 4px 12px; border-radius: 12px; cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.vib-toggle:hover { background: rgba(79, 195, 247, .32); }
+.vib-toggle.off { background: rgba(120, 144, 156, .25); color: #cfd8dc; }
 .badge {
   font-size: 11px; padding: 2px 8px; border-radius: 9px;
   background: rgba(79, 195, 247, .22); color: #b3e5fc; white-space: nowrap;
