@@ -24,11 +24,11 @@ function logout() {
 
 <template>
   <header class="topbar">
-    <div class="brand">🏝️ 比奇堡钓鱼</div>
+    <div class="brand">⛰️ 仙钓大陆</div>
     <nav class="nav">
-      <router-link to="/home">🎣 码头</router-link>
-      <router-link to="/shop">🛒 商店</router-link>
-      <router-link to="/inventory">🎒 背包</router-link>
+      <router-link to="/home">🎣 灵湖</router-link>
+      <router-link to="/shop">🛒 仙市</router-link>
+      <router-link to="/inventory">🎒 行囊</router-link>
       <router-link v-if="isAdmin" to="/admin" class="admin-link">🛠 后台</router-link>
     </nav>
     <div class="right">
@@ -52,7 +52,7 @@ function logout() {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 20px;
-  background: rgba(2, 60, 110, 0.82);
+  background: rgba(26, 22, 58, 0.86);
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   flex-wrap: wrap;
@@ -61,15 +61,15 @@ function logout() {
   font-weight: bold;
   font-size: 18px;
   letter-spacing: 1px;
-  color: #fff;
-  text-shadow: 1px 1px 0 #01477f;
+  color: #ffd54f;
+  text-shadow: 1px 1px 0 #4a148c;
 }
 .nav {
   display: flex;
   gap: 8px;
 }
 .nav a {
-  color: #cdeffd;
+  color: #e1d5ff;
   text-decoration: none;
   padding: 6px 12px;
   border-radius: 10px;

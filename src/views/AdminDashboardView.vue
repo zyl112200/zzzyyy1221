@@ -99,6 +99,10 @@ function pct(k) {
   <div class="admin">
     <header class="topbar">
       <div class="brand">🛠️ 后台管理系统</div>
+      <nav class="nav">
+        <router-link to="/admin/home" class="active">控制台</router-link>
+        <router-link to="/admin/users">用户管理</router-link>
+      </nav>
       <div class="right">
         <span class="who">👤 {{ adminName }}</span>
         <button class="logout" @click="logout">退出登录</button>
@@ -190,6 +194,26 @@ function pct(k) {
   font-size: 18px;
   color: #ffd54f;
   letter-spacing: 1px;
+}
+.nav {
+  display: flex;
+  gap: 6px;
+}
+.nav a {
+  color: #cdeffd;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav a:hover {
+  background: rgba(41, 182, 246, 0.18);
+}
+.nav a.active {
+  background: #ffd54f;
+  color: #043a2a;
+  font-weight: bold;
 }
 .right {
   display: flex;

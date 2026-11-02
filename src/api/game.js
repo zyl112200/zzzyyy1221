@@ -35,6 +35,13 @@ export const trainApi = (username) => request('/api/game/train', { username })
 /** 贝壳突破力量境界：POST /api/game/realm-up */
 export const realmUpApi = (username) => request('/api/game/realm-up', { username })
 
+/** 功法目录（钓鱼功法列表，无需登录）：GET /api/game/skills */
+export const skillCatalogApi = () => request('/api/game/skills')
+
+/** 修炼钓鱼功法：POST /api/game/cultivate { username, skillId } */
+export const cultivateApi = (username, skillId) =>
+  request('/api/game/cultivate', { username, skillId })
+
 /** AI 对话预设列表（游戏内助手，无需登录）：POST /api/game/ai-dialogs */
 export const aiDialogsApi = () => request('/api/game/ai-dialogs')
 

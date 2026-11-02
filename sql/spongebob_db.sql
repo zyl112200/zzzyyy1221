@@ -23,6 +23,8 @@ CREATE TABLE `user` (
   `strength`    INT          NOT NULL DEFAULT 10     COMMENT '力量（影响收线与可抗衡鱼重）',
   `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（升级力量的材料）',
   `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '力量境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
+  `permission`  INT          NOT NULL DEFAULT 1      COMMENT '权限：0=管理员（可进后台），1=普通玩家（默认）',
+  `skills`      VARCHAR(255) DEFAULT NULL             COMMENT '已修炼的钓鱼功法 id 列表，逗号分隔（如 "jingxin,xieli"）',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),

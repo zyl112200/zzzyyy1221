@@ -14,6 +14,8 @@ CREATE TABLE user (
   strength    INT          NOT NULL DEFAULT 10,
   gold_stones INT          NOT NULL DEFAULT 0,
   power_realm INT          NOT NULL DEFAULT 1,
+  permission  INT          NOT NULL DEFAULT 1,
+  skills      VARCHAR(255),
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);

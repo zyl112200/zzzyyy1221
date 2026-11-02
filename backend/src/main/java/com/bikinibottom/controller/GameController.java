@@ -3,6 +3,7 @@ package com.bikinibottom.controller;
 import com.bikinibottom.common.Result;
 import com.bikinibottom.dto.AiChatResult;
 import com.bikinibottom.dto.CastResult;
+import com.bikinibottom.dto.CultivateResult;
 import com.bikinibottom.dto.EquipRequest;
 import com.bikinibottom.dto.GameProfile;
 import com.bikinibottom.dto.SettleRequest;
@@ -67,10 +68,22 @@ public class GameController {
         return gameService.train(body.get("username"));
     }
 
-    /** 用贝壳突破力量境界：POST /api/game/realm-up { "username": "xxx" } */
+    /** 用贝壳突破钓道境界：POST /api/game/realm-up { "username": "xxx" } */
     @PostMapping("/realm-up")
     public Result<RealmUpResult> realmUp(@RequestBody Map<String, String> body) {
         return gameService.realmUp(body.get("username"));
+    }
+
+    /** 钓鱼功法目录（前端功法阁渲染用，无需登录）：GET /api/game/skills */
+    @GetMapping("/skills")
+    public Result<List<com.bikinibottom.service.GameService.SkillDef>> skills() {
+        return gameService.skills();
+    }
+
+    /** 修炼钓鱼功法：POST /api/game/cultivate { "username": "xxx", "skillId": "jingxin" } */
+    @PostMapping("/cultivate")
+    public Result<CultivateResult> cultivate(@RequestBody Map<String, String> body) {
+        return gameService.cultivate(body.get("username"), body.get("skillId"));
     }
 
     /** AI 对话预设列表（游戏内助手用，无需登录）：POST /api/game/ai-dialogs */

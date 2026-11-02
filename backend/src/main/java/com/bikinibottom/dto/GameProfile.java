@@ -28,6 +28,9 @@ public class GameProfile {
     /** 突破到下一重天所需贝壳（已达 999 则为 null） */
     private Long nextRealmCost;
 
+    /** 已修炼的钓鱼功法 id 列表（如 ["jingxin","xieli"]） */
+    private List<String> skills;
+
     /** 力量境界带来的钓鱼收益加成百分比（每级 +5%） */
     private Integer realmBonusPct;
 

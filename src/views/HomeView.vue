@@ -3,9 +3,10 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
-import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi } from '../api/game'
+import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi, cultivateApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
+import { SKILLS, SKILL_MAP } from '../data/skills'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -25,7 +26,8 @@ const profile = reactive({
   maxCatchWeight: 0,
   totalBait: 0,
   luckOwned: false,
-  inventory: []
+  inventory: [],
+  skills: []
 })
 
 // phases: idle | casting | waiting | bite | fight | result
@@ -332,18 +334,19 @@ async function cast() {
 
 function scheduleBite() {
   const heavy = encounter.value ? encounter.value.difficulty : 0.2
-  const delay = 1100 + Math.random() * 2200 + heavy * 300
+  const sb = skillBonus.value
+  const delay = (1100 + Math.random() * 2200 + heavy * 300) * sb.waitMul
   waitTimer = setTimeout(() => {
     if (phase.value !== 'waiting') return
     phase.value = 'bite'
     sfxBite()
     vibrate(90)
-    // 2.2 秒内不提竿就脱钩
+    // 潮汐真诀可延长提竿命中窗口
     biteTimer = setTimeout(() => {
       if (phase.value === 'bite') {
         settleOutcome(false, 'ESCAPE')
       }
-    }, 2200)
+    }, 2200 + sb.biteAdd)
   }, delay)
 }
 
@@ -392,8 +395,9 @@ function loop(ts) {
   const diff = enc ? enc.difficulty : 0.2
   const power = enc ? enc.rodPower : 1
 
-  let reelSpeed = 30 / (0.75 + diff * 0.55) * (0.9 + power * 0.03)
-  let tensionRise = 16 * (0.6 + diff * 0.42)
+  const sb = skillBonus.value
+  let reelSpeed = 30 / (0.75 + diff * 0.55) * (0.9 + power * 0.03) * sb.reelMul
+  let tensionRise = 16 * (0.6 + diff * 0.42) * sb.tensionMul
   let tensionDrop = 34
   let pullStrength = 7 * (0.5 + diff * 0.5)
 
@@ -625,8 +629,8 @@ function fmtNum(n) {
   return String(n)
 }
 
-/** 力量境界称号（海绵宝宝主题），按重天数分 10 个段位 */
-const REALM_TITLES = ['', '比奇堡萌新', '蟹堡奇兵', '菠萝屋渔夫', '水母捕手', '痞老板克星', '深海勇士', '海洋传说', '蟹黄堡宗师', '神话钓神', '比奇堡之巅']
+/** 钓道境界称号（修仙主题），按重天数分 10 个段位，取材自钓道修仙设定 + 用户指定名 */
+const REALM_TITLES = ['', '垂钓凡夫', '初窥钓道', '灵饵师', '御竿王', '渊主', '钓鱼大师', '钓仙', '钓鱼圣人', '钓天境', '无敌之境']
 function realmTierIndex(realm) {
   if (realm >= 999) return 10
   if (realm >= 900) return 9
@@ -673,6 +677,42 @@ async function realmUp() {
   }
 }
 
+// ---------------- 钓鱼功法 ----------------
+const ownedSkills = computed(() => (Array.isArray(profile.skills) ? profile.skills : []))
+function hasSkill(id) { return ownedSkills.value.includes(id) }
+const skillBonus = computed(() => {
+  const s = ownedSkills.value
+  return {
+    tensionMul: (s.includes('jingxin') ? 0.85 : 1) * (s.includes('diaodao') ? 0.92 : 1),
+    reelMul: (s.includes('xieli') ? 1.18 : 1) * (s.includes('diaodao') ? 1.08 : 1),
+    waitMul: s.includes('siji') ? 0.75 : 1,
+    biteAdd: s.includes('chaoxi') ? 600 : 0
+  }
+})
+
+const showSkills = ref(false)
+const cultivating = ref(false)
+async function cultivate(skillId) {
+  if (cultivating.value) return
+  cultivating.value = true
+  try {
+    const res = await cultivateApi(username, skillId)
+    if (res.code === 200) {
+      profile.goldStones = res.data.goldStones
+      profile.skills = res.data.skills
+      const def = SKILL_MAP.get(skillId)
+      showToast('📜 成功修炼《' + (def ? def.name : '功法') + '》！')
+      beep(600, 0.1); setTimeout(() => beep(820, 0.14), 90); setTimeout(() => beep(1000, 0.2), 200)
+    } else {
+      showToast(res.message || '修炼失败')
+    }
+  } catch (e) {
+    showToast(e.message || '修炼失败')
+  } finally {
+    cultivating.value = false
+  }
+}
+
 // ---------------- 展示辅助 ----------------
 function tierLabel(t) {
   return { COMMON: '普通', RARE: '稀有', LEGENDARY: '传说', MYTHIC: '神话', SHANHAI: '山海' }[t] || '普通'
@@ -699,21 +739,24 @@ onBeforeUnmount(() => {
   <div class="fishing-page" :class="{ 'is-berserk': berserk && phase === 'fight' }" :style="pageStyle">
     <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :strength="profile.strength" :power-realm="profile.powerRealm" :realm-title="realmTitle(profile.powerRealm)" />
 
-    <!-- ================= 场景 ================= -->
+    <!-- ================= 场景（仙侠：仙山 · 明月 · 祥云 · 灵湖） ================= -->
     <div class="scene">
       <div class="sky">
-        <div class="sun"></div>
+        <div class="moon"></div>
         <div class="cloud c1"></div>
         <div class="cloud c2"></div>
         <div class="cloud c3"></div>
-        <div class="island"></div>
+        <div class="peak peak-far"></div>
+        <div class="peak peak-mid"></div>
+        <div class="peak peak-near"></div>
+        <div class="mist"></div>
       </div>
-      <div class="sea">
+      <div class="lake">
         <div class="horizon"></div>
         <div class="wave w1"></div>
         <div class="wave w2"></div>
         <div class="wave w3"></div>
-        <div class="sea-glitter"></div>
+        <div class="lake-glitter"></div>
       </div>
 
       <!-- 水中的鱼：等待时巡游，咬钩时逼近浮漂，搏鱼时挣扎乱窜 -->
@@ -823,7 +866,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 暴走横幅 -->
-    <div class="berserk-banner" v-if="berserk && phase === 'fight'">🔥 巨物暴走！稳住鱼竿！</div>
+    <div class="berserk-banner" v-if="berserk && phase === 'fight'">🔥 灵兽暴走！稳住鱼竿！</div>
 
     <!-- ================= 底部操作 ================= -->
     <div class="controls">
@@ -843,7 +886,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <button class="cast-btn" @click="cast" :disabled="profile.totalBait <= 0 || !selectedBaitId">
-          {{ profile.totalBait > 0 ? '抛竿钓鱼 🎣' : '鱼饵不足，去商店 🪱' }}
+          {{ profile.totalBait > 0 ? '凝神抛竿 🎣' : '鱼饵不足，去仙市 🪱' }}
         </button>
         <p class="tip">当前鱼饵：{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '无' }} · 每次抛竿消耗 1 个 · 按住收线，松开泄力</p>
       </template>
@@ -851,7 +894,7 @@ onBeforeUnmount(() => {
       <div v-else-if="phase === 'casting'" class="status">抛竿中…</div>
 
       <div v-else-if="phase === 'waiting'" class="status">
-        静静等待鱼儿咬钩<span class="dots"><i>.</i><i>.</i><i>.</i></span>
+        静心凝神，等待灵鱼咬钩<span class="dots"><i>.</i><i>.</i><i>.</i></span>
       </div>
 
       <div v-else-if="phase === 'bite'" class="bite-wrap">
@@ -891,22 +934,27 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 力量升级悬浮按钮 -->
-    <button class="train-fab" @click="showTrain = !showTrain" title="力量修炼 / 境界突破">
+    <button class="train-fab" @click="showTrain = !showTrain" title="根骨修炼 / 境界突破">
       💪<span class="fab-label">修炼</span>
     </button>
 
+    <!-- 钓鱼功法悬浮按钮 -->
+    <button class="skill-fab" @click="showSkills = !showSkills" title="钓鱼功法">
+      📜<span class="fab-label">功法</span>
+    </button>
+
     <div class="train-panel" v-if="showTrain">
-      <h4>💪 力量修炼</h4>
-      <p class="tp-row"><span>当前力量</span><b>{{ profile.strength }}</b></p>
+      <h4>💪 根骨修炼</h4>
+      <p class="tp-row"><span>当前根骨</span><b>{{ profile.strength }}</b></p>
       <p class="tp-row"><span>金石</span><b>🪙 {{ profile.goldStones }}</b></p>
       <p class="tp-row"><span>下次消耗</span><b>{{ trainCost }} 金石</b></p>
       <button class="train-btn" :disabled="training || profile.goldStones < trainCost" @click="train">
-        {{ training ? '修炼中…' : (profile.goldStones < trainCost ? '金石不足' : '力量 +5') }}
+        {{ training ? '修炼中…' : (profile.goldStones < trainCost ? '金石不足' : '根骨 +5') }}
       </button>
 
       <div class="tp-divider"></div>
 
-      <h4>🌟 力量境界</h4>
+      <h4>🌟 钓道境界</h4>
       <div class="realm-title-badge" :class="realmTierClass(profile.powerRealm)">
         <span class="rt-name">{{ realmTitle(profile.powerRealm) }}</span>
         <span class="rt-lv">{{ profile.powerRealm }} / {{ realmMax }} 重天</span>
@@ -914,13 +962,43 @@ onBeforeUnmount(() => {
       <div class="realm-bar"><div class="realm-fill" :class="realmTierClass(profile.powerRealm)" :style="{ width: realmProgressPct + '%' }"></div></div>
       <p class="tp-row"><span>钓鱼收益加成</span><b class="realm-bonus">+{{ profile.realmBonusPct }}%</b></p>
       <p class="tp-row"><span>下一重天需</span><b>🐚 {{ nextRealmCostText }}</b></p>
-      <p class="tp-note">突破消耗贝壳逐重天翻倍（1→2→4→8…），境界越高，钓到的贝壳与金石越丰厚。</p>
+      <p class="tp-note">突破消耗贝壳逐重天翻倍（1→2→4→8…），钓道境界越高，钓到的贝壳与金石越丰厚。</p>
       <button class="realm-btn" :disabled="training2 || realmIsMax || profile.shells < (profile.nextRealmCost || 0)" @click="realmUp">
         <template v-if="realmIsMax">已臻巅峰 ✨</template>
         <template v-else-if="training2">突破中…</template>
         <template v-else-if="profile.shells < (profile.nextRealmCost || 0)">贝壳不足</template>
         <template v-else>突破到 {{ profile.powerRealm + 1 }} 重天 🌟</template>
       </button>
+    </div>
+
+    <!-- ================= 钓鱼功法阁 ================= -->
+    <div class="skill-panel" v-if="showSkills">
+      <h4>📜 钓鱼功法</h4>
+      <p class="sp-tip">以金石参悟钓道真传，修炼后永久生效。</p>
+      <div class="skill-list">
+        <div class="skill-card" v-for="s in SKILLS" :key="s.id" :class="{ owned: hasSkill(s.id) }">
+          <div class="sk-head">
+            <span class="sk-icon">{{ s.icon }}</span>
+            <span class="sk-name">{{ s.name }}</span>
+            <span class="sk-effect">{{ s.effect }}</span>
+          </div>
+          <p class="sk-desc">{{ s.desc }}</p>
+          <div class="sk-foot">
+            <span class="sk-cost" v-if="!hasSkill(s.id)">🪙 {{ s.cost }} 金石</span>
+            <span class="sk-cost owned-tag" v-else>✓ 已修炼</span>
+            <button
+              class="sk-btn"
+              :disabled="cultivating || hasSkill(s.id) || profile.goldStones < s.cost"
+              @click="cultivate(s.id)"
+            >
+              <template v-if="hasSkill(s.id)">已得真传</template>
+              <template v-else-if="cultivating">参悟中…</template>
+              <template v-else-if="profile.goldStones < s.cost">金石不足</template>
+              <template v-else>修炼</template>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ================= 结算弹窗 ================= -->
@@ -964,59 +1042,76 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-/* ---------- 场景 ---------- */
+/* ---------- 场景（仙侠：仙山 · 明月 · 祥云 · 灵湖） ---------- */
 .scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 .sky {
   position: absolute; inset: 0 0 42% 0;
-  background: linear-gradient(180deg, #7fd0ff 0%, #bfe8ff 45%, #ffe9b8 100%);
+  background: linear-gradient(180deg, #1b1740 0%, #2e2566 38%, #5a4a8c 70%, #c79a5a 100%);
   transition: background .6s;
 }
-.is-berserk .sky { background: linear-gradient(180deg, #6b2b2b 0%, #b5482f 55%, #ffb37a 100%); }
-.sun {
-  position: absolute; right: 16%; top: 16%; width: 90px; height: 90px; border-radius: 50%;
-  background: radial-gradient(circle, #fff8c9 0%, #ffe066 55%, rgba(255,224,102,0) 72%);
-  box-shadow: 0 0 70px 30px rgba(255, 224, 102, .45);
+.is-berserk .sky { background: linear-gradient(180deg, #3a1226 0%, #6e1f33 55%, #b5562f 100%); }
+.moon {
+  position: absolute; right: 15%; top: 13%; width: 96px; height: 96px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 38%, #ffffff 0%, #fff3d0 45%, rgba(255,243,208,0) 72%);
+  box-shadow: 0 0 70px 30px rgba(255, 240, 200, .4), 0 0 140px 60px rgba(180, 160, 255, .25);
 }
 .cloud {
-  position: absolute; height: 34px; border-radius: 40px;
-  background: rgba(255,255,255,.85);
+  position: absolute; height: 30px; border-radius: 40px;
+  background: linear-gradient(180deg, rgba(255,236,200,.92), rgba(220,200,255,.7));
   filter: blur(.4px);
-  opacity: .9;
+  opacity: .8;
 }
 .cloud::before, .cloud::after {
   content: ''; position: absolute; background: inherit; border-radius: 50%;
 }
 .cloud::before { width: 46px; height: 46px; top: -20px; left: 18px; }
 .cloud::after { width: 34px; height: 34px; top: -14px; right: 20px; }
-.c1 { width: 140px; top: 18%; left: 10%; animation: drift 34s linear infinite; }
-.c2 { width: 100px; top: 10%; left: 46%; animation: drift 46s linear infinite; opacity: .75; }
-.c3 { width: 170px; top: 26%; left: 70%; animation: drift 58s linear infinite; opacity: .6; }
+.c1 { width: 150px; top: 16%; left: 8%; animation: drift 34s linear infinite; }
+.c2 { width: 104px; top: 9%; left: 44%; animation: drift 46s linear infinite; opacity: .7; }
+.c3 { width: 180px; top: 24%; left: 68%; animation: drift 58s linear infinite; opacity: .55; }
 @keyframes drift { 0% { transform: translateX(-20px); } 50% { transform: translateX(30px); } 100% { transform: translateX(-20px); } }
 
-.island {
-  position: absolute; left: 12%; bottom: -6px; width: 260px; height: 70px;
-  background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  opacity: .55;
+/* 仙山：三层剪影营造纵深 */
+.peak { position: absolute; bottom: 30%; transform-origin: bottom center; }
+.peak-far {
+  left: -4%; width: 46%; height: 30%;
+  background: linear-gradient(180deg, #6f5fa6 0%, #4a3d77 100%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  opacity: .5; filter: blur(1px);
 }
-.island::before {
-  content: '🌴'; position: absolute; left: 30px; top: -48px; font-size: 52px;
+.peak-mid {
+  left: 30%; width: 50%; height: 38%;
+  background: linear-gradient(180deg, #5a4a8c 0%, #3a2f63 100%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  opacity: .7;
 }
-.island::after {
-  content: '🌴'; position: absolute; right: 40px; top: -34px; font-size: 38px;
+.peak-near {
+  right: -6%; width: 52%; height: 30%;
+  background: linear-gradient(180deg, #443663 0%, #2a2150 100%);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  opacity: .85;
 }
+/* 云海雾气 */
+.mist {
+  position: absolute; left: 0; right: 0; bottom: 30%; height: 64px;
+  background: linear-gradient(180deg, rgba(230,220,255,0) 0%, rgba(230,220,255,.55) 50%, rgba(230,220,255,0) 100%);
+  filter: blur(6px);
+  animation: mistMove 12s ease-in-out infinite;
+}
+@keyframes mistMove { 0%,100% { transform: translateX(-10px); opacity: .6; } 50% { transform: translateX(10px); opacity: .85; } }
 
-.sea {
+.lake {
   position: absolute; inset: 42% 0 0 0;
-  background: linear-gradient(180deg, #1e88b8 0%, #0b6a9e 35%, #064a75 75%, #02304d 100%);
+  background: linear-gradient(180deg, #1f6f6b 0%, #0e5a5e 35%, #073f46 75%, #042b32 100%);
 }
 .horizon {
   position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: rgba(255,255,255,.55);
+  background: rgba(255,255,255,.5);
+  box-shadow: 0 0 16px rgba(180,255,240,.6);
 }
 .wave {
   position: absolute; left: -10%; width: 120%; height: 62px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 70%);
+  background: radial-gradient(ellipse at 50% 0%, rgba(220,255,245,.22) 0%, rgba(220,255,245,0) 70%);
   border-radius: 50%;
   animation: waveMove 7s ease-in-out infinite;
 }
@@ -1027,9 +1122,9 @@ onBeforeUnmount(() => {
   0%,100% { transform: translateX(-3%) scaleY(1); }
   50% { transform: translateX(3%) scaleY(1.15); }
 }
-.sea-glitter {
+.lake-glitter {
   position: absolute; inset: 0;
-  background: repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 2px, transparent 2px 90px);
+  background: repeating-linear-gradient(180deg, rgba(200,255,245,.05) 0 2px, transparent 2px 90px);
   animation: glitter 6s linear infinite;
 }
 @keyframes glitter { 0% { background-position-y: 0; } 100% { background-position-y: 90px; } }
@@ -1425,6 +1520,49 @@ onBeforeUnmount(() => {
 }
 .to-shop { background: linear-gradient(180deg, #b3e5fc, #4fc3f7); color: #06263c; }
 
+/* ---------- 钓鱼功法阁 ---------- */
+.skill-fab {
+  position: absolute; z-index: 26; right: 92px; bottom: 22px;
+  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 24px; color: #fff;
+  background: linear-gradient(180deg, #b39ddb, #7e57c2);
+  box-shadow: 0 8px 20px rgba(0,0,0,.4), inset 0 0 0 3px rgba(255,255,255,.25);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.skill-fab .fab-label { font-size: 10px; letter-spacing: 1px; margin-top: -2px; }
+.skill-panel {
+  position: absolute; z-index: 27; right: 20px; bottom: 90px; width: 300px;
+  max-height: 64vh; overflow-y: auto;
+  background: rgba(26, 22, 58, .92);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(186, 152, 220, .35);
+  border-radius: 18px; padding: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,.45);
+}
+.skill-panel h4 { font-size: 16px; margin-bottom: 4px; color: #e1bee7; }
+.sp-tip { font-size: 11px; color: #ce93d8; margin-bottom: 10px; }
+.skill-list { display: flex; flex-direction: column; gap: 10px; }
+.skill-card {
+  background: rgba(12, 10, 30, .55);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px; padding: 10px 12px;
+}
+.skill-card.owned { border-color: rgba(186, 152, 220, .55); background: rgba(60, 40, 90, .55); }
+.sk-head { display: flex; align-items: center; gap: 8px; }
+.sk-icon { font-size: 20px; }
+.sk-name { font-weight: 800; font-size: 14px; color: #fff; }
+.sk-effect { margin-left: auto; font-size: 11px; color: #ffd54f; white-space: nowrap; }
+.sk-desc { font-size: 11px; line-height: 1.5; color: #d7c4ef; margin: 6px 0 8px; }
+.sk-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sk-cost { font-size: 12px; color: #ffe082; }
+.sk-cost.owned-tag { color: #b9f6ca; }
+.sk-btn {
+  border: none; border-radius: 10px; padding: 6px 14px; cursor: pointer;
+  font-weight: bold; font-size: 13px; color: #2a1147;
+  background: linear-gradient(180deg, #ce93d8, #8e24aa);
+}
+.sk-btn:disabled { opacity: .45; cursor: not-allowed; background: linear-gradient(180deg, #9e9e9e, #616161); color: #fff; }
+
 @media (max-width: 640px) {
   .hud { max-width: 210px; left: 10px; top: 62px; }
   .hud-card .row { font-size: 12px; }
@@ -1435,5 +1573,7 @@ onBeforeUnmount(() => {
   .bait-chip { padding: 5px 8px; font-size: 12px; }
   .train-fab { width: 50px; height: 50px; font-size: 22px; right: 12px; }
   .train-panel { right: 12px; bottom: 78px; width: 230px; }
+  .skill-fab { width: 50px; height: 50px; font-size: 20px; right: 70px; }
+  .skill-panel { right: 12px; bottom: 78px; width: 88vw; max-width: 320px; }
 }
 </style>

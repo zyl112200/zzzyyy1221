@@ -6,6 +6,7 @@ import ShopView from '../views/ShopView.vue'
 import InventoryView from '../views/InventoryView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
+import AdminUsersView from '../views/AdminUsersView.vue'
 import { getSession } from '../store/session'
 import { getAdminSession } from '../admin/store'
 
@@ -20,6 +21,7 @@ const router = createRouter({
     { path: '/inventory', name: 'inventory', component: InventoryView, meta: { auth: true } },
     { path: '/admin', name: 'admin-login', component: AdminLoginView },
     { path: '/admin/home', name: 'admin-home', component: AdminDashboardView, meta: { adminAuth: true } },
+    { path: '/admin/users', name: 'admin-users', component: AdminUsersView, meta: { adminAuth: true } },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })

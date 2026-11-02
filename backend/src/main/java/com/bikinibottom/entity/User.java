@@ -42,6 +42,15 @@ public class User {
     /** 力量境界（修仙式层级，1 起步，最高 999；突破消耗贝壳按 2^(境界-1) 翻倍） */
     private Integer powerRealm = 1;
 
+    /** 已修炼的钓鱼功法 id 列表，逗号分隔存储（如 "jingxin,xieli"） */
+    private String skills;
+
+    /**
+     * 权限：0 = 管理员（可进入后台管理系统），1 = 普通玩家（默认）。
+     * 与离线本地引擎 localEngine.js 中的 permission 字段保持一致。
+     */
+    private Integer permission = 1;
+
     /** 注册时间（插入时自动填充） */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

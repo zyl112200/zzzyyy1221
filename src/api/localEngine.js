@@ -17,6 +17,7 @@
  */
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
 import { getAdminConfig } from '../admin/store.js'
+import { SKILLS, SKILL_MAP } from '../data/skills.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -76,9 +77,9 @@ function seedDb() {
     nextUserItemId: 7,
     // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
-      { id: 1, username: 'admin', email: 'admin@bikini.bottom', password: 'admin123', permission: 0, shells: 0, strength: 10, goldStones: 0, powerRealm: 1 },
-      { id: 2, username: 'spongebob', email: 'spongebob@bikini.bottom', password: '123456', permission: 1, shells: 200000, strength: 10, goldStones: 200, powerRealm: 1 },
-      { id: 3, username: 'patrick', email: 'patrick@bikini.bottom', password: '123456', permission: 1, shells: 50, strength: 10, goldStones: 0, powerRealm: 1 }
+      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, strength:10, goldStones:0, powerRealm:1, skills:[], createTime:'2024-06-01T08:00:00.000Z' },
+      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200000, strength:10, goldStones:200, powerRealm:1, skills:[], createTime:'2024-06-02T09:30:00.000Z' },
+      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, strength:10, goldStones:0, powerRealm:1, skills:[], createTime:'2024-06-03T10:15:00.000Z' }
     ],
     userItems: [
       { id: 1, userId: 1, itemId: 1, quantity: 1, equipped: 1 },
@@ -113,6 +114,11 @@ const round1 = (v) => Math.round(v * 10) / 10
 function userByName(name) {
   const db = readDb()
   return db.users.find((u) => u.username === name) || null
+}
+
+/** 读取用户已修炼的功法列表（缺省 / 旧存档自动回退为空数组） */
+function userSkills(u) {
+  return Array.isArray(u && u.skills) ? u.skills.slice() : []
 }
 
 function ownedOf(userId) {
@@ -279,7 +285,12 @@ function buildProfile(u) {
     goldStones: u.goldStones == null ? 0 : u.goldStones,
     strength: u.strength == null ? 10 : u.strength,
     powerRealm: realm,
-    nextRealmCost: realmNextCost(realm) || null,
+    skills: userSkills(u),
+    nextRealmCost: (() => {
+      let nrc = realmNextCost(realm)
+      if (nrc > 0 && nrc < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) nrc = Math.round(nrc * 0.85)
+      return nrc || null
+    })(),
     realmBonusPct: (realm - 1) * REALM_BONUS_PER_LEVEL,
     equippedRodName: equippedRod ? equippedRod.name : '无',
     equippedRodPower: equippedRod ? equippedRod.power || 0 : 0,
@@ -298,7 +309,7 @@ function buildProfile(u) {
 const pending = new Map()
 const ENCOUNTER_TTL = 10 * 60 * 1000
 
-function pickTier(maxCatch, rodPower, luck, premium) {
+function pickTier(maxCatch, rodPower, luck, premium, skillLuck = 1) {
   const luckFactor = 1 + rodPower * 0.12 + (luck ? 0.5 : 0) + (premium ? 0.35 : 0)
   // 后台可覆盖各品级的爆率权重
   const admin = safeAdminConfig()
@@ -309,7 +320,7 @@ function pickTier(maxCatch, rodPower, luck, premium) {
     if (t.minW > maxCatch) continue // 装备承重够不到这个品级
     let base = t.baseWeight
     if (admin && admin.dropRates && admin.dropRates[code] != null) base = admin.dropRates[code]
-    if (code !== 'COMMON') base *= luckFactor
+    if (code !== 'COMMON') base *= luckFactor * skillLuck
     weights.push([code, base])
     total += base
   }
@@ -360,15 +371,16 @@ function consumeBait(userId, baitId) {
 }
 
 const RARE_CHEERS = [
-  '🎉 哇哦！你竟然把「{fish}」这种传说级的存在钓了上来，整个比奇堡都要为你欢呼啦！',
-  '🌟 不得了！「{fish}」成功上岸，这可是能写进蟹堡王传奇的鱼！',
-  '🐠 稀世珍宝「{fish}」被你收入囊中，海绵宝宝都看呆了！',
-  '👑 神话 / 山海级的「{fish}」！你这钓技，蟹老板都得拜你为师！'
+  '🎉 哇哦！你竟把「{fish}」这等灵物钓了上来，整个仙钓界都要为你轰动啦！',
+  '🌟 不得了！「{fish}」成功上岸，这可是能写进钓道传奇的鱼！',
+  '🐠 稀世珍宝「{fish}」被你收入囊中，仙人见了都惊叹！',
+  '👑 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
 ]
 
 function cast(username, baitId) {
   const u = userByName(username)
   if (!u) return err('比奇堡查无此人 🐙')
+  const skills = userSkills(u)
   ensureStarterRod(u.id)
 
   let profile = buildProfile(u)
@@ -391,7 +403,7 @@ function cast(username, baitId) {
   const lineStrength = profile.lineStrength || 300
   const strength = profile.strength || 10
 
-  const tier = pickTier(maxCatch, rodPower, luck, premiumBait)
+  const tier = pickTier(maxCatch, rodPower, luck, premiumBait, skills.includes('guanshui') ? 1.6 : 1)
   const weight = sampleWeight(tier, maxCatch)
   const td = TIERS[tier]
 
@@ -409,6 +421,11 @@ function cast(username, baitId) {
     rewardShells = Math.round(rewardShells * realmMul)
     rewardGold = Math.round(rewardGold * realmMul)
   }
+
+  // 钓鱼功法：引灵诀 +20% 收益，钓道真解 +8%（可叠加）
+  const skillYield = (skills.includes('yinling') ? 1.2 : 1) * (skills.includes('diaodao') ? 1.08 : 1)
+  rewardShells = Math.round(rewardShells * skillYield)
+  rewardGold = Math.round(rewardGold * skillYield)
 
   const powerScore = 1500 + strength * 600 + rodPower * 2500
   const difficulty = clamp(weight / powerScore, 0.12, 5.0)
@@ -575,15 +592,17 @@ function realmUp(username) {
   const u = userByName(username)
   if (!u) return err('比奇堡查无此人 🐙')
   const realm = u.powerRealm == null ? 1 : u.powerRealm
-  if (realm >= REALM_MAX) return err('力量境界已臻至 999 重天巅峰，无需再突破 ✨')
-  const cost = realmNextCost(realm)
+  if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
+  let cost = realmNextCost(realm)
+  if (cost > 0 && cost < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) cost = Math.round(cost * 0.85)
   const shells = u.shells == null ? 0 : u.shells
   if (shells < cost) return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${cost} 🐚`)
   u.shells = shells - cost
   u.powerRealm = realm + 1
   persist()
   const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
-  const next = realmNextCost(u.powerRealm)
+  let next = realmNextCost(u.powerRealm)
+  if (next > 0 && next < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) next = Math.round(next * 0.85)
   return ok({
     powerRealm: u.powerRealm,
     cost,
@@ -593,6 +612,25 @@ function realmUp(username) {
     nextRealmCost: next > 0 ? next : null,
     message: `🌟 突破！力量境界升至 ${u.powerRealm} 重天，钓鱼收益 +${bonus}%`
   })
+}
+
+// ============================================================
+//  钓鱼功法：修炼（消耗金石，解锁被动加成）
+// ============================================================
+function cultivate({ username, skillId }) {
+  const u = userByName(username)
+  if (!u) return err('查无此人，无法修炼功法')
+  const def = SKILL_MAP.get(skillId)
+  if (!def) return err('功法不存在，无此传承')
+  const skills = userSkills(u)
+  if (skills.includes(skillId)) return err('该功法已修炼，无需重复')
+  const gold = u.goldStones == null ? 0 : u.goldStones
+  if (gold < def.cost) return err(`金石不足，修炼《${def.name}》需要 ${def.cost} 金石 🪙`)
+  u.goldStones = gold - def.cost
+  skills.push(skillId)
+  u.skills = skills
+  persist()
+  return ok({ goldStones: u.goldStones, skills: userSkills(u) }, `📜 成功修炼《${def.name}》！`)
 }
 
 // ============================================================
@@ -675,10 +713,12 @@ function register({ username, email, password }) {
     email: mail,
     password: password, // 按需求：明文存储，不做加密
     permission: 1, // 注册用户默认权限：1 = 默认权限（普通玩家）
+    skills: [],
     shells: starterShells,
     strength: 10,
     goldStones: starterGold,
-    powerRealm: 1
+    powerRealm: 1,
+    createTime: new Date().toISOString()
   })
   // 新手礼包：1 把初级钓竿（已装备）+ 5 个普通鱼饵
   db.userItems.push({ id: db.nextUserItemId++, userId: id, itemId: 1, quantity: 1, equipped: 1 })
@@ -729,6 +769,134 @@ export function changeUserPassword({ username, oldPassword, newPassword }) {
   u.password = newPassword
   persist()
   return { code: 200, message: '密码已修改，请重新登录' }
+}
+
+// ============================================================
+//  后台用户管理（与后端 AdminUserController 接口契约保持一致）
+// ============================================================
+/** 脱敏：不返回明文密码 */
+function sanitizeUser(u) {
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    permission: u.permission == null ? 1 : u.permission,
+    shells: u.shells == null ? 0 : u.shells,
+    strength: u.strength == null ? 10 : u.strength,
+    goldStones: u.goldStones == null ? 0 : u.goldStones,
+    powerRealm: u.powerRealm == null ? 1 : u.powerRealm,
+    createTime: u.createTime || null
+  }
+}
+
+function countAdmins() {
+  return readDb().users.filter((u) => u.permission === 0).length
+}
+
+/** 用户列表（关键词 / 角色 / 分页） */
+function listUsers(params = {}) {
+  const db = readDb()
+  let list = db.users.slice()
+  const kw = String(params.keyword || '').trim().toLowerCase()
+  if (kw) {
+    list = list.filter(
+      (u) => u.username.toLowerCase().includes(kw) || String(u.email || '').toLowerCase().includes(kw)
+    )
+  }
+  if (params.permission !== '' && params.permission != null) {
+    list = list.filter((u) => String(u.permission) === String(params.permission))
+  }
+  list.sort((a, b) => a.id - b.id)
+  const total = list.length
+  const p = Number(params.page) > 0 ? Number(params.page) : 1
+  const ps = Number(params.pageSize) > 0 ? Number(params.pageSize) : 10
+  const from = Math.min((p - 1) * ps, Math.max(0, total))
+  const to = Math.min(from + ps, total)
+  return ok({
+    list: list.slice(from, to).map(sanitizeUser),
+    total,
+    page: p,
+    pageSize: ps
+  })
+}
+
+function getUser(id) {
+  const u = readDb().users.find((x) => x.id === Number(id))
+  if (!u) return err('用户不存在')
+  return ok(sanitizeUser(u))
+}
+
+function updateUser(b = {}) {
+  const db = readDb()
+  const u = db.users.find((x) => x.id === Number(b.id))
+  if (!u) return err('用户不存在')
+  if (b.email != null) {
+    const mail = String(b.email).trim()
+    if (!mail) return err('邮箱不能为空')
+    if (db.users.some((x) => x.id !== u.id && x.email === mail)) return err('该邮箱已被其他用户使用')
+    u.email = mail
+  }
+  if (b.shells != null) u.shells = clamp(Number(b.shells) || 0, 0, 1e12)
+  if (b.strength != null) u.strength = clamp(Math.round(Number(b.strength) || 0), 0, 1e9)
+  if (b.goldStones != null) u.goldStones = clamp(Number(b.goldStones) || 0, 0, 1e12)
+  if (b.powerRealm != null) u.powerRealm = clamp(Math.round(Number(b.powerRealm) || 1), 1, 999)
+  if (b.permission != null) {
+    const perm = Number(b.permission) === 0 ? 0 : 1
+    if (perm === 1 && u.permission === 0 && countAdmins() <= 1) {
+      return err('至少需要保留一名管理员，无法降级最后一名管理员')
+    }
+    u.permission = perm
+  }
+  persist()
+  return ok(sanitizeUser(u), '用户已更新')
+}
+
+function deleteUser(id) {
+  const db = readDb()
+  const u = db.users.find((x) => x.id === Number(id))
+  if (!u) return err('用户不存在')
+  if (u.permission === 0 && countAdmins() <= 1) {
+    return err('至少需要保留一名管理员，无法删除最后一名管理员')
+  }
+  db.users = db.users.filter((x) => x.id !== u.id)
+  persist()
+  return ok(null, '用户已删除')
+}
+
+function resetUserPassword(id, newPassword) {
+  const u = readDb().users.find((x) => x.id === Number(id))
+  if (!u) return err('用户不存在')
+  if (!newPassword || String(newPassword).length < 6) return err('新密码至少 6 位')
+  u.password = String(newPassword) // 离线模式：明文存储，与既有约定一致
+  persist()
+  return ok(null, '密码已重置')
+}
+
+function createUser(b = {}) {
+  const name = String(b.username || '').trim()
+  const mail = String(b.email || '').trim()
+  if (!name || !mail) return err('用户名和邮箱不能为空')
+  if (!b.password || String(b.password).length < 6) return err('密码至少 6 位')
+  const db = readDb()
+  if (db.users.some((u) => u.username === name)) return err('该用户名已被占用')
+  if (db.users.some((u) => u.email === mail)) return err('该邮箱已注册过')
+  const id = db.nextUserId++
+  const newUser = {
+    id,
+    username: name,
+    email: mail,
+    password: String(b.password), // 离线模式：明文存储
+    permission: Number(b.permission) === 0 ? 0 : 1,
+    shells: b.shells != null ? clamp(Number(b.shells), 0, 1e12) : 50,
+    strength: b.strength != null ? clamp(Math.round(Number(b.strength)), 0, 1e9) : 10,
+    goldStones: b.goldStones != null ? clamp(Number(b.goldStones), 0, 1e12) : 0,
+    powerRealm: b.powerRealm != null ? clamp(Math.round(Number(b.powerRealm)), 1, 999) : 1,
+    skills: [],
+    createTime: new Date().toISOString()
+  }
+  db.users.push(newUser)
+  persist()
+  return ok(sanitizeUser(newUser), '创建成功')
 }
 
 // ============================================================
@@ -805,6 +973,10 @@ export function localCall(method, url, body) {
       return realmUp(b.username)
     case '/api/game/equip':
       return equip(b.username, b.userItemId)
+    case '/api/game/cultivate':
+      return cultivate(b)
+    case '/api/game/skills':
+      return ok(SKILLS)
     case '/api/shop/items':
       return shopItems()
     case '/api/shop/buy':
@@ -813,6 +985,23 @@ export function localCall(method, url, body) {
       return aiDialogs()
     case '/api/game/ai-chat':
       return ok(aiChat(b.message))
+    // ---- 后台用户管理 ----
+    case '/api/admin/users':
+      if (M === 'GET') return listUsers(params)
+      if (M === 'POST') return createUser(b)
+      return err('不支持的请求方法：' + M + ' ' + path)
+    case '/api/admin/users/detail':
+      if (M === 'GET') return getUser(params.id)
+      return err('不支持的请求方法：' + M + ' ' + path)
+    case '/api/admin/users/update':
+      if (M === 'POST') return updateUser(b)
+      return err('不支持的请求方法：' + M + ' ' + path)
+    case '/api/admin/users/delete':
+      if (M === 'POST') return deleteUser(b.id)
+      return err('不支持的请求方法：' + M + ' ' + path)
+    case '/api/admin/users/reset-password':
+      if (M === 'POST') return resetUserPassword(b.id, b.newPassword)
+      return err('不支持的请求方法：' + M + ' ' + path)
     default:
       return err('离线模式暂不支持该接口：' + M + ' ' + path)
   }
