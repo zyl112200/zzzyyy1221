@@ -35,6 +35,12 @@ export const trainApi = (username) => request('/api/game/train', { username })
 /** 贝壳突破力量境界：POST /api/game/realm-up */
 export const realmUpApi = (username) => request('/api/game/realm-up', { username })
 
+/** 根骨一键修炼（耗尽金石）：POST /api/game/train-all */
+export const trainAllApi = (username) => request('/api/game/train-all', { username })
+
+/** 钓道境界一键突破（耗尽贝壳）：POST /api/game/realm-up-all */
+export const realmUpAllApi = (username) => request('/api/game/realm-up-all', { username })
+
 /** 功法目录（钓鱼功法列表，无需登录）：GET /api/game/skills */
 export const skillCatalogApi = () => request('/api/game/skills')
 

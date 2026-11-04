@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
-import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi, cultivateApi } from '../api/game'
+import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi, cultivateApi, trainAllApi, realmUpAllApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
 import { SKILLS, SKILL_MAP } from '../data/skills'
@@ -589,6 +589,8 @@ function closeResult() {
 const showTrain = ref(false)
 const training = ref(false)
 const training2 = ref(false)
+const trainingAll = ref(false)
+const realmTrainingAll = ref(false)
 const trainCost = computed(() => 20 + (profile.strength || 10) * 2)
 
 async function train() {
@@ -674,6 +676,59 @@ async function realmUp() {
     showToast(e.message || '突破失败 🌊')
   } finally {
     training2.value = false
+  }
+}
+
+/** 根骨一键修炼：用尽金石，能升几级升几级 */
+async function trainAll() {
+  if (training.value || trainingAll.value) return
+  if (profile.goldStones < (20 + (profile.strength || 10) * 2)) {
+    showToast('金石不足，无法修炼 🪙')
+    return
+  }
+  trainingAll.value = true
+  try {
+    const res = await trainAllApi(username)
+    if (res.code === 200) {
+      profile.strength = res.data.strength
+      profile.goldStones = res.data.goldStones
+      showToast(res.data.message)
+      beep(520, 0.09); setTimeout(() => beep(720, 0.14), 90)
+    } else {
+      showToast(res.message || '修炼失败')
+    }
+  } catch (e) {
+    showToast(e.message || '修炼失败 🌊')
+  } finally {
+    trainingAll.value = false
+  }
+}
+
+/** 钓道境界一键突破：用尽贝壳，能破几重破几重 */
+async function realmUpAll() {
+  if (training2.value || realmTrainingAll.value || realmIsMax.value) return
+  if (profile.shells < (profile.nextRealmCost || 0)) {
+    showToast('贝壳不够啦，无法突破 🐚')
+    return
+  }
+  realmTrainingAll.value = true
+  try {
+    const res = await realmUpAllApi(username)
+    if (res.code === 200) {
+      profile.powerRealm = res.data.powerRealm
+      profile.shells = res.data.shells
+      profile.goldStones = res.data.goldStones
+      profile.nextRealmCost = res.data.nextRealmCost
+      profile.realmBonusPct = res.data.realmBonusPct
+      showToast(res.data.message)
+      beep(660, 0.1, 'triangle'); setTimeout(() => beep(880, 0.12, 'triangle'), 100); setTimeout(() => beep(1040, 0.2, 'triangle'), 220)
+    } else {
+      showToast(res.message || '突破失败')
+    }
+  } catch (e) {
+    showToast(e.message || '突破失败 🌊')
+  } finally {
+    realmTrainingAll.value = false
   }
 }
 
@@ -951,6 +1006,9 @@ onBeforeUnmount(() => {
       <button class="train-btn" :disabled="training || profile.goldStones < trainCost" @click="train">
         {{ training ? '修炼中…' : (profile.goldStones < trainCost ? '金石不足' : '根骨 +5') }}
       </button>
+      <button class="train-btn ghost" :disabled="training || trainingAll || profile.goldStones < trainCost" @click="trainAll">
+        {{ trainingAll ? '连修中…' : '一键修炼（花光金石）' }}
+      </button>
 
       <div class="tp-divider"></div>
 
@@ -962,12 +1020,15 @@ onBeforeUnmount(() => {
       <div class="realm-bar"><div class="realm-fill" :class="realmTierClass(profile.powerRealm)" :style="{ width: realmProgressPct + '%' }"></div></div>
       <p class="tp-row"><span>钓鱼收益加成</span><b class="realm-bonus">+{{ profile.realmBonusPct }}%</b></p>
       <p class="tp-row"><span>下一重天需</span><b>🐚 {{ nextRealmCostText }}</b></p>
-      <p class="tp-note">突破消耗贝壳逐重天翻倍（1→2→4→8…），钓道境界越高，钓到的贝壳与金石越丰厚。</p>
+      <p class="tp-note">突破消耗贝壳逐重天递增 100（100→200→300…），钓道境界越高，钓到的贝壳与金石越丰厚。</p>
       <button class="realm-btn" :disabled="training2 || realmIsMax || profile.shells < (profile.nextRealmCost || 0)" @click="realmUp">
         <template v-if="realmIsMax">已臻巅峰 ✨</template>
         <template v-else-if="training2">突破中…</template>
         <template v-else-if="profile.shells < (profile.nextRealmCost || 0)">贝壳不足</template>
         <template v-else>突破到 {{ profile.powerRealm + 1 }} 重天 🌟</template>
+      </button>
+      <button class="realm-btn ghost" :disabled="training2 || realmTrainingAll || realmIsMax || profile.shells < (profile.nextRealmCost || 0)" @click="realmUpAll">
+        {{ realmTrainingAll ? '连破中…' : '一键突破（花空贝壳）' }}
       </button>
     </div>
 
@@ -1410,6 +1471,13 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 0 #2e7d32;
 }
 .train-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.train-btn.ghost {
+  background: rgba(102, 187, 106, .14);
+  color: #a5d6a7;
+  box-shadow: inset 0 0 0 2px rgba(102, 187, 106, .5);
+}
+.train-btn.ghost:hover:not(:disabled) { background: rgba(102, 187, 106, .26); }
+.train-btn.ghost:active:not(:disabled) { transform: translateY(2px); }
 
 /* ---------- 力量境界 ---------- */
 .tp-divider { height: 1px; background: rgba(255,255,255,.16); margin: 12px 0; }
@@ -1432,6 +1500,13 @@ onBeforeUnmount(() => {
 }
 .realm-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #6a1b9a; }
 .realm-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.realm-btn.ghost {
+  background: rgba(186, 104, 200, .14);
+  color: #e1bee7;
+  box-shadow: inset 0 0 0 2px rgba(186, 104, 200, .55);
+}
+.realm-btn.ghost:hover:not(:disabled) { background: rgba(186, 104, 200, .28); }
+.realm-btn.ghost:active:not(:disabled) { transform: translateY(2px); }
 .realm-title-badge {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 9px 10px; border-radius: 12px; margin-bottom: 8px;

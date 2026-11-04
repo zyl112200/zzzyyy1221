@@ -135,8 +135,8 @@ const REALM_BONUS_PER_LEVEL = 5
 
 function realmNextCost(realm) {
   if (realm >= REALM_MAX) return 0
-  if (realm >= 53) return Number.MAX_SAFE_INTEGER
-  return Math.pow(2, realm)
+  // 每次升级线性递增 100：realm→realm+1 需 100 × realm 贝壳（100→200→300…）
+  return 100 * realm
 }
 
 // ============================================================
@@ -614,6 +614,76 @@ function realmUp(username) {
   })
 }
 
+// 根骨一键修炼：耗尽金石，能升几级升几级
+function trainAll(username) {
+  const u = userByName(username)
+  if (!u) return err('比奇堡查无此人 🐙')
+  let strength = u.strength == null ? 10 : u.strength
+  let gold = u.goldStones == null ? 0 : u.goldStones
+  let times = 0
+  let totalCost = 0
+  while (true) {
+    const cost = 20 + strength * 2
+    if (gold < cost) break
+    gold -= cost
+    strength += 5
+    totalCost += cost
+    times++
+  }
+  if (times === 0) return err(`金石不足，至少需 ${20 + strength * 2} 金石 🪙`)
+  u.goldStones = gold
+  u.strength = strength
+  persist()
+  return ok({
+    strength: u.strength,
+    cost: totalCost,
+    goldStones: u.goldStones,
+    gained: times * 5,
+    message: `💪 连修 ${times} 次！根骨 +${times * 5}，金石耗尽`
+  })
+}
+
+// 钓道境界一键突破：耗尽贝壳，能破几重破几重
+function realmUpAll(username) {
+  const u = userByName(username)
+  if (!u) return err('比奇堡查无此人 🐙')
+  let realm = u.powerRealm == null ? 1 : u.powerRealm
+  const skills = userSkills(u)
+  if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
+  let shells = u.shells == null ? 0 : u.shells
+  let times = 0
+  let totalCost = 0
+  while (realm < REALM_MAX) {
+    let cost = realmNextCost(realm)
+    if (cost > 0 && cost < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) cost = Math.round(cost * 0.85)
+    if (shells < cost) break
+    shells -= cost
+    realm += 1
+    totalCost += cost
+    times++
+  }
+  if (times === 0) {
+    let need = realmNextCost(realm)
+    if (need > 0 && need < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) need = Math.round(need * 0.85)
+    return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${need} 🐚`)
+  }
+  u.shells = shells
+  u.powerRealm = realm
+  persist()
+  const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
+  let next = realmNextCost(u.powerRealm)
+  if (next > 0 && next < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) next = Math.round(next * 0.85)
+  return ok({
+    powerRealm: u.powerRealm,
+    cost: totalCost,
+    shells: u.shells,
+    goldStones: u.goldStones == null ? 0 : u.goldStones,
+    realmBonusPct: bonus,
+    nextRealmCost: next > 0 ? next : null,
+    message: `🌟 连破 ${times} 重天！钓道境界升至 ${u.powerRealm} 重天，收益 +${bonus}%`
+  })
+}
+
 // ============================================================
 //  钓鱼功法：修炼（消耗金石，解锁被动加成）
 // ============================================================
@@ -971,6 +1041,10 @@ export function localCall(method, url, body) {
       return train(b.username)
     case '/api/game/realm-up':
       return realmUp(b.username)
+    case '/api/game/train-all':
+      return trainAll(b.username)
+    case '/api/game/realm-up-all':
+      return realmUpAll(b.username)
     case '/api/game/equip':
       return equip(b.username, b.userItemId)
     case '/api/game/cultivate':

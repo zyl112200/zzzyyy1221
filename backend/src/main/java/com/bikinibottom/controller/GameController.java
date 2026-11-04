@@ -74,6 +74,18 @@ public class GameController {
         return gameService.realmUp(body.get("username"));
     }
 
+    /** 根骨一键修炼（耗尽金石，能升几级升几级）：POST /api/game/train-all { "username": "xxx" } */
+    @PostMapping("/train-all")
+    public Result<TrainResult> trainAll(@RequestBody Map<String, String> body) {
+        return gameService.trainAll(body.get("username"));
+    }
+
+    /** 钓道境界一键突破（耗尽贝壳，能破几重破几重）：POST /api/game/realm-up-all { "username": "xxx" } */
+    @PostMapping("/realm-up-all")
+    public Result<RealmUpResult> realmUpAll(@RequestBody Map<String, String> body) {
+        return gameService.realmUpAll(body.get("username"));
+    }
+
     /** 钓鱼功法目录（前端功法阁渲染用，无需登录）：GET /api/game/skills */
     @GetMapping("/skills")
     public Result<List<com.bikinibottom.service.GameService.SkillDef>> skills() {

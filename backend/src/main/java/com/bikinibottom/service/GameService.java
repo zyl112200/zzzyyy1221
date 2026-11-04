@@ -136,17 +136,14 @@ public class GameService {
     }
 
     /**
-     * 突破到下一重天所需贝壳：规律为 2^当前境界（即 1→2、2→4、3→8…）。
-     * 已达上限返回 0；超过 long 安全范围时返回 Long.MAX_VALUE（玩家实际无法企及）。
+     * 突破到下一重天所需贝壳：每次升级线性递增 100，即 realm 重天突破到 realm+1 重天需要
+     * 100 × realm 贝壳（100→200→300…）。已达上限返回 0。
      */
     private long realmNextCost(int realm) {
         if (realm >= REALM_MAX) {
             return 0L;
         }
-        if (realm >= 53) {
-            return SAFE_MAX;
-        }
-        return 1L << realm; // 2^realm
+        return 100L * realm; // realm→realm+1 需 100×realm 贝壳
     }
 
     /** 玩家档案（含钓竿兜底，保证新手永远有一把可用的竿） */
@@ -630,7 +627,7 @@ public class GameService {
     // ==========================================================
 
     /**
-     * 力量境界突破：消耗贝壳升级到下一重天，成本 = 2^当前境界（1→2→4→8…），最高 999 重天。
+     * 力量境界突破：消耗贝壳升级到下一重天，成本 = 100 × 当前重天数（100→200→300…），最高 999 重天。
      * 突破后钓鱼收益按每重天 +5% 永久提升。
      */
     public Result<RealmUpResult> realmUp(String username) {
@@ -666,6 +663,99 @@ public class GameService {
         }
         r.setNextRealmCost(nextCost > 0 ? nextCost : null);
         r.setMessage("🌟 突破！钓道境界升至 " + u.getPowerRealm() + " 重天，钓鱼收益 +" + r.getRealmBonusPct() + "%");
+        return Result.success(r);
+    }
+
+    /**
+     * 根骨一键修炼：用尽全部金石，能升几级升几级（每次 +5 根骨，成本 20 + 根骨×2）。
+     */
+    public Result<TrainResult> trainAll(String username) {
+        User u = getUser(username);
+        if (u == null) {
+            return Result.error("比奇堡查无此人 🐙");
+        }
+        int strength = strengthOf(u);
+        int gold = goldOf(u);
+        int times = 0;
+        int totalCost = 0;
+        while (true) {
+            int cost = 20 + strength * 2;
+            if (gold < cost) {
+                break;
+            }
+            gold -= cost;
+            strength += 5;
+            totalCost += cost;
+            times++;
+        }
+        if (times == 0) {
+            return Result.error("金石不足，至少需 " + (20 + strength * 2) + " 金石才能修炼 🪙");
+        }
+        u.setGoldStones(gold);
+        u.setStrength(strength);
+        userMapper.updateById(u);
+
+        TrainResult r = new TrainResult();
+        r.setStrength(u.getStrength());
+        r.setCost(totalCost);
+        r.setGoldStones(u.getGoldStones());
+        r.setGained(times * 5);
+        r.setMessage("💪 连修 " + times + " 次！根骨 +" + (times * 5) + "，金石耗尽");
+        return Result.success(r);
+    }
+
+    /**
+     * 钓道境界一键突破：用尽全部贝壳，能破几重破几重（每重成本 100 × 当前重天数）。
+     */
+    public Result<RealmUpResult> realmUpAll(String username) {
+        User u = getUser(username);
+        if (u == null) {
+            return Result.error("比奇堡查无此人 🐙");
+        }
+        int realm = realmOf(u);
+        if (realm >= REALM_MAX) {
+            return Result.error("钓道境界已臻至 999 重天巅峰，无需再突破 ✨");
+        }
+        int shells = u.getShells() == null ? 0 : u.getShells();
+        List<String> skills = userSkills(u);
+        int times = 0;
+        long totalCost = 0;
+        while (realm < REALM_MAX) {
+            long cost = realmNextCost(realm);
+            if (cost > 0 && cost < SAFE_MAX && skills.contains("wugou")) {
+                cost = Math.round(cost * WUGOU_DISCOUNT);
+            }
+            if (shells < cost) {
+                break;
+            }
+            shells -= (int) cost;
+            realm += 1;
+            totalCost += cost;
+            times++;
+        }
+        if (times == 0) {
+            long need = realmNextCost(realm);
+            if (need > 0 && need < SAFE_MAX && skills.contains("wugou")) {
+                need = Math.round(need * WUGOU_DISCOUNT);
+            }
+            return Result.error("贝壳不足，突破到 " + (realm + 1) + " 重天需要 " + need + " 🐚");
+        }
+        u.setShells(shells);
+        u.setPowerRealm(realm);
+        userMapper.updateById(u);
+
+        RealmUpResult r = new RealmUpResult();
+        r.setPowerRealm(u.getPowerRealm());
+        r.setCost(totalCost);
+        r.setShells(u.getShells());
+        r.setGoldStones(goldOf(u));
+        r.setRealmBonusPct((u.getPowerRealm() - 1) * REALM_BONUS_PER_LEVEL);
+        long nextCost = realmNextCost(u.getPowerRealm());
+        if (nextCost > 0 && nextCost < SAFE_MAX && skills.contains("wugou")) {
+            nextCost = Math.round(nextCost * WUGOU_DISCOUNT);
+        }
+        r.setNextRealmCost(nextCost > 0 ? nextCost : null);
+        r.setMessage("🌟 连破 " + times + " 重天！钓道境界升至 " + u.getPowerRealm() + " 重天，收益 +" + r.getRealmBonusPct() + "%");
         return Result.success(r);
     }
 

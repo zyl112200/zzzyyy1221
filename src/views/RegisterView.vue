@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import OceanBackground from '../components/OceanBackground.vue'
+import ImmortalBackground from '../components/ImmortalBackground.vue'
 import RegisterCard from '../components/RegisterCard.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 
@@ -18,7 +18,7 @@ function showToast(msg) {
 
 <template>
   <div class="page">
-    <OceanBackground />
+    <ImmortalBackground />
     <RegisterCard @toast="showToast" />
     <ToastMessage :message="toastMessage" :visible="toastVisible" />
   </div>

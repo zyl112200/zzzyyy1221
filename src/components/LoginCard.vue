@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import SpongeBob from './SpongeBob.vue'
+import Cultivator from './Cultivator.vue'
 import { loginApi } from '../api/auth'
 import { setSession } from '../store/session'
 
@@ -15,11 +15,11 @@ const loading = ref(false)
 
 async function onSubmit() {
   if (!username.value.trim()) {
-    emit('toast', '请输入用户名哦～ 🍍')
+    emit('toast', '请先报上道号 🍃')
     return
   }
   if (!password.value.trim()) {
-    emit('toast', '密码不能是空的，海绵宝宝会伤心的 😢')
+    emit('toast', '护道法印不可为空，仙尊会失望的 🌫️')
     return
   }
   loading.value = true
@@ -27,59 +27,59 @@ async function onSubmit() {
     const res = await loginApi({ username: username.value.trim(), password: password.value })
     if (res.code === 200) {
       setSession(res.data)
-      emit('toast', res.message || ('欢迎回到比奇堡，' + username.value.trim() + '！🎉'))
+      emit('toast', res.message || ('欢迎回到仙钓大陆，' + username.value.trim() + '！✨'))
       setTimeout(() => router.push('/home'), 700)
     } else {
       emit('toast', res.message || '登录失败')
     }
   } catch (e) {
-    emit('toast', e.message || '连不上蟹堡王服务器，请确认后端已启动 🌊')
+    emit('toast', e.message || '连不上仙门中枢，请确认后端已开启 🌫️')
   } finally {
     loading.value = false
   }
 }
 
 function forgot() {
-  emit('toast', '秘方被痞老板偷走了？快打给蟹老板！🦀')
+  emit('toast', '忘却法印？速去寻仙盟执事重铸 🗝️')
 }
 </script>
 
 <template>
   <div class="card">
-    <SpongeBob />
+    <Cultivator variant="jade" />
 
-    <h1>比奇堡登录</h1>
-    <p class="subtitle">我准备好了！我准备好了！⭐</p>
+    <h1>仙门登录</h1>
+    <p class="subtitle">道友请留步，入我仙钓大陆 ⛰️</p>
 
     <form @submit.prevent="onSubmit">
       <div class="field">
-        <span class="icon">🍍</span>
+        <span class="icon">☯</span>
         <input
           v-model="username"
           type="text"
-          placeholder="用户名（比如：海绵宝宝）"
+          placeholder="道号（比如：青云子）"
           autocomplete="username"
         >
       </div>
       <div class="field">
-        <span class="icon">🦀</span>
+        <span class="icon">🗝️</span>
         <input
           v-model="password"
           type="password"
-          placeholder="密码（蟹黄堡秘方）"
+          placeholder="护道法印（密码）"
           autocomplete="current-password"
         >
       </div>
 
       <div class="options">
-        <label><input v-model="remember" type="checkbox"> 记住我</label>
-        <a href="#" @click.prevent="forgot">忘记密码？</a>
+        <label><input v-model="remember" type="checkbox"> 铭记此身</label>
+        <a href="#" @click.prevent="forgot">忘却法印？</a>
       </div>
 
-      <button type="submit" class="btn" :disabled="loading">{{ loading ? '下潜中…' : '出发！' }}</button>
+      <button type="submit" class="btn" :disabled="loading">{{ loading ? '凝神中…' : '登 仙' }}</button>
     </form>
 
-    <p class="signup">还没有账号？<router-link to="/register">找章鱼哥注册</router-link></p>
+    <p class="signup">尚无仙缘？<router-link to="/register">叩仙门入道</router-link></p>
   </div>
 </template>
 
@@ -89,24 +89,24 @@ function forgot() {
   z-index: 5;
   width: 380px;
   max-width: 92vw;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.93);
   border-radius: 28px;
   padding: 150px 36px 36px;
-  box-shadow: 0 24px 60px rgba(1, 40, 80, .45), inset 0 0 0 4px #ffd54f;
+  box-shadow: 0 24px 60px rgba(30, 12, 60, .5), inset 0 0 0 4px #7e57c2;
   text-align: center;
   backdrop-filter: blur(4px);
 }
 
 h1 {
-  color: #f9a825;
+  color: #6a3fb0;
   font-size: 26px;
-  letter-spacing: 2px;
-  text-shadow: 2px 2px 0 #0277bd, 4px 4px 0 rgba(2, 119, 189, .25);
+  letter-spacing: 3px;
+  text-shadow: 2px 2px 0 #d1c4e9, 4px 4px 0 rgba(106, 63, 176, .18);
   margin-bottom: 4px;
 }
 
 .subtitle {
-  color: #0288d1;
+  color: #2e9b78;
   font-size: 13px;
   margin-bottom: 24px;
 }
@@ -119,17 +119,17 @@ h1 {
 .field input {
   width: 100%;
   padding: 13px 14px 13px 44px;
-  border: 3px solid #ffe082;
+  border: 3px solid #c5e1d6;
   border-radius: 14px;
   font-size: 15px;
   outline: none;
-  background: #fffde7;
-  color: #4e342e;
+  background: #f3fbf7;
+  color: #2e4034;
   transition: border-color .25s, box-shadow .25s;
 }
 .field input:focus {
-  border-color: #ffb300;
-  box-shadow: 0 0 0 4px rgba(255, 179, 0, .2);
+  border-color: #2e9b78;
+  box-shadow: 0 0 0 4px rgba(46, 155, 120, .2);
 }
 .field .icon {
   position: absolute;
@@ -144,7 +144,7 @@ h1 {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #0277bd;
+  color: #6a3fb0;
   margin-bottom: 20px;
 }
 .options label {
@@ -154,12 +154,12 @@ h1 {
   cursor: pointer;
 }
 .options input[type="checkbox"] {
-  accent-color: #ffb300;
+  accent-color: #7e57c2;
   width: 15px;
   height: 15px;
 }
 .options a {
-  color: #0277bd;
+  color: #2e9b78;
   text-decoration: none;
 }
 .options a:hover {
@@ -173,29 +173,29 @@ h1 {
   border-radius: 16px;
   font-size: 17px;
   font-weight: bold;
-  letter-spacing: 4px;
-  color: #4e2600;
+  letter-spacing: 6px;
+  color: #06321f;
   cursor: pointer;
-  background: linear-gradient(180deg, #ffe14d, #ffb300);
-  box-shadow: 0 6px 0 #c17900, 0 10px 18px rgba(1, 40, 80, .3);
+  background: linear-gradient(180deg, #6fe0b6, #2e9b78);
+  box-shadow: 0 6px 0 #176b54, 0 10px 18px rgba(30, 12, 60, .3);
   transition: transform .12s, box-shadow .12s;
 }
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 0 #c17900, 0 14px 22px rgba(1, 40, 80, .35);
+  box-shadow: 0 8px 0 #176b54, 0 14px 22px rgba(30, 12, 60, .35);
 }
 .btn:active {
   transform: translateY(3px);
-  box-shadow: 0 2px 0 #c17900, 0 6px 10px rgba(1, 40, 80, .3);
+  box-shadow: 0 2px 0 #176b54, 0 6px 10px rgba(30, 12, 60, .3);
 }
 
 .signup {
   margin-top: 18px;
   font-size: 13px;
-  color: #0277bd;
+  color: #6a3fb0;
 }
 .signup a {
-  color: #f9a825;
+  color: #7e57c2;
   font-weight: bold;
   text-decoration: none;
 }

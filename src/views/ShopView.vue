@@ -56,7 +56,7 @@ async function load() {
 }
 
 async function buy(item) {
-  const n = qty[item.id] || 1
+  const n = Math.max(1, Math.floor(qty[item.id] || 1))
   if (shells.value < item.price * n) {
     showToast('贝壳不够啦，先去钓鱼 🐚')
     return
@@ -79,8 +79,39 @@ async function buy(item) {
   }
 }
 
+/** 一键买满：把背包里所有贝壳都花在这件东西上（能买几件买几件） */
+async function buyMax(item) {
+  const maxN = Math.floor(shells.value / item.price)
+  if (maxN < 1) {
+    showToast('贝壳不够啦，先去钓鱼 🐚')
+    return
+  }
+  buying.value = item.id
+  try {
+    const res = await buyApi(username, item.id, maxN)
+    if (res.code === 200) {
+      shells.value = res.data.shells
+      goldStones.value = res.data.goldStones
+      strength.value = res.data.strength
+      qty[item.id] = maxN
+      showToast('已尽数兑换，贝壳散尽 🎉')
+    } else {
+      showToast(res.message || '购买失败')
+    }
+  } catch (e) {
+    showToast(e.message || '后端开小差了 🌊')
+  } finally {
+    buying.value = null
+  }
+}
+
 function dec(item) { if ((qty[item.id] || 1) > 1) qty[item.id]-- }
 function inc(item) { qty[item.id] = (qty[item.id] || 1) + 1 }
+function clampQty(item) {
+  let v = Math.floor(qty[item.id])
+  if (!v || v < 1) v = 1
+  qty[item.id] = v
+}
 
 onMounted(load)
 </script>
@@ -91,7 +122,7 @@ onMounted(load)
     <OceanBackground />
 
     <main class="shop">
-      <h2 class="title">🛒 比奇堡渔具商店</h2>
+      <h2 class="title">🛒 商店</h2>
       <p class="sub">贝壳买装备，金石升力量 · 承重决定你能拉上多大的鱼</p>
 
       <div class="grid">
@@ -113,9 +144,24 @@ onMounted(load)
 
           <div class="qty" v-if="canQty(item.type)">
             <button @click="dec(item)">−</button>
-            <span>{{ qty[item.id] || 1 }}</span>
+            <input
+              class="qty-input"
+              type="number"
+              min="1"
+              v-model.number="qty[item.id]"
+              @input="clampQty(item)"
+            >
             <button @click="inc(item)">＋</button>
           </div>
+
+          <button
+            v-if="canQty(item.type)"
+            class="buy-max"
+            @click="buyMax(item)"
+            :disabled="buying === item.id || shells < item.price"
+          >
+            {{ buying === item.id ? '兑换中…' : '一键买满（花光贝壳）' }}
+          </button>
 
           <button
             class="buy"
@@ -209,6 +255,42 @@ onMounted(load)
   font-size: 18px; font-weight: bold; cursor: pointer;
 }
 .qty span { font-weight: bold; color: #37474f; min-width: 20px; }
+.qty-input {
+  width: 52px;
+  padding: 6px 8px;
+  border: 2px solid #ffe082;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  text-align: center;
+  color: #37474f;
+  background: #fffde7;
+  outline: none;
+}
+.qty-input:focus { border-color: #ffb300; box-shadow: 0 0 0 3px rgba(255, 179, 0, .2); }
+/* 隐藏数字输入的步进箭头，保持卡通风格统一 */
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-input[type=number] { -moz-appearance: textfield; }
+
+.buy-max {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #ffb74d;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #7a4a00;
+  cursor: pointer;
+  background: linear-gradient(180deg, #fff3e0, #ffe0b2);
+  box-shadow: 0 4px 0 #e0a96b;
+  transition: transform .1s, box-shadow .1s;
+}
+.buy-max:hover:not(:disabled) { transform: translateY(-2px); }
+.buy-max:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #e0a96b; }
+.buy-max:disabled { opacity: .55; cursor: not-allowed; }
 
 .buy {
   margin-top: 6px;
