@@ -17,7 +17,7 @@
  */
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
 import { getAdminConfig } from '../admin/store.js'
-import { SKILLS, SKILL_MAP } from '../data/skills.js'
+import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost } from '../data/skills.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -116,9 +116,37 @@ function userByName(name) {
   return db.users.find((u) => u.username === name) || null
 }
 
-/** 读取用户已修炼的功法列表（缺省 / 旧存档自动回退为空数组） */
-function userSkills(u) {
-  return Array.isArray(u && u.skills) ? u.skills.slice() : []
+/**
+ * 读取用户功法境界表：{ 功法id: 等级 1..54 }。
+ * 旧存档为 id 数组（无境界体系时的「已修炼」列表），自动迁移为
+ * 一重天·入门（1 级，效果与旧版持平）；非法 / 缺省回退为空对象。
+ */
+function userSkillMap(u) {
+  const raw = u && u.skills
+  if (Array.isArray(raw)) {
+    const m = {}
+    for (const id of raw) if (SKILL_MAP.has(id)) m[id] = 1
+    return m
+  }
+  return raw && typeof raw === 'object' ? raw : {}
+}
+
+/** 某功法当前等级（0 = 未修炼） */
+function skillLevel(u, id) {
+  const lv = userSkillMap(u)[id]
+  return Number.isFinite(lv) ? lv : 0
+}
+
+/** 功法效果强度（0 = 未修炼；数值语义由各 skillId 的消费方解释） */
+function skillVal(u, id) {
+  const lv = skillLevel(u, id)
+  return lv > 0 ? skillPower(SKILL_MAP.get(id), lv) : 0
+}
+
+/** 无钩钓法：境界突破贝壳消耗折扣系数（无此功法则 1） */
+function wugouCostFactor(u) {
+  const v = skillVal(u, 'wugou')
+  return v > 0 ? 1 - v / 100 : 1
 }
 
 function ownedOf(userId) {
@@ -285,10 +313,10 @@ function buildProfile(u) {
     goldStones: u.goldStones == null ? 0 : u.goldStones,
     strength: u.strength == null ? 10 : u.strength,
     powerRealm: realm,
-    skills: userSkills(u),
+    skills: userSkillMap(u),
     nextRealmCost: (() => {
       let nrc = realmNextCost(realm)
-      if (nrc > 0 && nrc < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) nrc = Math.round(nrc * 0.85)
+      if (nrc > 0 && nrc < Number.MAX_SAFE_INTEGER) nrc = Math.round(nrc * wugouCostFactor(u))
       return nrc || null
     })(),
     realmBonusPct: (realm - 1) * REALM_BONUS_PER_LEVEL,
@@ -380,7 +408,6 @@ const RARE_CHEERS = [
 function cast(username, baitId) {
   const u = userByName(username)
   if (!u) return err('比奇堡查无此人 🐙')
-  const skills = userSkills(u)
   ensureStarterRod(u.id)
 
   let profile = buildProfile(u)
@@ -403,7 +430,7 @@ function cast(username, baitId) {
   const lineStrength = profile.lineStrength || 300
   const strength = profile.strength || 10
 
-  const tier = pickTier(maxCatch, rodPower, luck, premiumBait, skills.includes('guanshui') ? 1.6 : 1)
+  const tier = pickTier(maxCatch, rodPower, luck, premiumBait, skillVal(u, 'guanshui') || 1)
   const weight = sampleWeight(tier, maxCatch)
   const td = TIERS[tier]
 
@@ -422,8 +449,8 @@ function cast(username, baitId) {
     rewardGold = Math.round(rewardGold * realmMul)
   }
 
-  // 钓鱼功法：引灵诀 +20% 收益，钓道真解 +8%（可叠加）
-  const skillYield = (skills.includes('yinling') ? 1.2 : 1) * (skills.includes('diaodao') ? 1.08 : 1)
+  // 钓鱼功法：引灵诀 / 钓道真解按境界线性提升收益（可叠加）
+  const skillYield = (1 + skillVal(u, 'yinling') / 100) * (1 + skillVal(u, 'diaodao') / 100)
   rewardShells = Math.round(rewardShells * skillYield)
   rewardGold = Math.round(rewardGold * skillYield)
 
@@ -594,7 +621,7 @@ function realmUp(username) {
   const realm = u.powerRealm == null ? 1 : u.powerRealm
   if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
   let cost = realmNextCost(realm)
-  if (cost > 0 && cost < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) cost = Math.round(cost * 0.85)
+  if (cost > 0 && cost < Number.MAX_SAFE_INTEGER) cost = Math.round(cost * wugouCostFactor(u))
   const shells = u.shells == null ? 0 : u.shells
   if (shells < cost) return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${cost} 🐚`)
   u.shells = shells - cost
@@ -602,7 +629,7 @@ function realmUp(username) {
   persist()
   const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
   let next = realmNextCost(u.powerRealm)
-  if (next > 0 && next < Number.MAX_SAFE_INTEGER && userSkills(u).includes('wugou')) next = Math.round(next * 0.85)
+  if (next > 0 && next < Number.MAX_SAFE_INTEGER) next = Math.round(next * wugouCostFactor(u))
   return ok({
     powerRealm: u.powerRealm,
     cost,
@@ -648,14 +675,13 @@ function realmUpAll(username) {
   const u = userByName(username)
   if (!u) return err('比奇堡查无此人 🐙')
   let realm = u.powerRealm == null ? 1 : u.powerRealm
-  const skills = userSkills(u)
   if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
   let shells = u.shells == null ? 0 : u.shells
   let times = 0
   let totalCost = 0
   while (realm < REALM_MAX) {
     let cost = realmNextCost(realm)
-    if (cost > 0 && cost < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) cost = Math.round(cost * 0.85)
+    if (cost > 0 && cost < Number.MAX_SAFE_INTEGER) cost = Math.round(cost * wugouCostFactor(u))
     if (shells < cost) break
     shells -= cost
     realm += 1
@@ -664,7 +690,7 @@ function realmUpAll(username) {
   }
   if (times === 0) {
     let need = realmNextCost(realm)
-    if (need > 0 && need < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) need = Math.round(need * 0.85)
+    if (need > 0 && need < Number.MAX_SAFE_INTEGER) need = Math.round(need * wugouCostFactor(u))
     return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${need} 🐚`)
   }
   u.shells = shells
@@ -672,7 +698,7 @@ function realmUpAll(username) {
   persist()
   const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
   let next = realmNextCost(u.powerRealm)
-  if (next > 0 && next < Number.MAX_SAFE_INTEGER && skills.includes('wugou')) next = Math.round(next * 0.85)
+  if (next > 0 && next < Number.MAX_SAFE_INTEGER) next = Math.round(next * wugouCostFactor(u))
   return ok({
     powerRealm: u.powerRealm,
     cost: totalCost,
@@ -685,22 +711,46 @@ function realmUpAll(username) {
 }
 
 // ============================================================
-//  钓鱼功法：修炼（消耗金石，解锁被动加成）
+//  钓鱼功法：修炼 / 提升境界
+// ------------------------------------------------------------
+//  每部功法 54 级：一重天→九重天，每重天 入门→前期→中期→后期→巅峰→圆满。
+//  提升小境界消耗金石；自某重天「圆满」突破至下一重天「入门」时另扣贝壳。
 // ============================================================
 function cultivate({ username, skillId }) {
   const u = userByName(username)
   if (!u) return err('查无此人，无法修炼功法')
   const def = SKILL_MAP.get(skillId)
   if (!def) return err('功法不存在，无此传承')
-  const skills = userSkills(u)
-  if (skills.includes(skillId)) return err('该功法已修炼，无需重复')
+  const map = userSkillMap(u)
+  const level = Number.isFinite(map[skillId]) ? map[skillId] : 0
+  if (level >= SKILL_LEVEL_MAX) return err(`《${def.name}》已臻至九重天·圆满，进无可进 ✨`)
+
+  const nextLevel = level + 1
+  const goldCost = levelGoldCost(def, level)
+  const shellCost = heavenShellCost(nextLevel)
+
   const gold = u.goldStones == null ? 0 : u.goldStones
-  if (gold < def.cost) return err(`金石不足，修炼《${def.name}》需要 ${def.cost} 金石 🪙`)
-  u.goldStones = gold - def.cost
-  skills.push(skillId)
-  u.skills = skills
+  if (gold < goldCost) return err(`金石不足，提升《${def.name}》需要 ${goldCost} 金石 🪙`)
+  const shells = u.shells == null ? 0 : u.shells
+  if (shells < shellCost) return err(`贝壳不足，突破《${def.name}》至下一重天需要 ${shellCost} 贝壳 🐚`)
+
+  u.goldStones = gold - goldCost
+  u.shells = shells - shellCost
+  map[skillId] = nextLevel
+  u.skills = map
   persist()
-  return ok({ goldStones: u.goldStones, skills: userSkills(u) }, `📜 成功修炼《${def.name}》！`)
+
+  const label = realmLabel(nextLevel)
+  const message =
+    shellCost > 0
+      ? `🌟 突破！《${def.name}》迈入${label}（消耗 ${goldCost} 金石 + ${shellCost} 贝壳）`
+      : level === 0
+        ? `📜 成功修炼《${def.name}》，当前${label}！`
+        : `📜 《${def.name}》境界提升：${label}！`
+  return ok(
+    { goldStones: u.goldStones, shells: u.shells, skills: userSkillMap(u), level: nextLevel },
+    message
+  )
 }
 
 // ============================================================

@@ -6,7 +6,7 @@ import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi, cultivateApi, trainAllApi, realmUpAllApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
-import { SKILLS, SKILL_MAP } from '../data/skills'
+import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost, effectText } from '../data/skills'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -27,7 +27,7 @@ const profile = reactive({
   totalBait: 0,
   luckOwned: false,
   inventory: [],
-  skills: []
+  skills: {}
 })
 
 // phases: idle | casting | waiting | bite | fight | result
@@ -733,17 +733,39 @@ async function realmUpAll() {
 }
 
 // ---------------- 钓鱼功法 ----------------
-const ownedSkills = computed(() => (Array.isArray(profile.skills) ? profile.skills : []))
-function hasSkill(id) { return ownedSkills.value.includes(id) }
+// profile.skills 为 { 功法id: 等级1..54 }（旧数组存档由引擎自动迁移）
+const skillMap = computed(() => (profile.skills && typeof profile.skills === 'object' && !Array.isArray(profile.skills) ? profile.skills : {}))
+function skillLevelOf(id) {
+  const lv = skillMap.value[id]
+  return Number.isFinite(lv) ? lv : 0
+}
+function hasSkill(id) { return skillLevelOf(id) > 0 }
 const skillBonus = computed(() => {
-  const s = ownedSkills.value
+  const pct = (id) => skillPower(SKILL_MAP.get(id), skillLevelOf(id))
   return {
-    tensionMul: (s.includes('jingxin') ? 0.85 : 1) * (s.includes('diaodao') ? 0.92 : 1),
-    reelMul: (s.includes('xieli') ? 1.18 : 1) * (s.includes('diaodao') ? 1.08 : 1),
-    waitMul: s.includes('siji') ? 0.75 : 1,
-    biteAdd: s.includes('chaoxi') ? 600 : 0
+    tensionMul: (1 - pct('jingxin') / 100) * (1 - pct('diaodao') / 100),
+    reelMul: (1 + pct('xieli') / 100) * (1 + pct('diaodao') / 100),
+    waitMul: 1 - pct('siji') / 100,
+    biteAdd: pct('chaoxi')
   }
 })
+
+// 功法阁展示辅助
+function skRealm(id) { return realmLabel(skillLevelOf(id)) }
+function skProgressPct(id) { return Math.round((skillLevelOf(id) / SKILL_LEVEL_MAX) * 100) }
+function skNextGold(id) { return levelGoldCost(SKILL_MAP.get(id), skillLevelOf(id)) }
+function skNextShell(id) { return heavenShellCost(skillLevelOf(id) + 1) }
+function skEffectNow(s) { return effectText(s, skillLevelOf(s.id)) }
+function skEffectNext(s) {
+  const lv = skillLevelOf(s.id)
+  return lv >= SKILL_LEVEL_MAX ? null : effectText(s, lv + 1)
+}
+function skMaxed(id) { return skillLevelOf(id) >= SKILL_LEVEL_MAX }
+function skLack(id) {
+  if (skNextGold(id) != null && profile.goldStones < skNextGold(id)) return 'gold'
+  if (profile.shells < skNextShell(id)) return 'shell'
+  return ''
+}
 
 const showSkills = ref(false)
 const cultivating = ref(false)
@@ -754,9 +776,9 @@ async function cultivate(skillId) {
     const res = await cultivateApi(username, skillId)
     if (res.code === 200) {
       profile.goldStones = res.data.goldStones
+      profile.shells = res.data.shells
       profile.skills = res.data.skills
-      const def = SKILL_MAP.get(skillId)
-      showToast('📜 成功修炼《' + (def ? def.name : '功法') + '》！')
+      showToast(res.message || '📜 功法境界提升！')
       beep(600, 0.1); setTimeout(() => beep(820, 0.14), 90); setTimeout(() => beep(1000, 0.2), 200)
     } else {
       showToast(res.message || '修炼失败')
@@ -1035,27 +1057,40 @@ onBeforeUnmount(() => {
     <!-- ================= 钓鱼功法阁 ================= -->
     <div class="skill-panel" v-if="showSkills">
       <h4>📜 钓鱼功法</h4>
-      <p class="sp-tip">以金石参悟钓道真传，修炼后永久生效。</p>
+      <p class="sp-tip">每部功法由一重天修炼至九重天，每重天分入门→圆满六境。小境界耗金石，跨重天另耗贝壳。</p>
       <div class="skill-list">
-        <div class="skill-card" v-for="s in SKILLS" :key="s.id" :class="{ owned: hasSkill(s.id) }">
+        <div class="skill-card" v-for="s in SKILLS" :key="s.id" :class="{ owned: hasSkill(s.id), maxed: skMaxed(s.id) }">
           <div class="sk-head">
             <span class="sk-icon">{{ s.icon }}</span>
             <span class="sk-name">{{ s.name }}</span>
-            <span class="sk-effect">{{ s.effect }}</span>
+            <span class="sk-realm" :class="{ maxed: skMaxed(s.id) }">{{ skRealm(s.id) }}</span>
           </div>
           <p class="sk-desc">{{ s.desc }}</p>
+          <div class="sk-progress">
+            <div class="sk-progress-bar" :style="{ width: skProgressPct(s.id) + '%' }"></div>
+            <span class="sk-progress-text">{{ skillLevelOf(s.id) }} / {{ SKILL_LEVEL_MAX }}</span>
+          </div>
+          <div class="sk-effect-row">
+            <span class="sk-effect">{{ skEffectNow(s) }}</span>
+            <span class="sk-effect next" v-if="skEffectNext(s)">→ {{ skEffectNext(s) }}</span>
+          </div>
           <div class="sk-foot">
-            <span class="sk-cost" v-if="!hasSkill(s.id)">🪙 {{ s.cost }} 金石</span>
-            <span class="sk-cost owned-tag" v-else>✓ 已修炼</span>
+            <span class="sk-cost" v-if="!skMaxed(s.id)">
+              🪙 {{ skNextGold(s) }} 金石
+              <template v-if="skNextShell(s.id) > 0"> + 🐚 {{ skNextShell(s.id) }} 贝壳</template>
+            </span>
+            <span class="sk-cost owned-tag" v-else>✨ 已臻圆满</span>
             <button
               class="sk-btn"
-              :disabled="cultivating || hasSkill(s.id) || profile.goldStones < s.cost"
+              :disabled="cultivating || skMaxed(s.id) || !!skLack(s.id)"
               @click="cultivate(s.id)"
             >
-              <template v-if="hasSkill(s.id)">已得真传</template>
+              <template v-if="skMaxed(s.id)">已臻圆满</template>
               <template v-else-if="cultivating">参悟中…</template>
-              <template v-else-if="profile.goldStones < s.cost">金石不足</template>
-              <template v-else>修炼</template>
+              <template v-else-if="skLack(s.id) === 'gold'">金石不足</template>
+              <template v-else-if="skLack(s.id) === 'shell'">贝壳不足</template>
+              <template v-else-if="!hasSkill(s.id)">修炼</template>
+              <template v-else>提升</template>
             </button>
           </div>
         </div>
@@ -1623,11 +1658,32 @@ onBeforeUnmount(() => {
   border-radius: 12px; padding: 10px 12px;
 }
 .skill-card.owned { border-color: rgba(186, 152, 220, .55); background: rgba(60, 40, 90, .55); }
+.skill-card.maxed { border-color: rgba(255, 215, 64, .65); background: rgba(90, 70, 20, .5); }
 .sk-head { display: flex; align-items: center; gap: 8px; }
 .sk-icon { font-size: 20px; }
 .sk-name { font-weight: 800; font-size: 14px; color: #fff; }
-.sk-effect { margin-left: auto; font-size: 11px; color: #ffd54f; white-space: nowrap; }
+.sk-realm {
+  margin-left: auto; font-size: 11px; color: #ce93d8; white-space: nowrap;
+  border: 1px solid rgba(186, 152, 220, .45); border-radius: 999px; padding: 2px 8px;
+}
+.sk-realm.maxed { color: #ffd740; border-color: rgba(255, 215, 64, .6); }
 .sk-desc { font-size: 11px; line-height: 1.5; color: #d7c4ef; margin: 6px 0 8px; }
+.sk-progress {
+  position: relative; height: 14px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, .12); margin-bottom: 6px;
+}
+.sk-progress-bar {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #8e24aa, #ce93d8, #ffd54f);
+  transition: width .3s ease;
+}
+.sk-progress-text {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+.sk-effect-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.sk-effect { font-size: 11px; color: #ffd54f; white-space: nowrap; }
+.sk-effect.next { color: #b9f6ca; }
 .sk-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sk-cost { font-size: 12px; color: #ffe082; }
 .sk-cost.owned-tag { color: #b9f6ca; }

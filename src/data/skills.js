@@ -10,8 +10,33 @@
  *   · 无钩钓法 —— 姜太公「直钩钓天下」的典故
  *   · 钓道真解 —— 整合「钓形·钓气·钓心」三层次（钓友留步等作品设定）
  *
+ * 境界体系：每部功法由 一重天 修炼至 九重天，每重天分
+ *   入门 → 前期 → 中期 → 后期 → 巅峰 → 圆满 六个小境界，
+ *   合计 9 × 6 = 54 级（SKILL_LEVEL_MAX）。
+ *   功法效果随等级在 base（一重天·入门）与 max（九重天·圆满）之间线性成长。
+ *   提升小境界消耗金石；自某重天「圆满」突破至下一重天「入门」时，需额外消耗贝壳。
+ *
  * 前端用它渲染「功法阁」并据此计算被动加成；本地引擎(localEngine.js)
- * 用它校验消耗与生效逻辑；后端(GameService)用同名字段做同构。
+ * 用它校验消耗与生效逻辑；后端(GameService)用同名字段做同构（后端暂未同步境界体系）。
+ */
+
+// ---------------- 境界常量 ----------------
+export const SUB_REALMS = ['入门', '前期', '中期', '后期', '巅峰', '圆满']
+export const SUB_PER_HEAVEN = SUB_REALMS.length
+export const HEAVEN_MAX = 9
+/** 单部功法满级等级（54） */
+export const SKILL_LEVEL_MAX = HEAVEN_MAX * SUB_PER_HEAVEN
+
+const HEAVEN_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
+
+const round1 = (v) => Math.round(v * 10) / 10
+
+/**
+ * 功法定义：
+ *   cost  —— 定价基准（金石），实际每级消耗 = cost × (0.15 + 0.0065 × 当前等级)
+ *   base  —— 一重天·入门（1 级）时的效果强度
+ *   max   —— 九重天·圆满（54 级）时的效果强度
+ *   fmt   —— 效果展示文案（界面用），引擎按 skillId 自行解释数值语义
  */
 export const SKILLS = [
   {
@@ -19,16 +44,22 @@ export const SKILLS = [
     name: '静心诀',
     icon: '🧘',
     cost: 30,
-    desc: '心如止水，波澜不惊。搏鱼时鱼线张力上升减缓 15%，更易将张力稳在绿色安全区。',
-    effect: '张力上升 -15%'
+    desc: '心如止水，波澜不惊。搏鱼时鱼线张力上升减缓，更易将张力稳在绿色安全区。',
+    effect: '张力上升减缓',
+    base: 15,
+    max: 45,
+    fmt: (v) => `张力上升 -${round1(v)}%`
   },
   {
     id: 'xieli',
     name: '卸力诀',
     icon: '🌊',
     cost: 50,
-    desc: '借力打力，四两拨千斤。收线速度提升 18%，巨物也拉得动。',
-    effect: '收线速度 +18%'
+    desc: '借力打力，四两拨千斤。收线速度提升，巨物也拉得动。',
+    effect: '收线速度提升',
+    base: 18,
+    max: 54,
+    fmt: (v) => `收线速度 +${round1(v)}%`
   },
   {
     id: 'guanshui',
@@ -36,48 +67,120 @@ export const SKILLS = [
     icon: '👁️',
     cost: 40,
     desc: '察水色、辨鱼踪，于无声处听惊雷。稀有及以上灵鱼现身概率显著提升。',
-    effect: '稀有概率 ↑'
+    effect: '稀有概率提升',
+    base: 1.6,
+    max: 2.6,
+    fmt: (v) => `稀有概率提升 +${round1((v - 1) * 100)}%`
   },
   {
     id: 'siji',
     name: '四季钓经',
     icon: '🍂',
     cost: 35,
-    desc: '春钓滩、夏钓潭、秋钓荫、冬钓阳。顺应天时，咬钩等待时间缩短 25%。',
-    effect: '等待时间 -25%'
+    desc: '春钓滩、夏钓潭、秋钓荫、冬钓阳。顺应天时，咬钩等待时间显著缩短。',
+    effect: '等待时间缩短',
+    base: 25,
+    max: 60,
+    fmt: (v) => `等待时间 -${round1(v)}%`
   },
   {
     id: 'yinling',
     name: '引灵诀',
     icon: '✨',
     cost: 80,
-    desc: '引动天地灵气入竿。钓鱼收益（贝壳 / 金石）提升 20%，钓一尾抵往日两尾。',
-    effect: '钓鱼收益 +20%'
+    desc: '引动天地灵气入竿。钓鱼收益（贝壳 / 金石）提升，钓一尾抵往日数尾。',
+    effect: '钓鱼收益提升',
+    base: 20,
+    max: 60,
+    fmt: (v) => `钓鱼收益 +${round1(v)}%`
   },
   {
     id: 'chaoxi',
     name: '潮汐真诀',
     icon: '🌕',
     cost: 45,
-    desc: '涨潮满潮鱼来钓，落潮潮平去睡觉。浮漂信号更清晰，提竿命中窗口延长 0.6 秒。',
-    effect: '命中窗口 +0.6s'
+    desc: '涨潮满潮鱼来钓，落潮潮平去睡觉。浮漂信号更清晰，提竿命中窗口大幅延长。',
+    effect: '命中窗口延长',
+    base: 600,
+    max: 2000,
+    fmt: (v) => `命中窗口 +${round1(v / 1000)}s`
   },
   {
     id: 'wugou',
     name: '无钩钓法',
     icon: '🪝',
     cost: 60,
-    desc: '姜太公直钩钓天下，愿者上钩。境界突破所需贝壳降低 15%。',
-    effect: '突破消耗 -15%'
+    desc: '姜太公直钩钓天下，愿者上钩。钓道境界突破所需贝壳降低。',
+    effect: '突破消耗降低',
+    base: 15,
+    max: 40,
+    fmt: (v) => `突破消耗 -${round1(v)}%`
   },
   {
     id: 'diaodao',
     name: '钓道真解',
     icon: '📜',
     cost: 120,
-    desc: '钓形·钓气·钓心三合一，直指钓道本源。全属性小幅提升（张力 -8%、收线 +8%、收益 +8%）。',
-    effect: '全能提升'
+    desc: '钓形·钓气·钓心三合一，直指钓道本源。全属性提升（张力、收线、收益）。',
+    effect: '全属性提升',
+    base: 8,
+    max: 24,
+    fmt: (v) => `全属性 ±${round1(v)}%`
   }
 ]
 
 export const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]))
+
+// ---------------- 境界计算 ----------------
+
+/**
+ * 功法在指定等级的效果强度（线性成长）：
+ * 1 级 = base（一重天·入门），54 级 = max（九重天·圆满）。
+ * level 传 0 或非法值时返回 0（未修炼，无效果）。
+ */
+export function skillPower(def, level) {
+  if (!def || !Number.isFinite(level) || level < 1) return 0
+  const lv = Math.min(level, SKILL_LEVEL_MAX)
+  const t = (lv - 1) / (SKILL_LEVEL_MAX - 1)
+  return def.base + (def.max - def.base) * t
+}
+
+/** 境界名：如「三重天·中期」；level 为 0 时返回「未入门」 */
+export function realmLabel(level) {
+  if (!Number.isFinite(level) || level < 1) return '未入门'
+  const lv = Math.min(level, SKILL_LEVEL_MAX)
+  const heaven = Math.ceil(lv / SUB_PER_HEAVEN)
+  const sub = SUB_REALMS[(lv - 1) % SUB_PER_HEAVEN]
+  return `${HEAVEN_CN[heaven - 1]}重天·${sub}`
+}
+
+/**
+ * 从 level 提升到 level+1 所需金石（level 传 0 表示首次修炼）。
+ * 满级时返回 null。定价：cost × (0.15 + 0.0065 × 当前等级)，
+ * 单部功法修满约消耗 17 × cost 金石。
+ */
+export function levelGoldCost(def, level) {
+  if (!def) return null
+  const lv = Number.isFinite(level) ? level : 0
+  if (lv >= SKILL_LEVEL_MAX) return null
+  return Math.max(1, Math.round(def.cost * (0.15 + 0.0065 * lv)))
+}
+
+/**
+ * 提升到 nextLevel 时若为「跨重天突破」（自某重天圆满迈入下一重天入门），
+ * 返回需额外支付的贝壳：100 × (目标重天 - 1)，与力量境界突破同价；
+ * 非跨重天返回 0。
+ */
+export function heavenShellCost(nextLevel) {
+  if (nextLevel > 1 && nextLevel % SUB_PER_HEAVEN === 1) {
+    const heaven = Math.ceil(nextLevel / SUB_PER_HEAVEN)
+    return 100 * (heaven - 1)
+  }
+  return 0
+}
+
+/** 效果文案：未修炼时展示一重天·入门的效果预览 */
+export function effectText(def, level) {
+  if (!def) return ''
+  return def.fmt(skillPower(def, level >= 1 ? level : 1))
+}
