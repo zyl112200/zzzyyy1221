@@ -30,7 +30,7 @@ function typeLabel(t) {
   return { ROD: '钓竿', BAIT: '鱼饵', LUCK: '幸运物', LINE: '鱼线工具' }[t] || '道具'
 }
 function canQty(t) {
-  return t !== 'LUCK'
+  return true
 }
 function fmtWeight(w) {
   if (!w) return '—'
