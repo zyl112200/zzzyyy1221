@@ -6,7 +6,7 @@ import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, trainApi, realmUpApi, baitsApi, cultivateApi, trainAllApi, realmUpAllApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
-import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost, effectText } from '../data/skills'
+import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, HEAVEN_MAX, skillPower, realmLabel, heavenOf, levelGoldCost, heavenShellCost, effectText } from '../data/skills'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -733,26 +733,34 @@ async function realmUpAll() {
 }
 
 // ---------------- 钓鱼功法 ----------------
-// profile.skills 为 { 功法id: 等级1..54 }（旧数组存档由引擎自动迁移）
+// profile.skills 为 { 功法id: 等级1..599994 }（旧数组存档由引擎自动迁移）
 const skillMap = computed(() => (profile.skills && typeof profile.skills === 'object' && !Array.isArray(profile.skills) ? profile.skills : {}))
 function skillLevelOf(id) {
   const lv = skillMap.value[id]
   return Number.isFinite(lv) ? lv : 0
 }
 function hasSkill(id) { return skillLevelOf(id) > 0 }
+// 减益类效果设下限，防止高重天减幅过大导致乘区变为非正数
+const clampMul = (v) => Math.max(0.05, v)
 const skillBonus = computed(() => {
   const pct = (id) => skillPower(SKILL_MAP.get(id), skillLevelOf(id))
   return {
-    tensionMul: (1 - pct('jingxin') / 100) * (1 - pct('diaodao') / 100),
+    tensionMul: clampMul((1 - pct('jingxin') / 100) * (1 - pct('diaodao') / 100)),
     reelMul: (1 + pct('xieli') / 100) * (1 + pct('diaodao') / 100),
-    waitMul: 1 - pct('siji') / 100,
+    waitMul: clampMul(1 - pct('siji') / 100),
     biteAdd: pct('chaoxi')
   }
 })
 
 // 功法阁展示辅助
 function skRealm(id) { return realmLabel(skillLevelOf(id)) }
-function skProgressPct(id) { return Math.round((skillLevelOf(id) / SKILL_LEVEL_MAX) * 100) }
+// 进度条展示当前重天内的小境界进度（6 格）
+function skProgressPct(id) {
+  const lv = skillLevelOf(id)
+  if (lv < 1) return 0
+  return Math.round((((Math.min(lv, SKILL_LEVEL_MAX) - 1) % 6) + 1) * (100 / 6))
+}
+function skHeaven(id) { return heavenOf(skillLevelOf(id)) }
 function skNextGold(id) { return levelGoldCost(SKILL_MAP.get(id), skillLevelOf(id)) }
 function skNextShell(id) { return heavenShellCost(skillLevelOf(id) + 1) }
 function skEffectNow(s) { return effectText(s, skillLevelOf(s.id)) }
@@ -1057,7 +1065,7 @@ onBeforeUnmount(() => {
     <!-- ================= 钓鱼功法阁 ================= -->
     <div class="skill-panel" v-if="showSkills">
       <h4>📜 钓鱼功法</h4>
-      <p class="sp-tip">每部功法由一重天修炼至九重天，每重天分入门→圆满六境。小境界耗金石，跨重天另耗贝壳。</p>
+      <p class="sp-tip">每部功法由一重天修炼至{{ HEAVEN_MAX }}重天，每重天分入门→圆满六境。小境界耗金石，跨重天另耗贝壳。</p>
       <div class="skill-list">
         <div class="skill-card" v-for="s in SKILLS" :key="s.id" :class="{ owned: hasSkill(s.id), maxed: skMaxed(s.id) }">
           <div class="sk-head">
@@ -1068,7 +1076,7 @@ onBeforeUnmount(() => {
           <p class="sk-desc">{{ s.desc }}</p>
           <div class="sk-progress">
             <div class="sk-progress-bar" :style="{ width: skProgressPct(s.id) + '%' }"></div>
-            <span class="sk-progress-text">{{ skillLevelOf(s.id) }} / {{ SKILL_LEVEL_MAX }}</span>
+            <span class="sk-progress-text">{{ skHeaven(s.id) }} / {{ HEAVEN_MAX }} 重天</span>
           </div>
           <div class="sk-effect-row">
             <span class="sk-effect">{{ skEffectNow(s) }}</span>

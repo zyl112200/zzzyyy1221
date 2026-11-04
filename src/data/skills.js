@@ -10,10 +10,12 @@
  *   · 无钩钓法 —— 姜太公「直钩钓天下」的典故
  *   · 钓道真解 —— 整合「钓形·钓气·钓心」三层次（钓友留步等作品设定）
  *
- * 境界体系：每部功法由 一重天 修炼至 九重天，每重天分
+ * 境界体系：每部功法由 一重天 修炼至 99999 重天，每重天分
  *   入门 → 前期 → 中期 → 后期 → 巅峰 → 圆满 六个小境界，
- *   合计 9 × 6 = 54 级（SKILL_LEVEL_MAX）。
- *   功法效果随等级在 base（一重天·入门）与 max（九重天·圆满）之间线性成长。
+ *   合计 99999 × 6 = 599994 级（SKILL_LEVEL_MAX）。
+ *   前 54 级（一重天·入门 → 九重天·圆满）效果在 base 与 max 间线性成长；
+ *   九重天圆满之后转为对数曲线缓慢成长，满级约为 2 × max - base，
+ *   保证 99999 重天内效果永不溢出（减益类上限 < 100%）。
  *   提升小境界消耗金石；自某重天「圆满」突破至下一重天「入门」时，需额外消耗贝壳。
  *
  * 前端用它渲染「功法阁」并据此计算被动加成；本地引擎(localEngine.js)
@@ -23,19 +25,22 @@
 // ---------------- 境界常量 ----------------
 export const SUB_REALMS = ['入门', '前期', '中期', '后期', '巅峰', '圆满']
 export const SUB_PER_HEAVEN = SUB_REALMS.length
-export const HEAVEN_MAX = 9
-/** 单部功法满级等级（54） */
+export const HEAVEN_MAX = 99999
+/** 单部功法满级等级（99999 × 6 = 599994） */
 export const SKILL_LEVEL_MAX = HEAVEN_MAX * SUB_PER_HEAVEN
 
-const HEAVEN_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
+/** 九重天·圆满对应的等级（前 54 级为线性成长段） */
+export const LINEAR_LEVEL_MAX = 9 * SUB_PER_HEAVEN
+
+const HEAVEN_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 
 const round1 = (v) => Math.round(v * 10) / 10
 
 /**
  * 功法定义：
- *   cost  —— 定价基准（金石），实际每级消耗 = cost × (0.15 + 0.0065 × 当前等级)
+ *   cost  —— 定价基准（金石），每级消耗 = cost × (0.15 + 0.02 × (重天-1))
  *   base  —— 一重天·入门（1 级）时的效果强度
- *   max   —— 九重天·圆满（54 级）时的效果强度
+ *   max   —— 九重天·圆满（54 级）时的效果强度（其后按对数曲线缓增至约 2 × max - base）
  *   fmt   —— 效果展示文案（界面用），引擎按 skillId 自行解释数值语义
  */
 export const SKILLS = [
@@ -134,36 +139,51 @@ export const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]))
 // ---------------- 境界计算 ----------------
 
 /**
- * 功法在指定等级的效果强度（线性成长）：
- * 1 级 = base（一重天·入门），54 级 = max（九重天·圆满）。
+ * 功法在指定等级的效果强度：
+ *   1 ~ 54 级（一重天·入门 → 九重天·圆满）：base 与 max 间线性成长；
+ *   54 级之后：对数曲线缓慢成长，满级 599994 ≈ 2 × max - base（永不溢出 100%）。
  * level 传 0 或非法值时返回 0（未修炼，无效果）。
  */
 export function skillPower(def, level) {
   if (!def || !Number.isFinite(level) || level < 1) return 0
-  const lv = Math.min(level, SKILL_LEVEL_MAX)
-  const t = (lv - 1) / (SKILL_LEVEL_MAX - 1)
+  const lv = Math.min(Math.floor(level), SKILL_LEVEL_MAX)
+  if (lv <= LINEAR_LEVEL_MAX) {
+    const t = (lv - 1) / (LINEAR_LEVEL_MAX - 1)
+    return def.base + (def.max - def.base) * t
+  }
+  const t =
+    1 +
+    Math.log((lv - 1) / (LINEAR_LEVEL_MAX - 1)) /
+      Math.log((SKILL_LEVEL_MAX - 1) / (LINEAR_LEVEL_MAX - 1))
   return def.base + (def.max - def.base) * t
 }
 
-/** 境界名：如「三重天·中期」；level 为 0 时返回「未入门」 */
+/** level 所属重天（1..99999；未修炼返回 0） */
+export function heavenOf(level) {
+  if (!Number.isFinite(level) || level < 1) return 0
+  return Math.min(Math.ceil(level / SUB_PER_HEAVEN), HEAVEN_MAX)
+}
+
+/** 境界名：如「三重天·中期」「100重天·圆满」；level 为 0 时返回「未入门」 */
 export function realmLabel(level) {
   if (!Number.isFinite(level) || level < 1) return '未入门'
-  const lv = Math.min(level, SKILL_LEVEL_MAX)
-  const heaven = Math.ceil(lv / SUB_PER_HEAVEN)
-  const sub = SUB_REALMS[(lv - 1) % SUB_PER_HEAVEN]
-  return `${HEAVEN_CN[heaven - 1]}重天·${sub}`
+  const heaven = heavenOf(level)
+  const sub = SUB_REALMS[(Math.min(level, SKILL_LEVEL_MAX) - 1) % SUB_PER_HEAVEN]
+  const heavenText = heaven <= HEAVEN_CN.length ? HEAVEN_CN[heaven - 1] : String(heaven)
+  return `${heavenText}重天·${sub}`
 }
 
 /**
  * 从 level 提升到 level+1 所需金石（level 传 0 表示首次修炼）。
- * 满级时返回 null。定价：cost × (0.15 + 0.0065 × 当前等级)，
- * 单部功法修满约消耗 17 × cost 金石。
+ * 满级时返回 null。按重天计价：cost × (0.15 + 0.02 × (重天 - 1))，
+ * 一重天每级约 0.15 × cost，随重天线性缓涨。
  */
 export function levelGoldCost(def, level) {
   if (!def) return null
   const lv = Number.isFinite(level) ? level : 0
   if (lv >= SKILL_LEVEL_MAX) return null
-  return Math.max(1, Math.round(def.cost * (0.15 + 0.0065 * lv)))
+  const heaven = lv < 1 ? 1 : heavenOf(lv)
+  return Math.max(1, Math.round(def.cost * (0.15 + 0.02 * (heaven - 1))))
 }
 
 /**

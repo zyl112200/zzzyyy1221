@@ -17,7 +17,7 @@
  */
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
 import { getAdminConfig } from '../admin/store.js'
-import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost } from '../data/skills.js'
+import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, HEAVEN_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost } from '../data/skills.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -117,7 +117,7 @@ function userByName(name) {
 }
 
 /**
- * 读取用户功法境界表：{ 功法id: 等级 1..54 }。
+ * 读取用户功法境界表：{ 功法id: 等级 1..599994 }。
  * 旧存档为 id 数组（无境界体系时的「已修炼」列表），自动迁移为
  * 一重天·入门（1 级，效果与旧版持平）；非法 / 缺省回退为空对象。
  */
@@ -713,7 +713,7 @@ function realmUpAll(username) {
 // ============================================================
 //  钓鱼功法：修炼 / 提升境界
 // ------------------------------------------------------------
-//  每部功法 54 级：一重天→九重天，每重天 入门→前期→中期→后期→巅峰→圆满。
+//  每部功法 99999 重天 × 6 小境界 = 599994 级。
 //  提升小境界消耗金石；自某重天「圆满」突破至下一重天「入门」时另扣贝壳。
 // ============================================================
 function cultivate({ username, skillId }) {
@@ -723,7 +723,7 @@ function cultivate({ username, skillId }) {
   if (!def) return err('功法不存在，无此传承')
   const map = userSkillMap(u)
   const level = Number.isFinite(map[skillId]) ? map[skillId] : 0
-  if (level >= SKILL_LEVEL_MAX) return err(`《${def.name}》已臻至九重天·圆满，进无可进 ✨`)
+  if (level >= SKILL_LEVEL_MAX) return err(`《${def.name}》已臻至${HEAVEN_MAX}重天·圆满，进无可进 ✨`)
 
   const nextLevel = level + 1
   const goldCost = levelGoldCost(def, level)
