@@ -1,5 +1,5 @@
 -- ============================================================
--- 比奇堡登录注册 + 钓鱼小游戏 - 数据库初始化脚本
+-- 仙钓大陆登录注册 + 修仙钓鱼小游戏 - 数据库初始化脚本
 -- 数据库：spongebob_db
 -- 适用：MySQL 8.0+
 -- 执行方式：mysql -uroot -p123456 < spongebob_db.sql
@@ -20,9 +20,9 @@ CREATE TABLE `user` (
   `email`       VARCHAR(100) NOT NULL                COMMENT '邮箱',
   `password`    VARCHAR(100) NOT NULL                COMMENT '密码（BCrypt 加密存储）',
   `shells`      INT          NOT NULL DEFAULT 50     COMMENT '贝壳余额（游戏货币）',
-  `strength`    INT          NOT NULL DEFAULT 10     COMMENT '力量（影响收线与可抗衡鱼重）',
-  `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（升级力量的材料）',
-  `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '力量境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
+  `strength`    INT          NOT NULL DEFAULT 10     COMMENT '根骨（影响收线与可抗衡鱼重）',
+  `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（淬炼根骨的材料）',
+  `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '钓道境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
   `permission`  INT          NOT NULL DEFAULT 1      COMMENT '权限：0=管理员（可进后台），1=普通玩家（默认）',
   `skills`      VARCHAR(255) DEFAULT NULL             COMMENT '已修炼的钓鱼功法 id 列表，逗号分隔（如 "jingxin,xieli"）',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
@@ -32,7 +32,7 @@ CREATE TABLE `user` (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci
-  COMMENT ='比奇堡用户表';
+  COMMENT ='仙门用户表';
 
 -- 商店商品目录
 DROP TABLE IF EXISTS `item`;
@@ -122,7 +122,7 @@ INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `gold
 
 -- 商店商品目录（id 固定，便于逻辑引用）
 INSERT INTO `item` (`id`, `name`, `type`, `price`, `power`, `icon`, `description`, `sort`, `line_strength`, `max_catch_weight`) VALUES
-  (1,  '初级钓竿',       'ROD',  0,     1, '🎣', '比奇堡标配，承重 300 斤',        10, 300,     800),
+  (1,  '初级钓竿',       'ROD',  0,     1, '🎣', '仙门标配，承重 300 斤',        10, 300,     800),
   (2,  '银质钓竿',       'ROD',  200,   2, '🎣', '钓力提升，承重 2000 斤',         20, 2000,    5000),
   (3,  '黄金钓竿',       'ROD',  800,   3, '🎣', '承重 2 万斤，传说鱼也拦不住',     30, 20000,   50000),
   (4,  '钻石钓竿',       'ROD',  3000,  4, '🎣', '深海霸主专用，承重 20 万斤',      40, 200000,  400000),

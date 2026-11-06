@@ -11,7 +11,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 比奇堡用户表
+ * 仙门用户表（仙钓大陆）
  */
 @Data
 @TableName("user")
@@ -33,13 +33,13 @@ public class User {
     /** 贝壳余额（游戏货币，注册时默认 50） */
     private Integer shells;
 
-    /** 力量：影响收线速度与可抗衡的鱼重，注册默认 10 */
+    /** 根骨：影响收线速度与可抗衡的鱼重，注册默认 10 */
     private Integer strength;
 
-    /** 金石：升级力量的稀有材料，钓到越稀有越重的鱼给得越多 */
+    /** 金石：淬炼根骨的稀有材料，钓到越稀有越重的灵鱼给得越多 */
     private Integer goldStones;
 
-    /** 力量境界（修仙式层级，1 起步，最高 999；突破消耗贝壳按 2^(境界-1) 翻倍） */
+    /** 钓道境界（修仙式层级，1 起步，最高 999；突破消耗贝壳按 2^(境界-1) 翻倍） */
     private Integer powerRealm = 1;
 
     /** 已修炼的钓鱼功法 id 列表，逗号分隔存储（如 "jingxin,xieli"） */

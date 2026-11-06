@@ -11,10 +11,12 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    // 监听所有网卡，局域网内可通过本机 IP（192.168.68.7）访问开发服务器
+    host: '0.0.0.0',
     proxy: {
       // 前端请求 /api 转发到 Spring Boot 后端
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://192.168.68.7:8080',
         changeOrigin: true
       }
     }

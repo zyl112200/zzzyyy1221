@@ -12,7 +12,7 @@
 import { localCall } from './localEngine.js'
 
 const MODE_KEY = 'bikini_api_mode'
-const SERVER_BASE = '' // 开发模式由 Vite 代理转发 /api → localhost:8080
+const SERVER_BASE = '' // 开发模式由 Vite 代理转发 /api → 192.168.68.7:8080
 
 /** 当前使用的通道：'local' | 'server' */
 export function getApiMode() {
@@ -39,7 +39,7 @@ function callServer(method, url, body) {
     init.body = JSON.stringify(body || {})
   }
   return fetch(SERVER_BASE + url, init).then((res) => {
-    if (!res.ok) throw new Error('服务器开小差了，请稍后再试 🌊')
+    if (!res.ok) throw new Error('仙门中枢暂失感应，请稍后再试 🌫️')
     return res.json()
   })
 }

@@ -38,10 +38,10 @@ public class SettleResult {
     /** 钓后金石余额 */
     private Integer goldStones;
 
-    /** 钓后力量 */
+    /** 钓后根骨 */
     private Integer strength;
 
-    /** 本次钓鱼收益中，力量境界提供的加成百分比（1 重天为 0%） */
+    /** 本次钓鱼收益中，钓道境界提供的加成百分比（1 重天为 0%） */
     private Integer realmBonusPct;
 
     /** 失败类型 */

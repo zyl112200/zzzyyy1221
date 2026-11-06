@@ -4,7 +4,7 @@
  * 修改商品时请同步这三处。
  */
 export const SHOP_ITEMS = [
-  { id: 1, name: '初级钓竿', type: 'ROD', price: 0, power: 1, lineStrength: 300, maxCatchWeight: 800, icon: '🎣', description: '比奇堡标配，承重 300 斤，能钓到常见小鱼', sort: 10 },
+  { id: 1, name: '初级钓竿', type: 'ROD', price: 0, power: 1, lineStrength: 300, maxCatchWeight: 800, icon: '🎣', description: '仙门标配，承重 300 斤，能钓到常见灵鱼', sort: 10 },
   { id: 2, name: '银质钓竿', type: 'ROD', price: 200, power: 2, lineStrength: 2000, maxCatchWeight: 5000, icon: '🎣', description: '钓力提升，承重 2000 斤，稀有鱼更易上钩', sort: 20 },
   { id: 3, name: '黄金钓竿', type: 'ROD', price: 800, power: 3, lineStrength: 20000, maxCatchWeight: 50000, icon: '🎣', description: '闪闪发光，承重 2 万斤，传说鱼也拦不住', sort: 30 },
   { id: 4, name: '钻石钓竿', type: 'ROD', price: 3000, power: 4, lineStrength: 200000, maxCatchWeight: 400000, icon: '🎣', description: '深海霸主专用，承重 20 万斤', sort: 40 },

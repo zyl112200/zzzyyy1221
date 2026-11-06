@@ -181,7 +181,7 @@ const TIER_ORDER = ['COMMON', 'RARE', 'LEGENDARY', 'MYTHIC', 'SHANHAI']
 
 const POOLS = {
   COMMON: [
-    { name: '小丑鱼', icon: '🐠', lore: '比奇堡最常见的邻居，颜色鲜艳。' },
+    { name: '小丑鱼', icon: '🐠', lore: '灵湖最常见的灵鱼，颜色鲜艳。' },
     { name: '热带鱼', icon: '🐟', lore: '礁石间穿梭的小精灵。' },
     { name: '河豚', icon: '🐡', lore: '一生气就鼓成一颗刺球。' },
     { name: '沙丁鱼', icon: '🐟', lore: '成群结队地游过码头。' },
@@ -197,7 +197,7 @@ const POOLS = {
   LEGENDARY: [
     { name: '深海龙鱼', icon: '🐉', lore: '深渊尽头的一点幽光，传说是龙的幼崽。' },
     { name: '独角鲸', icon: '🐋', lore: '额前长角，传说能破开冰层。' },
-    { name: '黄金海马', icon: '👑', lore: '蟹老板做梦都想收藏的稀世珍宝。' },
+    { name: '黄金海马', icon: '👑', lore: '传闻渊主做梦都想收藏的稀世珍宝。' },
     { name: '大王乌贼', icon: '🦑', lore: '能与巨鲸搏斗的深海巨兽。' },
     { name: '幽灵鲨', icon: '🦈', lore: '只在月圆之夜浮出水面。' }
   ],
@@ -407,7 +407,7 @@ const RARE_CHEERS = [
 
 function cast(username, baitId) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   ensureStarterRod(u.id)
 
   let profile = buildProfile(u)
@@ -536,7 +536,7 @@ function breakEquippedRod(u) {
 function settle({ username, encounterId, landed, breakType }) {
   if (!username || !encounterId) return err('结算参数不完整')
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   const pe = pending.get(encounterId)
   if (!pe || pe.username !== username) return err('这次咬钩已经跑掉了 🐟')
   if (pe.settled) return err('这条鱼已经结算过了')
@@ -593,11 +593,11 @@ function settle({ username, encounterId, landed, breakType }) {
 }
 
 // ============================================================
-//  成长：力量 / 境界
+//  成长：根骨 / 境界
 // ============================================================
 function train(username) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   const strength = u.strength == null ? 10 : u.strength
   const gold = u.goldStones == null ? 0 : u.goldStones
   const cost = 20 + strength * 2
@@ -611,13 +611,13 @@ function train(username) {
     cost,
     goldStones: u.goldStones,
     gained,
-    message: `💪 力量 +${gained}！现在能更稳地拉起巨物了`
+    message: `💪 根骨 +${gained}！现在能更稳地拉起巨物了`
   })
 }
 
 function realmUp(username) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   const realm = u.powerRealm == null ? 1 : u.powerRealm
   if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
   let cost = realmNextCost(realm)
@@ -637,14 +637,14 @@ function realmUp(username) {
     goldStones: u.goldStones == null ? 0 : u.goldStones,
     realmBonusPct: bonus,
     nextRealmCost: next > 0 ? next : null,
-    message: `🌟 突破！力量境界升至 ${u.powerRealm} 重天，钓鱼收益 +${bonus}%`
+    message: `🌟 突破！钓道境界升至 ${u.powerRealm} 重天，钓鱼收益 +${bonus}%`
   })
 }
 
 // 根骨一键修炼：耗尽金石，能升几级升几级
 function trainAll(username) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   let strength = u.strength == null ? 10 : u.strength
   let gold = u.goldStones == null ? 0 : u.goldStones
   let times = 0
@@ -673,7 +673,7 @@ function trainAll(username) {
 // 钓道境界一键突破：耗尽贝壳，能破几重破几重
 function realmUpAll(username) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   let realm = u.powerRealm == null ? 1 : u.powerRealm
   if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
   let shells = u.shells == null ? 0 : u.shells
@@ -764,7 +764,7 @@ function buy(username, itemId, quantity) {
   let qty = Number(quantity)
   if (!qty || qty < 1) qty = 1
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   const item = ITEM_MAP.get(Number(itemId))
   if (!item) return err('商店里没有这件商品')
   const cost = item.price * qty
@@ -794,7 +794,7 @@ function buy(username, itemId, quantity) {
 
 function equip(username, userItemId) {
   const u = userByName(username)
-  if (!u) return err('比奇堡查无此人 🐙')
+  if (!u) return err('仙门名录上没有此人 🌫️')
   const db = readDb()
   const target = db.userItems.find((ui) => ui.id === Number(userItemId))
   if (!target || target.userId !== u.id) return err('背包里没有这件道具')
@@ -816,11 +816,12 @@ function equip(username, userItemId) {
 // ============================================================
 function register({ username, email, password }) {
   const name = String(username || '').trim()
-  const mail = String(email || '').trim()
-  if (!name || !mail || !password) return err('注册信息填写不完整哦 🐚')
+  // 注册界面已取消邮箱：未填写时按道号自动生成占位邮箱，保持数据模型不变
+  const mail = String(email || '').trim() || (name ? name + '@xiandao.world' : '')
+  if (!name || !password) return err('注册信息填写不完整哦 🐚')
   const db = readDb()
-  if (db.users.some((u) => u.username === name)) return err('该用户名已被占用，海绵宝宝不答应 🍍')
-  if (db.users.some((u) => u.email === mail)) return err('该邮箱已注册过，直接回菠萝屋登录吧 🐌')
+  if (db.users.some((u) => u.username === name)) return err('此道号已被先人占用，另择一名号吧 🍃')
+  if (email && email.trim() && db.users.some((u) => u.email === mail)) return err('该仙讯邮箱已注册过，直接回山门登录吧 🕊️')
 
   const id = db.nextUserId++
   // 新玩家初始货币：后台可配置，默认贝壳 50 / 金石 0
@@ -847,17 +848,17 @@ function register({ username, email, password }) {
   const u = userByName(name)
   return ok(
     { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
-    '注册成功，欢迎加入比奇堡 🎉'
+    '入道成功，欢迎踏入仙钓大陆 🎉'
   )
 }
 
 function login({ username, password }) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('用户不存在，比奇堡查无此人 🐙')
-  if (u.password !== password) return err('密码错误，蟹黄堡秘方可不是这个 🦀')
+  if (!u) return err('查无此道号，仙门名录上没有此人 🌫️')
+  if (u.password !== password) return err('护道法印不对，心魔可趁机而入 🗝️')
   return ok(
     { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
-    `登录成功，欢迎回到比奇堡 🎉`
+    `登仙成功，欢迎回到仙钓大陆 🎉`
   )
 }
 
@@ -1023,10 +1024,10 @@ function createUser(b = {}) {
 //  AI 助手：内置预设问答（完全离线）
 // ============================================================
 const AI_DIALOGS = [
-  { id: 1, scene: '你好', reply: '嗨～我是比奇堡钓鱼助手海绵宝宝！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍍' },
+  { id: 1, scene: '你好', reply: '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍃' },
   { id: 2, scene: '怎么玩', reply: '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦 🎣' },
   { id: 3, scene: '断线', reply: '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断 🧵' },
-  { id: 4, scene: '力量', reply: '力量越高，收线越稳、能抗衡的鱼越重。用金石修炼，每次 +5；贝壳可以突破力量境界，每重天永久 +5% 钓鱼收益 💪' },
+  { id: 4, scene: '根骨', reply: '根骨越高，收线越稳、能抗衡的灵鱼越重。用金石淬炼，每次 +5；贝壳可突破钓道境界，每重天永久 +5% 钓鱼收益 💪' },
   { id: 5, scene: '金石', reply: '金石靠钓稀有 / 巨物获得，越稀有越重给得越多。钓到 1000 斤以上基本能攒出一大把 🪙' },
   { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊' },
   { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱' },
@@ -1043,8 +1044,8 @@ function aiChat(message) {
   if (hit) return { reply: hit.reply, scene: hit.scene }
   const tips = [
     '唔…这个我还在学。不过我知道：张力别拉满，暴走要松手！🎣',
-    '试试问我「怎么玩」「力量」「金石」「巨物」「存档」这些关键词吧～',
-    '派大星说：钓大鱼最重要的是耐心…还有别忘了买鱼饵 🪱'
+    '试试问我「怎么玩」「根骨」「金石」「巨物」「存档」这些关键词吧～',
+    '老钓仙说：钓大鱼最重要的是耐心…还有别忘了买鱼饵 🪱'
   ]
   return { reply: tips[rand(tips.length)], scene: '其他' }
 }
@@ -1077,7 +1078,7 @@ export function localCall(method, url, body) {
       return login(b)
     case '/api/game/me': {
       const u = userByName(params.username)
-      if (!u) return err('比奇堡查无此人 🐙')
+      if (!u) return err('仙门名录上没有此人 🌫️')
       ensureStarterRod(u.id)
       return ok(buildProfile(u))
     }
@@ -1134,7 +1135,7 @@ export function localCall(method, url, body) {
 /** 列出当前玩家拥有的鱼饵（仅返回库存 > 0 的），供「切换鱼饵」功能使用 */
 export function listBaits(username) {
   const u = userByName(String(username || '').trim())
-  if (!u) return { code: 400, message: '比奇堡查无此人 🐙', data: [] }
+  if (!u) return { code: 400, message: '仙门名录上没有此人 🌫️', data: [] }
   const db = readDb()
   const owned = db.userItems.filter((ui) => ui.userId === u.id)
   const rows = []

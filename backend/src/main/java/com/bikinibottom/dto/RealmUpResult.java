@@ -3,7 +3,7 @@ package com.bikinibottom.dto;
 import lombok.Data;
 
 /**
- * 力量境界突破结果
+ * 钓道境界突破结果
  */
 @Data
 public class RealmUpResult {

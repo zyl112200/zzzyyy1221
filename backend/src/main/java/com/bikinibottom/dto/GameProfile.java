@@ -16,13 +16,13 @@ public class GameProfile {
     /** 贝壳余额 */
     private Integer shells;
 
-    /** 金石余额（升级力量的材料） */
+    /** 金石余额（淬炼根骨的材料） */
     private Integer goldStones;
 
-    /** 力量值（影响收线速度与可抗衡的鱼重） */
+    /** 根骨值（影响收线速度与可抗衡的鱼重） */
     private Integer strength;
 
-    /** 力量境界（修仙式层级，1 起步，最高 999） */
+    /** 钓道境界（修仙式层级，1 起步，最高 999） */
     private Integer powerRealm;
 
     /** 突破到下一重天所需贝壳（已达 999 则为 null） */
@@ -31,7 +31,7 @@ public class GameProfile {
     /** 已修炼的钓鱼功法 id 列表（如 ["jingxin","xieli"]） */
     private List<String> skills;
 
-    /** 力量境界带来的钓鱼收益加成百分比（每级 +5%） */
+    /** 钓道境界带来的钓鱼收益加成百分比（每级 +5%） */
     private Integer realmBonusPct;
 
     /** 已装备钓竿名称 */

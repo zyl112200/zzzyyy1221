@@ -31,7 +31,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * 比奇堡钓鱼小游戏业务：贝壳经济 + 金石 + 力量 + 第一人称搏鱼。
+ * 仙钓大陆钓鱼小游戏业务：贝壳经济 + 金石 + 根骨 + 第一人称搏鱼。
  * <p>抛竿由 {@link #cast(String)} 生成一次「咬钩遭遇」并暂存在内存里，
  * 前端完成拉扯后由 {@link #settle(SettleRequest)} 结算奖励或断线断竿。</p>
  */
@@ -44,7 +44,7 @@ public class GameService {
     private final DropRateService dropRateService;
     private final Random random = new Random();
 
-    /** 力量境界上限（重天数） */
+    /** 钓道境界上限（重天数） */
     private static final int REALM_MAX = 999;
     /** 每突破一重天带来的钓鱼收益加成（百分比），境界越高收获越丰 */
     private static final int REALM_BONUS_PER_LEVEL = 5;
@@ -150,7 +150,7 @@ public class GameService {
     public Result<GameProfile> me(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         ensureStarterRod(u.getId());
         return Result.success(buildProfile(u));
@@ -320,7 +320,7 @@ public class GameService {
         }
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         Item item = itemMapper.selectById(itemId);
         if (item == null) {
@@ -357,7 +357,7 @@ public class GameService {
     public Result<GameProfile> equip(String username, Long userItemId) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         UserItem target = userItemMapper.selectById(userItemId);
         if (target == null || !target.getUserId().equals(u.getId())) {
@@ -392,7 +392,7 @@ public class GameService {
     public Result<CastResult> cast(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         // 钓竿是刚需兜底（断了就补一把，避免卡死）；鱼饵不白送，只在“没饵且买不起饵”时救济 3 个
         ensureStarterRod(u.getId());
@@ -429,7 +429,7 @@ public class GameService {
         int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75)));
         int rewardGold = (int) Math.max(1, Math.round(td.goldMul() * Math.pow(weight, 0.45)));
 
-        // 力量境界加成：境界越高，钓到的贝壳 / 金石越多（每重天 +5%）
+        // 钓道境界加成：境界越高，钓到的贝壳 / 金石越多（每重天 +5%）
         int realmLvl = realmOf(u);
         if (realmLvl > 1) {
             double realmMul = 1 + (realmLvl - 1) * REALM_BONUS_PER_LEVEL / 100.0;
@@ -502,7 +502,7 @@ public class GameService {
         }
         User u = getUser(req.getUsername());
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         PendingEncounter pe = pending.get(req.getEncounterId());
         if (pe == null || !pe.getUsername().equals(req.getUsername())) {
@@ -594,13 +594,13 @@ public class GameService {
     }
 
     // ==========================================================
-    //  力量：用金石升级
+    //  根骨：用金石升级
     // ==========================================================
 
     public Result<TrainResult> train(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         int strength = strengthOf(u);
         int gold = goldOf(u);
@@ -618,22 +618,22 @@ public class GameService {
         r.setCost(cost);
         r.setGoldStones(u.getGoldStones());
         r.setGained(gained);
-        r.setMessage("💪 力量 +" + gained + "！现在能更稳地拉起巨物了");
+        r.setMessage("💪 根骨 +" + gained + "！现在能更稳地拉起巨物了");
         return Result.success(r);
     }
 
     // ==========================================================
-    //  力量境界：用贝壳突破（成本翻倍 2^境界）
+    //  钓道境界：用贝壳突破（成本翻倍 2^境界）
     // ==========================================================
 
     /**
-     * 力量境界突破：消耗贝壳升级到下一重天，成本 = 100 × 当前重天数（100→200→300…），最高 999 重天。
+     * 钓道境界突破：消耗贝壳升级到下一重天，成本 = 100 × 当前重天数（100→200→300…），最高 999 重天。
      * 突破后钓鱼收益按每重天 +5% 永久提升。
      */
     public Result<RealmUpResult> realmUp(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         int realm = realmOf(u);
         if (realm >= REALM_MAX) {
@@ -672,7 +672,7 @@ public class GameService {
     public Result<TrainResult> trainAll(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         int strength = strengthOf(u);
         int gold = goldOf(u);
@@ -710,7 +710,7 @@ public class GameService {
     public Result<RealmUpResult> realmUpAll(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("比奇堡查无此人 🐙");
+            return Result.error("仙门名录上没有此人 🌫️");
         }
         int realm = realmOf(u);
         if (realm >= REALM_MAX) {
@@ -852,7 +852,7 @@ public class GameService {
 
     static {
         POOLS.put("COMMON", List.of(
-                new FishDef("小丑鱼", "🐠", "比奇堡最常见的邻居，颜色鲜艳。"),
+                new FishDef("小丑鱼", "🐠", "灵湖最常见的灵鱼，颜色鲜艳。"),
                 new FishDef("热带鱼", "🐟", "礁石间穿梭的小精灵。"),
                 new FishDef("河豚", "🐡", "一生气就鼓成一颗刺球。"),
                 new FishDef("沙丁鱼", "🐟", "成群结队地游过码头。"),
@@ -868,7 +868,7 @@ public class GameService {
         POOLS.put("LEGENDARY", List.of(
                 new FishDef("深海龙鱼", "🐉", "深渊尽头的一点幽光，传说是龙的幼崽。"),
                 new FishDef("独角鲸", "🐋", "额前长角，传说能破开冰层。"),
-                new FishDef("黄金海马", "👑", "蟹老板做梦都想收藏的稀世珍宝。"),
+                new FishDef("黄金海马", "👑", "传闻渊主做梦都想收藏的稀世珍宝。"),
                 new FishDef("大王乌贼", "🦑", "能与巨鲸搏斗的深海巨兽。"),
                 new FishDef("幽灵鲨", "🦈", "只在月圆之夜浮出水面。")
         ));

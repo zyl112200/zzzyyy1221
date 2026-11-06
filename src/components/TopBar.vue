@@ -7,7 +7,7 @@ const props = defineProps({
   goldStones: { type: Number, default: 0 },
   strength: { type: Number, default: 10 },
   powerRealm: { type: Number, default: 1 },
-  realmTitle: { type: String, default: '比奇堡萌新' }
+  realmTitle: { type: String, default: '初入仙门' }
 })
 
 const router = useRouter()

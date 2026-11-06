@@ -29,10 +29,10 @@ export const settleApi = (username, encounterId, landed, breakType = 'NONE') =>
 export const equipApi = (username, userItemId) =>
   request('/api/game/equip', { username, userItemId })
 
-/** 金石升级力量：POST /api/game/train */
+/** 金石淬炼根骨：POST /api/game/train */
 export const trainApi = (username) => request('/api/game/train', { username })
 
-/** 贝壳突破力量境界：POST /api/game/realm-up */
+/** 贝壳突破钓道境界：POST /api/game/realm-up */
 export const realmUpApi = (username) => request('/api/game/realm-up', { username })
 
 /** 根骨一键修炼（耗尽金石）：POST /api/game/train-all */

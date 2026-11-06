@@ -188,7 +188,7 @@ export function levelGoldCost(def, level) {
 
 /**
  * 提升到 nextLevel 时若为「跨重天突破」（自某重天圆满迈入下一重天入门），
- * 返回需额外支付的贝壳：100 × (目标重天 - 1)，与力量境界突破同价；
+ * 返回需额外支付的贝壳：100 × (目标重天 - 1)，与钓道境界突破同价；
  * 非跨重天返回 0。
  */
 export function heavenShellCost(nextLevel) {

@@ -41,7 +41,7 @@ async function submit() {
     <div class="card">
       <div class="badge">🛠</div>
       <h1>后台管理系统</h1>
-      <p class="sub">比奇堡钓鱼 · 数据管理后台</p>
+      <p class="sub">仙钓大陆 · 仙盟数据管理后台</p>
 
       <form @submit.prevent="submit">
         <label>管理员账号</label>

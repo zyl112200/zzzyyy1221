@@ -62,7 +62,7 @@ public class GameController {
         return gameService.equip(req.getUsername(), req.getUserItemId());
     }
 
-    /** 用金石升级力量：POST /api/game/train { "username": "xxx" } */
+    /** 用金石淬炼根骨：POST /api/game/train { "username": "xxx" } */
     @PostMapping("/train")
     public Result<TrainResult> train(@RequestBody Map<String, String> body) {
         return gameService.train(body.get("username"));

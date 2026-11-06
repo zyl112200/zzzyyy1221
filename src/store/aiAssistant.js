@@ -1,5 +1,5 @@
 /**
- * 游戏内 AI 助手（海绵宝宝）的全局状态。
+ * 游戏内 AI 助手（仙钓小助手）的全局状态。
  * 完全离线：对话内容来自本地预设（src/api/localEngine.js 的 AI_DIALOGS），
  * 不需要任何外部大模型接口。
  */
@@ -52,6 +52,6 @@ export function clearAssistant() {
 // 首次打开时的欢迎语
 export function greetOnce() {
   if (aiState.messages.length) return
-  pushBot('嗨～我是比奇堡钓鱼助手 🍍 张力别拉满、暴走要松手，剩下的问我！')
+  pushBot('嗨～我是仙钓小助手 🪷 张力别拉满、暴走要松手，剩下的问我！')
   aiState.unread = 0
 }

@@ -123,7 +123,7 @@ onMounted(load)
 
     <main class="shop">
       <h2 class="title">🛒 商店</h2>
-      <p class="sub">贝壳买装备，金石升力量 · 承重决定你能拉上多大的鱼</p>
+      <p class="sub">贝壳买装备，金石淬根骨 · 承重决定你能拉上多大的灵鱼</p>
 
       <div class="grid">
         <div class="card" v-for="item in items" :key="item.id" :class="'type-' + item.type.toLowerCase()">

@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * 比奇堡登录注册后端服务启动类
+ * 仙钓大陆登录注册后端服务启动类
  */
 @SpringBootApplication
 @MapperScan("com.bikinibottom.mapper")

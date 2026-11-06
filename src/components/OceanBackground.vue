@@ -37,7 +37,7 @@ const fishes = ref(
   <!-- 沙滩 -->
   <div class="sand"></div>
 
-  <!-- 花形云（比奇堡天空） -->
+  <!-- 花形云（灵湖上空） -->
   <svg class="flower-cloud" style="top:8%;left:6%;" width="90" height="90" viewBox="0 0 100 100">
     <g fill="none" stroke="#fff" stroke-width="5">
       <path d="M50 10 Q65 30 50 50 Q35 30 50 10Z" />

@@ -11,7 +11,6 @@ const loading = ref(false)
 
 const form = reactive({
   username: '',
-  email: '',
   password: '',
   confirm: '',
   agree: false
@@ -19,7 +18,6 @@ const form = reactive({
 
 async function onSubmit() {
   if (!form.username.trim()) return emit('toast', '给自己起个道号吧 🍃')
-  if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return emit('toast', '仙讯邮箱格式不对，仙鹤都看出来了 🕊️')
   if (form.password.length < 6) return emit('toast', '护道法印至少 6 位，莫让邪修轻易破译 🗝️')
   if (form.password !== form.confirm) return emit('toast', '两次法印不一，道童都替你记下了 ⛰️')
   if (!form.agree) return emit('toast', '需先立誓遵《仙门弟子戒律》🌿')
@@ -28,7 +26,6 @@ async function onSubmit() {
   try {
     const res = await registerApi({
       username: form.username.trim(),
-      email: form.email.trim(),
       password: form.password
     })
     if (res.code === 200) {
@@ -57,10 +54,6 @@ async function onSubmit() {
       <div class="field">
         <span class="icon">☯</span>
         <input v-model="form.username" type="text" placeholder="道号（比如：凌霄子）" autocomplete="username">
-      </div>
-      <div class="field">
-        <span class="icon">📮</span>
-        <input v-model="form.email" type="email" placeholder="仙讯邮箱（用于找回法印）" autocomplete="email">
       </div>
       <div class="field">
         <span class="icon">🗝️</span>

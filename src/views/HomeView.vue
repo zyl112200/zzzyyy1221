@@ -585,7 +585,7 @@ function closeResult() {
   stopVibrate()
 }
 
-// ---------------- 力量升级 ----------------
+// ---------------- 根骨修炼 ----------------
 const showTrain = ref(false)
 const training = ref(false)
 const training2 = ref(false)
@@ -613,7 +613,7 @@ async function train() {
   }
 }
 
-// ---------------- 力量境界 ----------------
+// ---------------- 钓道境界 ----------------
 const realmMax = 999
 const realmIsMax = computed(() => profile.powerRealm >= realmMax)
 const realmProgressPct = computed(() => Math.min(100, (profile.powerRealm / realmMax) * 100))
@@ -1018,7 +1018,7 @@ onBeforeUnmount(() => {
       <div v-else-if="phase === 'settling'" class="status">结算中…</div>
     </div>
 
-    <!-- 力量升级悬浮按钮 -->
+    <!-- 根骨修炼悬浮按钮 -->
     <button class="train-fab" @click="showTrain = !showTrain" title="根骨修炼 / 境界突破">
       💪<span class="fab-label">修炼</span>
     </button>
@@ -1121,7 +1121,7 @@ onBeforeUnmount(() => {
             <span class="rw">🐚 +{{ result.rewardShells }}</span>
             <span class="rg">🪙 +{{ result.rewardGold }}</span>
           </div>
-          <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0">🌟 力量境界加成 +{{ result.realmBonusPct }}%</div>
+          <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0">🌟 钓道境界加成 +{{ result.realmBonusPct }}%</div>
         </template>
         <div class="r-broken" v-if="result.rodBroken">💥 鱼竿被拽断了！请去背包换一根</div>
         <p class="r-msg">{{ result.message }}</p>
@@ -1485,7 +1485,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #ffe082, #ffb300);
 }
 
-/* ---------- 力量修炼 ---------- */
+/* ---------- 根骨修炼 ---------- */
 .train-fab {
   position: absolute; z-index: 26; right: 20px; bottom: 22px;
   width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
@@ -1522,7 +1522,7 @@ onBeforeUnmount(() => {
 .train-btn.ghost:hover:not(:disabled) { background: rgba(102, 187, 106, .26); }
 .train-btn.ghost:active:not(:disabled) { transform: translateY(2px); }
 
-/* ---------- 力量境界 ---------- */
+/* ---------- 钓道境界 ---------- */
 .tp-divider { height: 1px; background: rgba(255,255,255,.16); margin: 12px 0; }
 .realm-bar {
   height: 10px; border-radius: 8px; background: rgba(2, 24, 44, .7);

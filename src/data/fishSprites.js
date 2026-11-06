@@ -1,4 +1,4 @@
-// 鱼类名称 → 卡通立绘映射（素材由 AI 生成，海绵宝宝风格，见 assets/fish/）
+// 鱼类名称 → 卡通立绘映射（素材由 AI 生成，Q 版卡通风格，见 assets/fish/）
 import xiaochouyu from '../assets/fish/xiaochouyu.png'
 import redaiyu from '../assets/fish/redaiyu.png'
 import hetun from '../assets/fish/hetun.png'

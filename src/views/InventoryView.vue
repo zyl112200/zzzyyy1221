@@ -70,7 +70,7 @@ onMounted(load)
       <p class="sub">装备更强的钓竿与鱼线，去征服百万斤的巨物</p>
 
       <div class="summary">
-        <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.strength }}</b><small>力量</small></div>
+        <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.strength }}</b><small>根骨</small></div>
         <div class="sm"><span class="sm-ico">🪙</span><b>{{ profile.goldStones }}</b><small>金石</small></div>
         <div class="sm"><span class="sm-ico">🧵</span><b>{{ fmtWeight(profile.lineStrength) }}</b><small>鱼线承重</small></div>
         <div class="sm"><span class="sm-ico">🎯</span><b>{{ fmtWeight(profile.maxCatchWeight) }}</b><small>最大可钓</small></div>

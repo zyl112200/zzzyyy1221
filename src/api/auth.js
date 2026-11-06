@@ -3,7 +3,7 @@
  */
 import { request } from './http'
 
-/** 注册：{ username, email, password } -> { code, message, data } */
+/** 注册：{ username, password } -> { code, message, data }（邮箱已取消，可选） */
 export function registerApi(data) {
   return request('/api/auth/register', data)
 }

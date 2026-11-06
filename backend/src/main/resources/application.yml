@@ -1,12 +1,14 @@
 server:
   port: 8080
+  # 绑定所有网卡，局域网内可通过本机 IP（192.168.68.7）直接访问后端
+  address: 0.0.0.0
 
 spring:
   application:
     name: spongebob-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/spongebob_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${MYSQL_URL:jdbc:mysql://192.168.68.7:3306/spongebob_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:123456}
 

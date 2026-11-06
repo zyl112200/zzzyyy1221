@@ -2,7 +2,7 @@
   <div class="ai-assistant" :class="{ hidden }">
     <!-- 悬浮按钮 -->
     <button class="ai-fab" :class="{ active: aiState.open }" type="button" @click="toggle">
-      <span class="face">🧽</span>
+      <span class="face">🪷</span>
       <span v-if="aiState.unread" class="badge">{{ aiState.unread > 9 ? '9+' : aiState.unread }}</span>
     </button>
 
@@ -11,10 +11,10 @@
       <section v-if="aiState.open" class="ai-panel">
         <header>
           <div class="who">
-            <span class="avatar">🧽</span>
+            <span class="avatar">🪷</span>
             <div>
-              <strong>海绵宝宝助手</strong>
-              <small>离线可用 · 比奇堡本地知识</small>
+              <strong>仙钓小助手</strong>
+              <small>离线可用 · 仙钓大陆本地知识</small>
             </div>
           </div>
           <button class="close" type="button" title="收起" @click="closeAssistant">×</button>
@@ -35,7 +35,7 @@
         </div>
 
         <form class="composer" @submit.prevent="send">
-          <input v-model="draft" type="text" maxlength="60" placeholder="和海绵宝宝说点什么…" />
+          <input v-model="draft" type="text" maxlength="60" placeholder="和小仙童说点什么…" />
           <button type="submit" :disabled="!draft.trim()">发送</button>
         </form>
       </section>
@@ -55,7 +55,7 @@ const draft = ref('')
 const dialogs = ref([])
 const listEl = ref(null)
 
-const QUICK = ['怎么玩', '力量', '金石', '巨物', '存档']
+const QUICK = ['怎么玩', '根骨', '金石', '巨物', '存档']
 
 async function loadDialogs() {
   try {

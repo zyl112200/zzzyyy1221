@@ -258,7 +258,7 @@ function formatTime(t) {
       <section class="panel">
         <h2>👥 用户管理</h2>
         <p class="desc">
-          查看并管理比奇堡所有已注册用户：调整游戏资源（贝壳 / 金石 / 力量 / 境界）、修改角色权限、重置密码或删除账号。
+          查看并管理仙钓大陆所有已注册道友：调整游戏资源（贝壳 / 金石 / 根骨 / 境界）、修改角色权限、重置密码或删除账号。
         </p>
 
         <!-- 工具栏 -->
@@ -286,7 +286,7 @@ function formatTime(t) {
                 <th>邮箱</th>
                 <th>角色</th>
                 <th>贝壳 🐚</th>
-                <th>力量 💪</th>
+                <th>根骨 💪</th>
                 <th>金石 🪙</th>
                 <th>境界</th>
                 <th>注册时间</th>
@@ -315,7 +315,7 @@ function formatTime(t) {
                 </td>
               </tr>
               <tr v-if="!loading && list.length === 0">
-                <td colspan="10" class="empty">比奇堡还没有这样的用户 🐙</td>
+                <td colspan="10" class="empty">仙门名录上还没有这样的道友 🌫️</td>
               </tr>
             </tbody>
           </table>
@@ -340,11 +340,11 @@ function formatTime(t) {
           <input v-model="editForm.email" type="email" />
           <label>贝壳 🐚</label>
           <input v-model.number="editForm.shells" type="number" min="0" />
-          <label>力量 💪</label>
+          <label>根骨 💪</label>
           <input v-model.number="editForm.strength" type="number" min="0" />
           <label>金石 🪙</label>
           <input v-model.number="editForm.goldStones" type="number" min="0" />
-          <label>力量境界</label>
+          <label>钓道境界</label>
           <input v-model.number="editForm.powerRealm" type="number" min="1" max="999" />
           <label>角色</label>
           <select v-model.number="editForm.permission">
@@ -406,11 +406,11 @@ function formatTime(t) {
           </select>
           <label>贝壳 🐚</label>
           <input v-model.number="createForm.shells" type="number" min="0" />
-          <label>力量 💪</label>
+          <label>根骨 💪</label>
           <input v-model.number="createForm.strength" type="number" min="0" />
           <label>金石 🪙</label>
           <input v-model.number="createForm.goldStones" type="number" min="0" />
-          <label>力量境界</label>
+          <label>钓道境界</label>
           <input v-model.number="createForm.powerRealm" type="number" min="1" max="999" />
         </div>
         <p v-if="createMsg" class="modal-msg">{{ createMsg }}</p>

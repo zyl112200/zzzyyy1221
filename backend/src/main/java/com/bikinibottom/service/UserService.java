@@ -23,24 +23,30 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     /**
-     * 注册：用户名 / 邮箱唯一校验，密码 BCrypt 加密入库
+     * 注册：用户名唯一校验，密码 BCrypt 加密入库；
+     * 邮箱已改为可选，留空时按用户名生成占位邮箱以保持数据模型不变
      */
     public Result<User> register(RegisterRequest req) {
         boolean usernameExists = lambdaQuery().eq(User::getUsername, req.getUsername()).exists();
         if (usernameExists) {
-            return Result.error("该用户名已被占用，海绵宝宝不答应 🍍");
+            return Result.error("此道号已被先人占用，另择一名号吧 🍃");
         }
-        boolean emailExists = lambdaQuery().eq(User::getEmail, req.getEmail()).exists();
-        if (emailExists) {
-            return Result.error("该邮箱已注册过，直接回菠萝屋登录吧 🐌");
+        String mail = req.getEmail() == null || req.getEmail().trim().isEmpty()
+                ? req.getUsername() + "@xiandao.world"
+                : req.getEmail().trim();
+        if (req.getEmail() != null && !req.getEmail().trim().isEmpty()) {
+            boolean emailExists = lambdaQuery().eq(User::getEmail, mail).exists();
+            if (emailExists) {
+                return Result.error("该仙讯邮箱已注册过，直接回山门登录吧 🕊️");
+            }
         }
 
         User user = new User();
         user.setUsername(req.getUsername());
-        user.setEmail(req.getEmail());
+        user.setEmail(mail);
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         save(user);
-        return Result.success("注册成功，欢迎加入比奇堡 🎉", user);
+        return Result.success("入道成功，欢迎踏入仙钓大陆 🎉", user);
     }
 
     /**
@@ -49,12 +55,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     public Result<User> login(LoginRequest req) {
         User user = lambdaQuery().eq(User::getUsername, req.getUsername()).one();
         if (user == null) {
-            return Result.error("用户不存在，比奇堡查无此人 🐙");
+            return Result.error("查无此道号，仙门名录上没有此人 🌫️");
         }
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
-            return Result.error("密码错误，蟹黄堡秘方可不是这个 🦀");
+            return Result.error("护道法印不对，心魔可趁机而入 🗝️");
         }
-        return Result.success("登录成功，欢迎回到比奇堡 🎉", user);
+        return Result.success("登仙成功，欢迎回到仙钓大陆 🎉", user);
     }
 
     // ============================================================

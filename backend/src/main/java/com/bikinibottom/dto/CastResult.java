@@ -44,10 +44,10 @@ public class CastResult {
     /** 当前最大可钓重量（斤） */
     private Integer maxCatchWeight;
 
-    /** 力量值 */
+    /** 根骨值 */
     private Integer strength;
 
-    /** 当前力量境界对钓鱼收益的加成百分比（1 重天为 0%），用于搏鱼时展示 */
+    /** 当前钓道境界对钓鱼收益的加成百分比（1 重天为 0%），用于搏鱼时展示 */
     private Integer realmBonusPct;
 
     /** 收线难度系数（约 0.12 ~ 5，越大越吃力） */

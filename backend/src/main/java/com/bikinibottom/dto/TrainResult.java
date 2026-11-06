@@ -3,12 +3,12 @@ package com.bikinibottom.dto;
 import lombok.Data;
 
 /**
- * 力量升级结果
+ * 根骨修炼结果
  */
 @Data
 public class TrainResult {
 
-    /** 升级后力量 */
+    /** 修炼后根骨 */
     private Integer strength;
 
     /** 本次消耗金石 */
