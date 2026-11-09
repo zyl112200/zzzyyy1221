@@ -67,15 +67,15 @@ npm run build:standalone
 
 ---
 
-## 可选：Spring Boot 后端（已修复，可正常编译启动）
+## 可选：Spring Boot 后端（已验证，可正常编译启动）
 
 后端目录 `backend/` 是完整的 Spring Boot 3 工程（Controller / Service / Mapper / DTO / H2 脚本齐全），
-使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（`mvnw.bat` 会自动使用 Wrapper 缓存的 Maven 发行版）。
+使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（项目自带 `mvw` / `mvnw.cmd` 即 Maven Wrapper，首次运行自动下载并缓存 Maven 3.9.16 到 `~/.m2/wrapper/dists`，无需本机预装；已用 `mvnw compile` 验证：38 个源文件 BUILD SUCCESS）。
 
 ```bash
 cd backend
 unset SERVER__PORT   # Windows: set SERVER__PORT=
-./mvnw.bat -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
+mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
 ```
 
 - 后端地址：http://192.168.68.7:8080 （H2 控制台：http://192.168.68.7:8080/h2-console；后端已绑定 0.0.0.0，局域网可达）
@@ -281,7 +281,7 @@ npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 │       └── ToastMessage.vue
 └── backend/                  # Spring Boot 后端（可选，可正常编译启动）
     ├── pom.xml
-    ├── mvnw / mvnw.bat       # 轻量 Maven 启动器
+    ├── mvnw / mvnw.cmd       # Maven Wrapper（首次运行自动下载 Maven 3.9.16）
     └── src/main/
         ├── resources/
         │   ├── application.yml        # 默认 MySQL 数据源

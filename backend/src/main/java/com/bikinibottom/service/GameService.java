@@ -313,6 +313,40 @@ public class GameService {
         return Result.success(items);
     }
 
+    /**
+     * 鱼饵列表：返回当前玩家拥有的鱼饵（含库存），供前端切换鱼饵。
+     * 与离线引擎 localEngine.js listBaits 返回结构保持一致：
+     * [{ itemId, name, icon, power, quantity }]，仅含 quantity>0 的 BAIT 类道具，按 power 升序。
+     */
+    public Result<List<Map<String, Object>>> listBaits(String username) {
+        User u = getUser(username);
+        if (u == null) {
+            return Result.error("仙门名录上没有此人 🌫️");
+        }
+        List<Item> baits = itemMapper.selectList(
+                Wrappers.<Item>lambdaQuery().eq(Item::getType, "BAIT"));
+        List<UserItem> owned = userItemMapper.selectList(
+                Wrappers.<UserItem>lambdaQuery().eq(UserItem::getUserId, u.getId()));
+        Map<Long, Integer> qtyMap = owned.stream()
+                .collect(Collectors.toMap(UserItem::getItemId, ui -> ui.getQuantity() == null ? 0 : ui.getQuantity()));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Item it : baits) {
+            int qty = qtyMap.getOrDefault(it.getId(), 0);
+            if (qty <= 0) {
+                continue;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("itemId", it.getId());
+            row.put("name", it.getName());
+            row.put("icon", it.getIcon());
+            row.put("power", it.getPower() == null ? 0 : it.getPower());
+            row.put("quantity", qty);
+            rows.add(row);
+        }
+        rows.sort(Comparator.comparingInt(r -> ((Number) r.get("power")).intValue()));
+        return Result.success(rows);
+    }
+
     /** 购买：扣贝壳 + 入库（首把竿 / 首条线自动装备） */
     public Result<GameProfile> buy(String username, Long itemId, Integer quantity) {
         if (quantity == null || quantity < 1) {

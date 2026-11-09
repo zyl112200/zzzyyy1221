@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -86,10 +87,20 @@ public class GameController {
         return gameService.realmUpAll(body.get("username"));
     }
 
-    /** 钓鱼功法目录（前端功法阁渲染用，无需登录）：GET /api/game/skills */
-    @GetMapping("/skills")
+    /** 钓鱼功法目录（前端功法阁渲染用，无需登录）：GET / POST /api/game/skills
+     *  同时支持 GET 与 POST：离线引擎 localEngine.js 与前端 skillCatalogApi 均以 POST 调用，
+     *  原仅 GET 会导致 ?api=server 模式下功法阁加载失败（405）。 */
+    @RequestMapping(value = "/skills", method = {RequestMethod.GET, RequestMethod.POST})
     public Result<List<com.bikinibottom.service.GameService.SkillDef>> skills() {
         return gameService.skills();
+    }
+
+    /** 鱼饵列表（切换鱼饵用）：POST /api/game/baits { "username": "xxx" }
+     *  与离线引擎 localEngine.js listBaits 返回结构保持一致，原后端缺失该端点
+     *  （?api=server 模式下切换鱼饵会 404）。 */
+    @PostMapping("/baits")
+    public Result<List<Map<String, Object>>> baits(@RequestBody Map<String, String> body) {
+        return gameService.listBaits(body.get("username"));
     }
 
     /** 修炼钓鱼功法：POST /api/game/cultivate { "username": "xxx", "skillId": "jingxin" } */
