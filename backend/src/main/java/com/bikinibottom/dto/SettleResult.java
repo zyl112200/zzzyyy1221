@@ -55,4 +55,7 @@ public class SettleResult {
 
     /** 钓到神话/山海级稀有鱼时，AI 助手的祝贺台词（前端自动唤起助手播报） */
     private String celebrateMessage;
+
+    /** 钓鱼协会播报：任务达成 / 比赛累计 / 徽章认证等消息（可为空） */
+    private java.util.List<String> assocMessages;
 }

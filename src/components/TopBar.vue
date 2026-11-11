@@ -5,9 +5,7 @@ import { clearSession, getSession } from '../store/session'
 const props = defineProps({
   shells: { type: Number, default: 0 },
   goldStones: { type: Number, default: 0 },
-  strength: { type: Number, default: 10 },
-  powerRealm: { type: Number, default: 1 },
-  realmTitle: { type: String, default: '初入仙门' }
+  power: { type: Number, default: 100 }
 })
 
 const router = useRouter()
@@ -27,6 +25,7 @@ function logout() {
     <div class="brand">⛰️ 仙钓大陆</div>
     <nav class="nav">
       <router-link to="/home">🎣 灵湖</router-link>
+      <router-link to="/assoc">🏆 协会</router-link>
       <router-link to="/shop">🛒 仙市</router-link>
       <router-link to="/inventory">🎒 行囊</router-link>
       <router-link v-if="isAdmin" to="/admin" class="admin-link">🛠 后台</router-link>
@@ -34,8 +33,7 @@ function logout() {
     <div class="right">
       <span class="chip shell">🐚 {{ shells }}</span>
       <span class="chip gold">🪙 {{ goldStones }}</span>
-      <span class="chip str">💪 {{ strength }}</span>
-      <span class="chip realm" :title="powerRealm + ' 重天'">🌟 {{ realmTitle }}</span>
+      <span class="chip str">💪 力量 {{ power }}</span>
       <span class="user">{{ username }}</span>
       <button class="logout" @click="logout">退出</button>
     </div>

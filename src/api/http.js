@@ -12,7 +12,7 @@
 import { localCall } from './localEngine.js'
 
 const MODE_KEY = 'bikini_api_mode'
-const SERVER_BASE = '' // 开发模式由 Vite 代理转发 /api → 192.168.68.7:8080
+const SERVER_BASE = '' // 开发模式由 Vite 代理转发 /api → 192.168.68.28:8080
 
 /** 当前使用的通道：'local' | 'server' */
 export function getApiMode() {

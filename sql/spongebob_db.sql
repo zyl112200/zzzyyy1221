@@ -25,6 +25,8 @@ CREATE TABLE `user` (
   `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '钓道境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
   `permission`  INT          NOT NULL DEFAULT 1      COMMENT '权限：0=管理员（可进后台），1=普通玩家（默认）',
   `skills`      VARCHAR(255) DEFAULT NULL             COMMENT '已修炼的钓鱼功法 id 列表，逗号分隔（如 "jingxin,xieli"）',
+  `max_caught_weight` INT NOT NULL DEFAULT 0          COMMENT '历史最重单尾钓获（斤），协会徽章依据',
+  `assoc_badge` INT          NOT NULL DEFAULT 0        COMMENT '钓鱼协会认证徽章星级（0=未认证，1~9）',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),

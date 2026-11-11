@@ -16,6 +16,8 @@ CREATE TABLE user (
   power_realm INT          NOT NULL DEFAULT 1,
   permission  INT          NOT NULL DEFAULT 1,
   skills      VARCHAR(255),
+  max_caught_weight INT    NOT NULL DEFAULT 0,   -- 历史最重单尾钓获（斤），协会徽章依据
+  assoc_badge INT          NOT NULL DEFAULT 0,   -- 钓鱼协会认证徽章星级（0~9）
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);

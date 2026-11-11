@@ -48,14 +48,14 @@
 
 ```bash
 npm install      # 仅首次需要网络
-npm run dev      # http://localhost:5173 （局域网访问：http://192.168.68.7:5173）
+npm run dev      # http://localhost:5173 （局域网访问：http://192.168.68.28:5173）
 ```
 
 前端默认也走本地引擎，所以**没有后端也能开发调试**。想要连真实后端时，在地址后加 `?api=server`：
 
 ```
 http://localhost:5173/?api=server
-# 局域网内其他设备：http://192.168.68.7:5173/?api=server
+# 局域网内其他设备：http://192.168.68.28:5173/?api=server
 ```
 
 ## 重新打包离线单文件
@@ -78,8 +78,8 @@ unset SERVER__PORT   # Windows: set SERVER__PORT=
 mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
 ```
 
-- 后端地址：http://192.168.68.7:8080 （H2 控制台：http://192.168.68.7:8080/h2-console；后端已绑定 0.0.0.0，局域网可达）
-- 前端连后端：开发模式 `npm run dev` 后访问 `http://localhost:5173/?api=server`（局域网：`http://192.168.68.7:5173/?api=server`），或控制台执行
+- 后端地址：http://192.168.68.28:8080 （H2 控制台：http://192.168.68.28:8080/h2-console；后端已绑定 0.0.0.0，局域网可达）
+- 前端连后端：开发模式 `npm run dev` 后访问 `http://localhost:5173/?api=server`（局域网：`http://192.168.68.28:5173/?api=server`），或控制台执行
   `localStorage.setItem('bikini_api_mode', 'server')`
 - 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）都已写入 H2 初始化脚本
 - 不启动后端也完全不影响游玩：前端默认走离线本地引擎，两套模式的接口契约完全一致
@@ -181,6 +181,7 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 | `/` | 仙门登录页（修仙主题） | 已登录则跳 `/home` |
 | `/register` | 叩仙门注册页（修仙主题，无需邮箱） | 已登录则跳 `/home` |
 | `/home` | 第一人称灵湖钓场 | 需登录 |
+| `/assoc` | 钓鱼协会（任务 / 比赛 / 认证徽章） | 需登录 |
 | `/shop` | 渔具商店 | 需登录 |
 | `/inventory` | 我的背包 | 需登录 |
 | `/admin` | 后台登录页 | — |
@@ -208,6 +209,10 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 | `POST /api/game/equip` | 装备钓竿 / 鱼线 | `{ "username", "userItemId" }` |
 | `POST /api/game/ai-dialogs` | 助手预设问答列表 | — |
 | `POST /api/game/ai-chat` | 助手问答（按触发词匹配本地预设） | `{ "username", "message" }` |
+| `GET  /api/assoc/info` | 钓鱼协会主页（任务 / 徽章 / 比赛战况） | query: username |
+| `POST /api/assoc/task-claim` | 领取协会任务奖励 | `{ "username", "taskId" }` |
+| `POST /api/assoc/comp-start` | 报名并开始 2 分钟钓鱼比赛 | `{ "username" }` |
+| `POST /api/assoc/comp-state` | 比赛实时战况（到点自动结算发奖） | `{ "username" }` |
 | `GET  /api/admin/users` | 后台用户列表（关键词 / 角色 / 分页） | query: keyword, permission, page, pageSize |
 | `GET  /api/admin/users/detail` | 用户详情 | query: id |
 | `POST /api/admin/users` | 后台新建用户 | `{ "username", "email", "password", "permission", "shells", "strength", "goldStones", "powerRealm" }` |
@@ -223,7 +228,34 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 > 后端 `user` 表新增 `permission` 字段（0=管理员，1=普通玩家）；若已有 MySQL 库，请先执行
 > `ALTER TABLE user ADD COLUMN permission INT NOT NULL DEFAULT 1;` 再启动后端。
 > 另新增 `skills` 字段（已修炼功法 id 列表，逗号分隔）：`ALTER TABLE user ADD COLUMN skills VARCHAR(255);`
+> 钓鱼协会再新增两列（历史最重单尾 / 认证徽章星级）：
+> `ALTER TABLE user ADD COLUMN max_caught_weight INT NOT NULL DEFAULT 0;`
+> `ALTER TABLE user ADD COLUMN assoc_badge INT NOT NULL DEFAULT 0;`
 > H2 内存库（`schema-h2.sql`）已同步加列，无需手动迁移。
+
+---
+
+## 钓鱼协会（任务 / 比赛 / 认证徽章）
+
+主页右下角「🏆 协会」按钮（或顶栏「协会」）进入钓鱼协会，三大玩法：
+
+- **协会任务**：协会**不定时**发布「钓起一条指定灵鱼」任务（20~40 分钟有效，
+  普通鱼常见、山海鱼稀有），完成后来协会页面领贝壳 + 金石奖励；两波任务间隔 5~15 分钟随机。
+- **钓鱼比赛**：报名后开赛 **2 分钟**，期间钓起的每条鱼重量实时累计，与 4 位协会玩家
+  （海绵宝宝 / 派大星 / 章鱼哥 / 蟹老板等）比总重，前 3 名发放贝壳 / 金石大奖，比赛页面每 3 秒刷新战况。
+- **认证徽章**：协会专属徽章共 **1~9 星**，「单独钓起一只」≥ 门槛重量的灵鱼即可认证：
+
+| 星级 | 门槛（单尾） | 星级 | 门槛（单尾） |
+| --- | --- | --- | --- |
+| 1 星 | 1,000 斤 | 6 星 | 100 万斤 |
+| 2 星 | 5,000 斤 | 7 星 | 200 万斤 |
+| 3 星 | 20,000 斤 | 8 星 | 500 万斤 |
+| 4 星 | 100,000 斤 | 9 星 | 1,000 万斤 |
+| 5 星 | 500,000 斤 | — | — |
+
+> 徽章依据「历史最重单尾钓获」评定，钓起更重的鱼自动升级；离线与后端模式规则一致。
+>
+> 协会功能回归测试：`node assoc_smoke_test.mjs`（Node 直跑本地引擎，覆盖任务 / 比赛 / 徽章全流程）。
 
 ---
 

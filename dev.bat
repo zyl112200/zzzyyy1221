@@ -1,5 +1,5 @@
 @echo off
-REM Dev mode: Vite dev server on http://localhost:5173 (LAN: http://192.168.68.7:5173)
+REM Dev mode: Vite dev server on http://localhost:5173 (LAN: http://192.168.68.28:5173)
 REM The frontend is fully self-contained (local game engine), no backend needed.
 REM Requires Node.js and one-time "npm install" (network).
 setlocal
@@ -22,6 +22,6 @@ if not exist "node_modules" (
   )
 )
 
-echo [i] Dev server: http://localhost:5173  ^(局域网访问: http://192.168.68.7:5173^)
+echo [i] Dev server: http://localhost:5173  ^(局域网访问: http://192.168.68.28:5173^)
 echo [i] API mode: local (offline engine). Add ?api=server to use Spring Boot if you run it later.
 call npm run dev

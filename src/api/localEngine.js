@@ -10,14 +10,14 @@
  * 与后端一一对应的接口：
  *   POST /api/auth/register   POST /api/auth/login
  *   GET  /api/game/me         POST /api/game/cast
- *   POST /api/game/settle     POST /api/game/train
- *   POST /api/game/realm-up   POST /api/game/equip
- *   GET  /api/shop/items      POST /api/shop/buy
- *   POST /api/game/ai-dialogs POST /api/game/ai-chat
+ *   POST /api/game/settle     GET  /api/game/maps
+ *   POST /api/game/equip      GET  /api/shop/items
+ *   POST /api/shop/buy        POST /api/game/ai-dialogs
+ *   POST /api/game/ai-chat
  */
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
 import { getAdminConfig } from '../admin/store.js'
-import { SKILLS, SKILL_MAP, SKILL_LEVEL_MAX, HEAVEN_MAX, skillPower, realmLabel, levelGoldCost, heavenShellCost } from '../data/skills.js'
+import { MAPS, MAP_MAP, DEFAULT_MAP, EXCLUSIVE_FISH } from '../data/maps.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -50,6 +50,7 @@ function readDb() {
   if (raw) {
     try {
       memoryDb = JSON.parse(raw)
+      migrateDb(memoryDb)
       return memoryDb
     } catch {
       /* 数据损坏则重建 */
@@ -58,6 +59,23 @@ function readDb() {
   memoryDb = seedDb()
   persist()
   return memoryDb
+}
+
+/**
+ * 旧存档迁移（v3 → v4）：
+ *   · strength（根骨）→ power（力量），初始 100；
+ *   · 移除 powerRealm（钓道境界）与 skills（功法）字段（已取消功法与修炼）。
+ */
+function migrateDb(db) {
+  if (!db || db.version >= 4) return
+  db.version = 4
+  for (const u of db.users || []) {
+    if (u.power == null) u.power = u.strength != null ? u.strength : 100
+    if (u.currentMap == null) u.currentMap = DEFAULT_MAP
+    delete u.strength
+    delete u.powerRealm
+    delete u.skills
+  }
 }
 
 function persist() {
@@ -72,14 +90,14 @@ function persist() {
 
 function seedDb() {
   const db = {
-    version: 3,
+    version: 4,
     nextUserId: 4,
     nextUserItemId: 7,
     // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
-      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, strength:10, goldStones:0, powerRealm:1, skills:[], createTime:'2024-06-01T08:00:00.000Z' },
-      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200000, strength:10, goldStones:200, powerRealm:1, skills:[], createTime:'2024-06-02T09:30:00.000Z' },
-      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, strength:10, goldStones:0, powerRealm:1, skills:[], createTime:'2024-06-03T10:15:00.000Z' }
+      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-01T08:00:00.000Z' },
+      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200000, power:100, goldStones:200, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
+      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-03T10:15:00.000Z' }
     ],
     userItems: [
       { id: 1, userId: 1, itemId: 1, quantity: 1, equipped: 1 },
@@ -116,37 +134,29 @@ function userByName(name) {
   return db.users.find((u) => u.username === name) || null
 }
 
-/**
- * 读取用户功法境界表：{ 功法id: 等级 1..599994 }。
- * 旧存档为 id 数组（无境界体系时的「已修炼」列表），自动迁移为
- * 一重天·入门（1 级，效果与旧版持平）；非法 / 缺省回退为空对象。
- */
-function userSkillMap(u) {
-  const raw = u && u.skills
-  if (Array.isArray(raw)) {
-    const m = {}
-    for (const id of raw) if (SKILL_MAP.has(id)) m[id] = 1
-    return m
-  }
-  return raw && typeof raw === 'object' ? raw : {}
+/** 玩家当前力量（力量 = 极限重量，初始 100；正常钓到的鱼约 = 力量 斤） */
+function powerOf(u) {
+  return u && u.power != null ? u.power : 100
 }
 
-/** 某功法当前等级（0 = 未修炼） */
-function skillLevel(u, id) {
-  const lv = userSkillMap(u)[id]
-  return Number.isFinite(lv) ? lv : 0
+/** 根据重量 / 力量 的倍数决定鱼品级（仅用于外观与奖励倍率） */
+function tierByMul(m) {
+  if (m < 1) return 'COMMON'
+  if (m < 1.5) return 'RARE'
+  if (m < 5) return 'LEGENDARY'
+  if (m < 20) return 'MYTHIC'
+  return 'SHANHAI'
 }
 
-/** 功法效果强度（0 = 未修炼；数值语义由各 skillId 的消费方解释） */
-function skillVal(u, id) {
-  const lv = skillLevel(u, id)
-  return lv > 0 ? skillPower(SKILL_MAP.get(id), lv) : 0
-}
-
-/** 无钩钓法：境界突破贝壳消耗折扣系数（无此功法则 1） */
-function wugouCostFactor(u) {
-  const v = skillVal(u, 'wugou')
-  return v > 0 ? 1 - v / 100 : 1
+/** 断线风险：随重量/力量 倍数上升，并受鱼线承重缓冲 */
+function computeBreakRisk(weight, power, lineStrength, maxCatch) {
+  const m = weight / power
+  let base
+  if (m <= 1) base = 0.03
+  else if (m <= 1.5) base = 0.08 + (m - 1) * 0.25
+  else base = 0.25 + Math.min(0.7, (m - 1.5) * 0.08)
+  const factor = weight <= lineStrength ? 0.5 : 1 + ((weight - lineStrength) / Math.max(1, lineStrength)) * 0.4
+  return clamp(base * factor, 0.02, 0.97)
 }
 
 function ownedOf(userId) {
@@ -156,15 +166,6 @@ function ownedOf(userId) {
 function findFirst(userId, itemId) {
   const list = ownedOf(userId).filter((ui) => ui.itemId === itemId)
   return list.length ? list[0] : null
-}
-
-const REALM_MAX = 999
-const REALM_BONUS_PER_LEVEL = 5
-
-function realmNextCost(realm) {
-  if (realm >= REALM_MAX) return 0
-  // 每次升级线性递增 100：realm→realm+1 需 100 × realm 贝壳（100→200→300…）
-  return 100 * realm
 }
 
 // ============================================================
@@ -305,21 +306,15 @@ function buildProfile(u) {
   const lineLine = equippedLine ? equippedLine.lineStrength || 0 : 0
   const rodMax = equippedRod ? equippedRod.maxCatchWeight || 0 : 0
   const lineMax = equippedLine ? equippedLine.maxCatchWeight || 0 : 0
-  const realm = u.powerRealm == null ? 1 : u.powerRealm
 
   return {
     username: u.username,
     shells: u.shells == null ? 0 : u.shells,
     goldStones: u.goldStones == null ? 0 : u.goldStones,
-    strength: u.strength == null ? 10 : u.strength,
-    powerRealm: realm,
-    skills: userSkillMap(u),
-    nextRealmCost: (() => {
-      let nrc = realmNextCost(realm)
-      if (nrc > 0 && nrc < Number.MAX_SAFE_INTEGER) nrc = Math.round(nrc * wugouCostFactor(u))
-      return nrc || null
-    })(),
-    realmBonusPct: (realm - 1) * REALM_BONUS_PER_LEVEL,
+    power: powerOf(u),
+    assocBadge: u.assocBadge || 0,
+    maxCaughtWeight: u.maxCaughtWeight || 0,
+    currentMap: u.currentMap || DEFAULT_MAP,
     equippedRodName: equippedRod ? equippedRod.name : '无',
     equippedRodPower: equippedRod ? equippedRod.power || 0 : 0,
     equippedLineName: equippedLine ? equippedLine.name : '无',
@@ -337,37 +332,7 @@ function buildProfile(u) {
 const pending = new Map()
 const ENCOUNTER_TTL = 10 * 60 * 1000
 
-function pickTier(maxCatch, rodPower, luck, premium, skillLuck = 1) {
-  const luckFactor = 1 + rodPower * 0.12 + (luck ? 0.5 : 0) + (premium ? 0.35 : 0)
-  // 后台可覆盖各品级的爆率权重
-  const admin = safeAdminConfig()
-  const weights = []
-  let total = 0
-  for (const code of TIER_ORDER) {
-    const t = TIERS[code]
-    if (t.minW > maxCatch) continue // 装备承重够不到这个品级
-    let base = t.baseWeight
-    if (admin && admin.dropRates && admin.dropRates[code] != null) base = admin.dropRates[code]
-    if (code !== 'COMMON') base *= luckFactor * skillLuck
-    weights.push([code, base])
-    total += base
-  }
-  let roll = Math.random() * total
-  for (const [code, w] of weights) {
-    roll -= w
-    if (roll <= 0) return code
-  }
-  return 'COMMON'
-}
-
-function sampleWeight(tier, maxCatch) {
-  const t = TIERS[tier]
-  const cap = Math.min(t.maxW, maxCatch)
-  const low = Math.min(t.minW, cap)
-  let w = low + Math.random() * (cap - low)
-  if (w < 0.5) w = 0.5
-  return round1(w)
-}
+// 抛竿时根据「当前力量」与「地图」生成目标鱼（重量 / 品级 / 难度）。
 
 function consumeBait(userId, baitId) {
   const db = readDb()
@@ -405,7 +370,7 @@ const RARE_CHEERS = [
   '👑 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
 ]
 
-function cast(username, baitId) {
+function cast(username, baitId, mapId) {
   const u = userByName(username)
   if (!u) return err('仙门名录上没有此人 🌫️')
   ensureStarterRod(u.id)
@@ -428,42 +393,50 @@ function cast(username, baitId) {
   const luck = !!profile.luckOwned
   const maxCatch = profile.maxCatchWeight || 800
   const lineStrength = profile.lineStrength || 300
-  const strength = profile.strength || 10
+  const power = powerOf(u)
 
-  const tier = pickTier(maxCatch, rodPower, luck, premiumBait, skillVal(u, 'guanshui') || 1)
-  const weight = sampleWeight(tier, maxCatch)
-  const td = TIERS[tier]
+  const map = MAP_MAP.get(mapId) || MAP_MAP.get(u.currentMap) || MAP_MAP.get(DEFAULT_MAP)
 
   // 后台货币倍率（默认 1）
   const admin = safeAdminConfig()
   const shellMulAdj = admin && admin.currency ? admin.currency.shellMultiplier : 1
   const goldMulAdj = admin && admin.currency ? admin.currency.goldMultiplier : 1
 
+  // 鱼饵 / 幸运草小幅提升专属鱼概率
+  let exRate = map.exclusiveRate || 0
+  if (premiumBait) exRate = Math.min(1, exRate + 0.05)
+  if (luck) exRate = Math.min(1, exRate + 0.05)
+
+  let fish, weight, tier
+  if (Math.random() < exRate) {
+    // 专属鱼：重量 = 力量 × 地图系数（受钓竿承重上限限制）
+    fish = EXCLUSIVE_FISH[rand(EXCLUSIVE_FISH.length)]
+    const m = map.exMin + Math.random() * (map.exMax - map.exMin)
+    weight = round1(power * m)
+    if (weight > maxCatch) weight = maxCatch
+    tier = tierByMul(weight / power)
+  } else {
+    // 普通鱼：重量围绕力量分布（正常约 = 力量）
+    let m
+    const r = Math.random()
+    if (r < 0.55) m = 0.4 + Math.random() * 0.6 // 0.4 ~ 1.0
+    else if (r < 0.85) m = 1.0 + Math.random() * 0.5 // 1.0 ~ 1.5（自身极限）
+    else m = 1.5 + Math.random() * 2.5 // 1.5 ~ 4.0（超极限）
+    weight = round1(power * m)
+    if (weight > maxCatch) weight = maxCatch
+    tier = tierByMul(weight / power)
+    const pool = POOLS[tier]
+    fish = pool[rand(pool.length)]
+  }
+  const td = TIERS[tier]
+
   let rewardShells = Math.round(td.shellMul * (10 + 3 * Math.pow(weight, 0.75)) * (shellMulAdj || 1))
   let rewardGold = Math.max(1, Math.round(td.goldMul * Math.pow(weight, 0.45) * (goldMulAdj || 1)))
 
-  const realm = u.powerRealm == null ? 1 : u.powerRealm
-  if (realm > 1) {
-    const realmMul = 1 + ((realm - 1) * REALM_BONUS_PER_LEVEL) / 100
-    rewardShells = Math.round(rewardShells * realmMul)
-    rewardGold = Math.round(rewardGold * realmMul)
-  }
-
-  // 钓鱼功法：引灵诀 / 钓道真解按境界线性提升收益（可叠加）
-  const skillYield = (1 + skillVal(u, 'yinling') / 100) * (1 + skillVal(u, 'diaodao') / 100)
-  rewardShells = Math.round(rewardShells * skillYield)
-  rewardGold = Math.round(rewardGold * skillYield)
-
-  const powerScore = 1500 + strength * 600 + rodPower * 2500
-  const difficulty = clamp(weight / powerScore, 0.12, 5.0)
-  const breakRisk =
-    weight <= lineStrength
-      ? 0.01 + (0.05 * weight) / Math.max(1, lineStrength)
-      : Math.min(0.95, 0.1 + (0.65 * (weight - lineStrength)) / Math.max(1, lineStrength))
-  const berserkChance = Math.min(0.95, td.berserkBase + Math.min(1, weight / Math.max(1, maxCatch)) * 0.15)
-
-  const pool = POOLS[tier]
-  const def = pool[rand(pool.length)]
+  const m = weight / power
+  const breakRisk = computeBreakRisk(weight, power, lineStrength, maxCatch)
+  const difficulty = clamp(0.3 + m * 0.45, 0.3, 4)
+  const berserkChance = Math.min(0.95, td.berserkBase + Math.min(1, m / 4) * 0.15)
 
   // 清理过期遭遇
   const now = Date.now()
@@ -473,14 +446,14 @@ function cast(username, baitId) {
   pending.set(encounterId, {
     encounterId,
     username,
-    fishName: def.name,
-    fishIcon: def.icon,
+    fishName: fish.name,
+    fishIcon: fish.icon,
     tier,
     tierName: td.label,
     weight,
     rewardShells,
     rewardGold,
-    lore: def.lore,
+    lore: fish.lore,
     baitId: bait.itemId,
     baitName: bait.name,
     baitIcon: bait.icon,
@@ -490,29 +463,30 @@ function cast(username, baitId) {
 
   return ok({
     encounterId,
-    fishName: def.name,
-    fishIcon: def.icon,
+    fishName: fish.name,
+    fishIcon: fish.icon,
     tier,
     tierName: td.label,
     weight,
     rewardShells,
     rewardGold,
-    lore: def.lore,
+    lore: fish.lore,
     baitId: bait.itemId,
     baitName: bait.name,
     baitIcon: bait.icon,
+    mapId: map.id,
+    mapName: map.name,
     rodPower,
     lineStrength,
     maxCatchWeight: maxCatch,
-    strength,
+    power,
     difficulty: round2(difficulty),
     breakRisk: round2(breakRisk),
     berserkChance: round2(berserkChance),
     totalBait: profile.totalBait - 1,
     shells: profile.shells,
     goldStones: profile.goldStones,
-    realmBonusPct: (realm - 1) * REALM_BONUS_PER_LEVEL,
-    message: '有东西咬钩了！握紧鱼竿，开始收线！'
+    message: `有东西咬钩了！这是${map.name}的${fish.name}，握紧鱼竿，开始收线！`
   })
 }
 
@@ -567,6 +541,32 @@ function settle({ username, encounterId, landed, breakType }) {
     if (pe.tier === 'MYTHIC' || pe.tier === 'SHANHAI') {
       r.celebrateMessage = RARE_CHEERS[rand(RARE_CHEERS.length)].replace('{fish}', pe.fishName)
     }
+    // 钓鱼协会挂钩：协会任务进度 / 2 分钟钓鱼比赛 / 认证徽章
+    const assocMsgs = assocOnCatch(u, pe.fishName, pe.weight)
+    if (assocMsgs.length) r.assocMessages = assocMsgs
+    // 力量成长：钓到「自身极限的鱼」（重量 ≥ 力量）+1%~10%；
+    // 钓到「超过自身极限 1.5 倍」的鱼（重量 ≥ 1.5×力量）+10%~50%（复合增长）
+    const pw = powerOf(u)
+    const mul = pe.weight / pw
+    let gainPct = 0
+    let kind = ''
+    if (mul >= 1.5) {
+      gainPct = 10 + Math.floor(Math.random() * 41)
+      kind = 'beyond'
+    } else if (mul >= 1.0) {
+      gainPct = 1 + Math.floor(Math.random() * 10)
+      kind = 'limit'
+    }
+    if (gainPct > 0) {
+      const newPower = Math.round(pw * (1 + gainPct / 100))
+      const gained = newPower - pw
+      u.power = newPower
+      r.powerGain = gained
+      r.powerGainPct = gainPct
+      r.powerKind = kind
+      const tag = kind === 'beyond' ? '⚡突破极限' : '🔥挑战极限'
+      r.message += ` ${tag}！力量 +${gained}（${gainPct}% → 当前力量 ${newPower}）`
+    }
   } else {
     if (bt === 'ROD') {
       breakEquippedRod(u)
@@ -586,171 +586,8 @@ function settle({ username, encounterId, landed, breakType }) {
 
   r.shells = u.shells == null ? 0 : u.shells
   r.goldStones = u.goldStones == null ? 0 : u.goldStones
-  r.strength = u.strength == null ? 10 : u.strength
-  const realm = u.powerRealm == null ? 1 : u.powerRealm
-  r.realmBonusPct = (realm - 1) * REALM_BONUS_PER_LEVEL
+  r.power = u.power == null ? 100 : u.power
   return ok(r)
-}
-
-// ============================================================
-//  成长：根骨 / 境界
-// ============================================================
-function train(username) {
-  const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
-  const strength = u.strength == null ? 10 : u.strength
-  const gold = u.goldStones == null ? 0 : u.goldStones
-  const cost = 20 + strength * 2
-  if (gold < cost) return err(`金石不足，升级需要 ${cost} 金石 🪙（多钓稀有巨物能拿到更多）`)
-  const gained = 5
-  u.goldStones = gold - cost
-  u.strength = strength + gained
-  persist()
-  return ok({
-    strength: u.strength,
-    cost,
-    goldStones: u.goldStones,
-    gained,
-    message: `💪 根骨 +${gained}！现在能更稳地拉起巨物了`
-  })
-}
-
-function realmUp(username) {
-  const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
-  const realm = u.powerRealm == null ? 1 : u.powerRealm
-  if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
-  let cost = realmNextCost(realm)
-  if (cost > 0 && cost < Number.MAX_SAFE_INTEGER) cost = Math.round(cost * wugouCostFactor(u))
-  const shells = u.shells == null ? 0 : u.shells
-  if (shells < cost) return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${cost} 🐚`)
-  u.shells = shells - cost
-  u.powerRealm = realm + 1
-  persist()
-  const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
-  let next = realmNextCost(u.powerRealm)
-  if (next > 0 && next < Number.MAX_SAFE_INTEGER) next = Math.round(next * wugouCostFactor(u))
-  return ok({
-    powerRealm: u.powerRealm,
-    cost,
-    shells: u.shells,
-    goldStones: u.goldStones == null ? 0 : u.goldStones,
-    realmBonusPct: bonus,
-    nextRealmCost: next > 0 ? next : null,
-    message: `🌟 突破！钓道境界升至 ${u.powerRealm} 重天，钓鱼收益 +${bonus}%`
-  })
-}
-
-// 根骨一键修炼：耗尽金石，能升几级升几级
-function trainAll(username) {
-  const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
-  let strength = u.strength == null ? 10 : u.strength
-  let gold = u.goldStones == null ? 0 : u.goldStones
-  let times = 0
-  let totalCost = 0
-  while (true) {
-    const cost = 20 + strength * 2
-    if (gold < cost) break
-    gold -= cost
-    strength += 5
-    totalCost += cost
-    times++
-  }
-  if (times === 0) return err(`金石不足，至少需 ${20 + strength * 2} 金石 🪙`)
-  u.goldStones = gold
-  u.strength = strength
-  persist()
-  return ok({
-    strength: u.strength,
-    cost: totalCost,
-    goldStones: u.goldStones,
-    gained: times * 5,
-    message: `💪 连修 ${times} 次！根骨 +${times * 5}，金石耗尽`
-  })
-}
-
-// 钓道境界一键突破：耗尽贝壳，能破几重破几重
-function realmUpAll(username) {
-  const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
-  let realm = u.powerRealm == null ? 1 : u.powerRealm
-  if (realm >= REALM_MAX) return err('钓道境界已臻至 999 重天巅峰，无需再突破 ✨')
-  let shells = u.shells == null ? 0 : u.shells
-  let times = 0
-  let totalCost = 0
-  while (realm < REALM_MAX) {
-    let cost = realmNextCost(realm)
-    if (cost > 0 && cost < Number.MAX_SAFE_INTEGER) cost = Math.round(cost * wugouCostFactor(u))
-    if (shells < cost) break
-    shells -= cost
-    realm += 1
-    totalCost += cost
-    times++
-  }
-  if (times === 0) {
-    let need = realmNextCost(realm)
-    if (need > 0 && need < Number.MAX_SAFE_INTEGER) need = Math.round(need * wugouCostFactor(u))
-    return err(`贝壳不足，突破到 ${realm + 1} 重天需要 ${need} 🐚`)
-  }
-  u.shells = shells
-  u.powerRealm = realm
-  persist()
-  const bonus = (u.powerRealm - 1) * REALM_BONUS_PER_LEVEL
-  let next = realmNextCost(u.powerRealm)
-  if (next > 0 && next < Number.MAX_SAFE_INTEGER) next = Math.round(next * wugouCostFactor(u))
-  return ok({
-    powerRealm: u.powerRealm,
-    cost: totalCost,
-    shells: u.shells,
-    goldStones: u.goldStones == null ? 0 : u.goldStones,
-    realmBonusPct: bonus,
-    nextRealmCost: next > 0 ? next : null,
-    message: `🌟 连破 ${times} 重天！钓道境界升至 ${u.powerRealm} 重天，收益 +${bonus}%`
-  })
-}
-
-// ============================================================
-//  钓鱼功法：修炼 / 提升境界
-// ------------------------------------------------------------
-//  每部功法 99999 重天 × 6 小境界 = 599994 级。
-//  提升小境界消耗金石；自某重天「圆满」突破至下一重天「入门」时另扣贝壳。
-// ============================================================
-function cultivate({ username, skillId }) {
-  const u = userByName(username)
-  if (!u) return err('查无此人，无法修炼功法')
-  const def = SKILL_MAP.get(skillId)
-  if (!def) return err('功法不存在，无此传承')
-  const map = userSkillMap(u)
-  const level = Number.isFinite(map[skillId]) ? map[skillId] : 0
-  if (level >= SKILL_LEVEL_MAX) return err(`《${def.name}》已臻至${HEAVEN_MAX}重天·圆满，进无可进 ✨`)
-
-  const nextLevel = level + 1
-  const goldCost = levelGoldCost(def, level)
-  const shellCost = heavenShellCost(nextLevel)
-
-  const gold = u.goldStones == null ? 0 : u.goldStones
-  if (gold < goldCost) return err(`金石不足，提升《${def.name}》需要 ${goldCost} 金石 🪙`)
-  const shells = u.shells == null ? 0 : u.shells
-  if (shells < shellCost) return err(`贝壳不足，突破《${def.name}》至下一重天需要 ${shellCost} 贝壳 🐚`)
-
-  u.goldStones = gold - goldCost
-  u.shells = shells - shellCost
-  map[skillId] = nextLevel
-  u.skills = map
-  persist()
-
-  const label = realmLabel(nextLevel)
-  const message =
-    shellCost > 0
-      ? `🌟 突破！《${def.name}》迈入${label}（消耗 ${goldCost} 金石 + ${shellCost} 贝壳）`
-      : level === 0
-        ? `📜 成功修炼《${def.name}》，当前${label}！`
-        : `📜 《${def.name}》境界提升：${label}！`
-  return ok(
-    { goldStones: u.goldStones, shells: u.shells, skills: userSkillMap(u), level: nextLevel },
-    message
-  )
 }
 
 // ============================================================
@@ -834,11 +671,10 @@ function register({ username, email, password }) {
     email: mail,
     password: password, // 按需求：明文存储，不做加密
     permission: 1, // 注册用户默认权限：1 = 默认权限（普通玩家）
-    skills: [],
     shells: starterShells,
-    strength: 10,
     goldStones: starterGold,
-    powerRealm: 1,
+    power: 100, // 初始力量 = 100
+    currentMap: DEFAULT_MAP, // 初始所在地图：灵湖
     createTime: new Date().toISOString()
   })
   // 新手礼包：1 把初级钓竿（已装备）+ 5 个普通鱼饵
@@ -847,7 +683,7 @@ function register({ username, email, password }) {
   persist()
   const u = userByName(name)
   return ok(
-    { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
+    { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), currentMap: u.currentMap || DEFAULT_MAP },
     '入道成功，欢迎踏入仙钓大陆 🎉'
   )
 }
@@ -857,7 +693,7 @@ function login({ username, password }) {
   if (!u) return err('查无此道号，仙门名录上没有此人 🌫️')
   if (u.password !== password) return err('护道法印不对，心魔可趁机而入 🗝️')
   return ok(
-    { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, strength: u.strength, goldStones: u.goldStones, powerRealm: u.powerRealm },
+    { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), currentMap: u.currentMap || DEFAULT_MAP },
     `登仙成功，欢迎回到仙钓大陆 🎉`
   )
 }
@@ -903,9 +739,9 @@ function sanitizeUser(u) {
     email: u.email,
     permission: u.permission == null ? 1 : u.permission,
     shells: u.shells == null ? 0 : u.shells,
-    strength: u.strength == null ? 10 : u.strength,
     goldStones: u.goldStones == null ? 0 : u.goldStones,
-    powerRealm: u.powerRealm == null ? 1 : u.powerRealm,
+    power: powerOf(u),
+    currentMap: u.currentMap || DEFAULT_MAP,
     createTime: u.createTime || null
   }
 }
@@ -958,9 +794,12 @@ function updateUser(b = {}) {
     u.email = mail
   }
   if (b.shells != null) u.shells = clamp(Number(b.shells) || 0, 0, 1e12)
-  if (b.strength != null) u.strength = clamp(Math.round(Number(b.strength) || 0), 0, 1e9)
+  if (b.power != null) u.power = clamp(Math.round(Number(b.power) || 0), 0, 1e12)
   if (b.goldStones != null) u.goldStones = clamp(Number(b.goldStones) || 0, 0, 1e12)
-  if (b.powerRealm != null) u.powerRealm = clamp(Math.round(Number(b.powerRealm) || 1), 1, 999)
+  if (b.currentMap != null) {
+    if (MAP_MAP.get(String(b.currentMap))) u.currentMap = String(b.currentMap)
+    else return err('未知地图：' + b.currentMap)
+  }
   if (b.permission != null) {
     const perm = Number(b.permission) === 0 ? 0 : 1
     if (perm === 1 && u.permission === 0 && countAdmins() <= 1) {
@@ -1009,15 +848,285 @@ function createUser(b = {}) {
     password: String(b.password), // 离线模式：明文存储
     permission: Number(b.permission) === 0 ? 0 : 1,
     shells: b.shells != null ? clamp(Number(b.shells), 0, 1e12) : 50,
-    strength: b.strength != null ? clamp(Math.round(Number(b.strength)), 0, 1e9) : 10,
     goldStones: b.goldStones != null ? clamp(Number(b.goldStones), 0, 1e12) : 0,
-    powerRealm: b.powerRealm != null ? clamp(Math.round(Number(b.powerRealm)), 1, 999) : 1,
-    skills: [],
+    power: b.power != null ? clamp(Math.round(Number(b.power)), 0, 1e12) : 100,
+    currentMap: MAP_MAP.get(String(b.currentMap)) ? String(b.currentMap) : DEFAULT_MAP,
     createTime: new Date().toISOString()
   }
   db.users.push(newUser)
   persist()
   return ok(sanitizeUser(newUser), '创建成功')
+}
+
+// ============================================================
+//  钓鱼协会：任务 / 2 分钟钓鱼比赛 / 1-9 星认证徽章
+// ============================================================
+//  - 协会不定时发布钓鱼任务（例：钓起一条指定的灵鱼），完成后可领奖励；
+//  - 钓鱼比赛：报名后开赛 2 分钟，与其他玩家（协会成员）比谁钓的鱼总重更高；
+//  - 认证徽章：单独钓起一只 ≥ 门槛重量的灵鱼即可获得对应星级认证。
+// ============================================================
+const BADGE_THRESHOLDS = [1000, 5000, 20000, 100000, 500000, 1000000, 2000000, 5000000, 10000000]
+const COMP_DURATION = 2 * 60 * 1000          // 比赛时长：2 分钟
+const COMP_NPC_COUNT = 4
+const COMP_NPC_NAMES = ['海棉宝宝', '派大星', '章鱼哥', '蟹老板', '珊迪', '痞老板', '小蜗', '珍珍']
+const COMP_REWARDS = [
+  { rank: 1, shells: 2000, gold: 200, title: '冠军' },
+  { rank: 2, shells: 1000, gold: 100, title: '亚军' },
+  { rank: 3, shells: 500, gold: 50, title: '季军' }
+]
+const TASK_LIFETIME_MIN = 20 * 60 * 1000     // 任务有效期：20~40 分钟
+const TASK_LIFETIME_MAX = 40 * 60 * 1000
+const TASK_GAP_MIN = 5 * 60 * 1000           // 两波任务的发布间隔：5~15 分钟（不定时发布）
+const TASK_GAP_MAX = 15 * 60 * 1000
+
+/** 协会任务鱼池：所有品级灵鱼合并（按品级权重抽样，普通鱼常见、山海鱼稀有） */
+const ALL_ASSOC_FISH = TIER_ORDER.flatMap((code) =>
+  POOLS[code].map((f) => ({ ...f, tier: code, tierName: TIERS[code].label, minW: TIERS[code].minW, maxW: TIERS[code].maxW, shellMul: TIERS[code].shellMul, goldMul: TIERS[code].goldMul }))
+)
+
+/** 协会数据惰性初始化（兼容旧存档） */
+function ensureAssoc(db) {
+  if (!db.assoc) db.assoc = { nextTaskId: 1, nextTaskAt: 0, tasks: [], competition: null, compRecords: [] }
+  const a = db.assoc
+  if (!Array.isArray(a.tasks)) a.tasks = []
+  if (!Array.isArray(a.compRecords)) a.compRecords = []
+  if (!a.nextTaskId) a.nextTaskId = 1
+  if (a.nextTaskAt == null) a.nextTaskAt = 0
+  return a
+}
+
+/** 不定时发布协会任务：到点后生成一条「钓指定鱼」任务 */
+function ensureAssocTasks(db, now) {
+  const a = ensureAssoc(db)
+  if (now < a.nextTaskAt) return
+  // 随机抽鱼：普通鱼 60% / 稀有 22% / 传说 11% / 神话 5% / 山海 2%
+  const roll = Math.random()
+  const tierCode = roll < 0.6 ? 'COMMON' : roll < 0.82 ? 'RARE' : roll < 0.93 ? 'LEGENDARY' : roll < 0.98 ? 'MYTHIC' : 'SHANHAI'
+  const pool = ALL_ASSOC_FISH.filter((f) => f.tier === tierCode)
+  const fish = pool[rand(pool.length)]
+  const rewardShells = Math.round(fish.shellMul * (120 + 2 * Math.pow(fish.maxW, 0.6)) * 10)
+  const rewardGold = Math.max(5, Math.round(fish.goldMul * Math.pow(fish.maxW, 0.45) * 4))
+  a.tasks.push({
+    id: a.nextTaskId++,
+    fishName: fish.name,
+    fishIcon: fish.icon,
+    tier: fish.tier,
+    tierName: fish.tierName,
+    minWeight: fish.minW,
+    rewardShells,
+    rewardGold,
+    publishedAt: now,
+    expiresAt: now + TASK_LIFETIME_MIN + rand(TASK_LIFETIME_MAX - TASK_LIFETIME_MIN),
+    progress: {},   // { username: 该玩家已钓起该鱼的最大重量 }
+    claimedBy: {}   // { username: true 已领奖 }
+  })
+  // 只保留最近 8 条任务供展示
+  while (a.tasks.length > 8) a.tasks.shift()
+  a.nextTaskAt = now + TASK_LIFETIME_MAX + TASK_GAP_MIN + rand(TASK_GAP_MAX - TASK_GAP_MIN)
+}
+
+/** 协会比赛 NPC 总重抽样：多数对手可以战胜，偶尔冒出钓鱼高手 */
+function sampleNpcTotal() {
+  const roll = Math.random()
+  if (roll < 0.6) return Math.round(30 + Math.random() * 770)        // 30 ~ 800 斤
+  if (roll < 0.85) return Math.round(800 + Math.random() * 7200)     // 800 ~ 8000 斤
+  if (roll < 0.97) return Math.round(8000 + Math.random() * 92000)   // 8000 ~ 100000 斤
+  return Math.round(100000 + Math.random() * 700000)                 // 100000 ~ 800000 斤
+}
+
+/** 比赛结算：到点后按总重排名并发放前三名奖励 */
+function finalizeComp(db, now) {
+  const a = ensureAssoc(db)
+  const c = a.competition
+  if (!c || c.finalized) return
+  c.finalized = true
+  // NPC 成绩按其计划总重定型（进行中已按时间展示部分进度）
+  for (const e of c.entries) if (!e.isPlayer) e.total = e.planned
+  const sorted = c.entries.slice().sort((x, y) => y.total - x.total)
+  const rankOfPlayer = sorted.findIndex((e) => e.isPlayer) + 1
+  c.rank = rankOfPlayer
+  c.reward = null
+  const rw = COMP_REWARDS.find((x) => x.rank === rankOfPlayer)
+  if (rw) {
+    const u = db.users.find((x) => x.username === c.username)
+    if (u) {
+      u.shells = (u.shells == null ? 0 : u.shells) + rw.shells
+      u.goldStones = (u.goldStones == null ? 0 : u.goldStones) + rw.gold
+      c.reward = { rank: rw.rank, title: rw.title, shells: rw.shells, gold: rw.gold }
+    }
+  }
+  a.compRecords.unshift({ rank: rankOfPlayer, total: c.entries.find((e) => e.isPlayer)?.total || 0, at: now })
+  if (a.compRecords.length > 5) a.compRecords.pop()
+}
+
+/** 钓获挂钩：任务进度 / 比赛成绩 / 徽章认证。返回需要播报的消息数组 */
+function assocOnCatch(u, fishName, weight) {
+  const db = readDb()
+  const now = Date.now()
+  const a = ensureAssoc(db)
+  ensureAssocTasks(db, now)
+  const msgs = []
+
+  // 1) 协会任务进度
+  for (const t of a.tasks) {
+    if (t.fishName !== fishName || now >= t.expiresAt) continue
+    const best = t.progress[u.username] || 0
+    if (weight > best) {
+      const firstDone = !(u.username in t.progress)
+      t.progress[u.username] = weight
+      if (firstDone) msgs.push(`📋 协会任务达成：「钓起一条${t.fishIcon}${t.fishName}」完成！记得去协会领奖`)
+    }
+  }
+
+  // 2) 钓鱼比赛：进行中则累计本次钓获重量
+  const c = a.competition
+  if (c && !c.finalized) {
+    if (now >= c.endsAt) finalizeComp(db, now)
+    else if (c.username === u.username) {
+      c.total = round1((c.total || 0) + weight)
+      const me = c.entries.find((e) => e.isPlayer)
+      if (me) me.total = c.total
+      msgs.push(`⚔️ 比赛中！你已累计 ${fmtW(c.total)} 斤`)
+    }
+  }
+
+  // 3) 认证徽章：单独钓起一只 ≥ 门槛的灵鱼
+  if (weight > (u.maxCaughtWeight || 0)) u.maxCaughtWeight = weight
+  let star = 0
+  for (let i = 0; i < BADGE_THRESHOLDS.length; i++) if (weight >= BADGE_THRESHOLDS[i]) star = i + 1
+  if (star > (u.assocBadge || 0)) {
+    u.assocBadge = star
+    msgs.push(`🏆 钓鱼协会认证：单尾 ${fmtW(weight)} 斤，授予 ${star} 星专属徽章！`)
+  }
+  persist()
+  return msgs
+}
+
+function fmtW(n) {
+  return n >= 1e8 ? round1(n / 1e8) + ' 亿' : n >= 1e4 ? round1(n / 1e4) + ' 万' : String(n)
+}
+
+/** 协会主页数据 */
+function assocInfo(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人 🌫️')
+  const db = readDb()
+  const now = Date.now()
+  const a = ensureAssoc(db)
+  ensureAssocTasks(db, now)
+  if (a.competition && !a.competition.finalized && now >= a.competition.endsAt) finalizeComp(db, now)
+  persist()
+
+  const tasks = a.tasks.slice().reverse().map((t) => ({
+    id: t.id,
+    fishName: t.fishName,
+    fishIcon: t.fishIcon,
+    tier: t.tier,
+    tierName: t.tierName,
+    minWeight: t.minWeight,
+    rewardShells: t.rewardShells,
+    rewardGold: t.rewardGold,
+    publishedAt: t.publishedAt,
+    expiresAt: t.expiresAt,
+    expired: now >= t.expiresAt,
+    done: !!(t.progress && u.username in t.progress),
+    claimed: !!(t.claimedBy && u.username in t.claimedBy),
+    myWeight: (t.progress && t.progress[u.username]) || 0
+  }))
+
+  const star = u.assocBadge || 0
+  let comp = null
+  if (a.competition) {
+    const c = a.competition
+    const elapsed = Math.min(COMP_DURATION, now - c.startedAt)
+    // NPC 成绩随时间推进逐步浮出（模拟对手同时在钓）
+    const entries = c.entries.map((e) => ({
+      name: e.name,
+      isPlayer: !!e.isPlayer,
+      total: e.isPlayer ? c.total || 0 : Math.min(e.planned, Math.round(e.planned * (elapsed / COMP_DURATION)))
+    }))
+    comp = {
+      startedAt: c.startedAt,
+      endsAt: c.endsAt,
+      duration: COMP_DURATION,
+      finalized: !!c.finalized,
+      rank: c.rank || null,
+      reward: c.reward || null,
+      remaining: Math.max(0, c.endsAt - now),
+      entries: entries.sort((x, y) => y.total - x.total)
+    }
+  }
+
+  return ok({
+    badgeStar: star,
+    maxCaughtWeight: u.maxCaughtWeight || 0,
+    badgeThresholds: BADGE_THRESHOLDS,
+    nextBadgeTarget: star < BADGE_THRESHOLDS.length ? BADGE_THRESHOLDS[star] : null,
+    tasks,
+    nextTaskAt: a.nextTaskAt,
+    competition: comp,
+    compRecords: a.compRecords.slice()
+  })
+}
+
+/** 领取协会任务奖励 */
+function assocTaskClaim(username, taskId) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人 🌫️')
+  const db = readDb()
+  const a = ensureAssoc(db)
+  const t = a.tasks.find((x) => x.id === Number(taskId))
+  if (!t) return err('任务不存在或已下架 📋')
+  if (Date.now() >= t.expiresAt) return err('任务已过期，奖励无法领取')
+  if (!(u.username in (t.progress || {}))) return err(`还没钓起「${t.fishName}」，先去灵湖完成它吧 🎣`)
+  if (u.username in (t.claimedBy || {})) return err('奖励已经领过啦，下一次任务加油 🍃')
+  t.claimedBy = t.claimedBy || {}
+  t.claimedBy[u.username] = true
+  u.shells = (u.shells == null ? 0 : u.shells) + t.rewardShells
+  u.goldStones = (u.goldStones == null ? 0 : u.goldStones) + t.rewardGold
+  persist()
+  return ok(
+    { shells: u.shells, goldStones: u.goldStones, taskId: t.id },
+    `任务奖励到账：${t.rewardShells} 🐚 + ${t.rewardGold} 金石 🪙`
+  )
+}
+
+/** 报名并开始一场 2 分钟钓鱼比赛 */
+function assocCompStart(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人 🌫️')
+  const db = readDb()
+  const now = Date.now()
+  const a = ensureAssoc(db)
+  if (a.competition && !a.competition.finalized) {
+    if (now < a.competition.endsAt) return err('你已在一场比赛中，2 分钟后再来 🐟')
+    finalizeComp(db, now)
+  }
+  const npcNames = COMP_NPC_NAMES.slice()
+  const entries = [{ name: u.username, isPlayer: true, total: 0 }]
+  for (let i = 0; i < COMP_NPC_COUNT; i++) {
+    const idx = rand(npcNames.length)
+    entries.push({ name: npcNames.splice(idx, 1)[0], isPlayer: false, planned: sampleNpcTotal() })
+  }
+  a.competition = { username: u.username, startedAt: now, endsAt: now + COMP_DURATION, total: 0, entries, finalized: false, rank: null, reward: null }
+  persist()
+  return ok(
+    { endsAt: a.competition.endsAt, duration: COMP_DURATION },
+    '⚔️ 比赛开始！2 分钟内钓的鱼越重越好，快回灵湖抛竿！'
+  )
+}
+
+/** 查询比赛实时战况（到点自动结算并发放奖励） */
+function assocCompState(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人 🌫️')
+  const db = readDb()
+  const now = Date.now()
+  const a = ensureAssoc(db)
+  if (!a.competition) return ok({ competition: null, compRecords: a.compRecords.slice() })
+  if (!a.competition.finalized && now >= a.competition.endsAt) finalizeComp(db, now)
+  persist()
+  return assocInfo(u.username)
 }
 
 // ============================================================
@@ -1031,7 +1140,8 @@ const AI_DIALOGS = [
   { id: 5, scene: '金石', reply: '金石靠钓稀有 / 巨物获得，越稀有越重给得越多。钓到 1000 斤以上基本能攒出一大把 🪙' },
   { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊' },
   { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱' },
-  { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦 💾' }
+  { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦 💾' },
+  { id: 9, scene: '协会', reply: '钓鱼协会不定时发布任务（钓指定鱼有奖），还能报名 2 分钟钓鱼比赛跟其他玩家比重量；单尾钓起 1000 斤以上就开始授予 1~9 星认证徽章，越重星星越多 🏆' }
 ]
 
 function aiDialogs() {
@@ -1083,25 +1193,15 @@ export function localCall(method, url, body) {
       return ok(buildProfile(u))
     }
     case '/api/game/cast':
-      return cast(b.username, b.baitId)
+      return cast(b.username, b.baitId, b.mapId)
     case '/api/game/baits':
       return listBaits(b.username)
     case '/api/game/settle':
       return settle(b)
-    case '/api/game/train':
-      return train(b.username)
-    case '/api/game/realm-up':
-      return realmUp(b.username)
-    case '/api/game/train-all':
-      return trainAll(b.username)
-    case '/api/game/realm-up-all':
-      return realmUpAll(b.username)
+    case '/api/game/maps':
+      return ok(MAPS)
     case '/api/game/equip':
       return equip(b.username, b.userItemId)
-    case '/api/game/cultivate':
-      return cultivate(b)
-    case '/api/game/skills':
-      return ok(SKILLS)
     case '/api/shop/items':
       return shopItems()
     case '/api/shop/buy':
@@ -1110,6 +1210,15 @@ export function localCall(method, url, body) {
       return aiDialogs()
     case '/api/game/ai-chat':
       return ok(aiChat(b.message))
+    // ---- 钓鱼协会（任务 / 比赛 / 认证徽章）----
+    case '/api/assoc/info':
+      return assocInfo(params.username)
+    case '/api/assoc/task-claim':
+      return assocTaskClaim(b.username, b.taskId)
+    case '/api/assoc/comp-start':
+      return assocCompStart(b.username)
+    case '/api/assoc/comp-state':
+      return assocCompState(b.username)
     // ---- 后台用户管理 ----
     case '/api/admin/users':
       if (M === 'GET') return listUsers(params)

@@ -4,6 +4,7 @@ import RegisterView from '../views/RegisterView.vue'
 import HomeView from '../views/HomeView.vue'
 import ShopView from '../views/ShopView.vue'
 import InventoryView from '../views/InventoryView.vue'
+import AssociationView from '../views/AssociationView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
@@ -19,6 +20,7 @@ const router = createRouter({
     { path: '/home', name: 'home', component: HomeView, meta: { auth: true } },
     { path: '/shop', name: 'shop', component: ShopView, meta: { auth: true } },
     { path: '/inventory', name: 'inventory', component: InventoryView, meta: { auth: true } },
+    { path: '/assoc', name: 'assoc', component: AssociationView, meta: { auth: true } },
     { path: '/admin', name: 'admin-login', component: AdminLoginView },
     { path: '/admin/home', name: 'admin-home', component: AdminDashboardView, meta: { adminAuth: true } },
     { path: '/admin/users', name: 'admin-users', component: AdminUsersView, meta: { adminAuth: true } },

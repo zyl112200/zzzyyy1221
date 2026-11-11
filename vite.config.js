@@ -15,9 +15,9 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       // 前端请求 /api 转发到 Spring Boot 后端。
-      // 默认指向本机 localhost；若要在其他设备上访问，请改成你的本机局域网 IP（如 http://192.168.x.x:8080）。
+      // 指向本机局域网 IP（192.168.68.28）；局域网内其他设备也用该地址访问。
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://192.168.68.28:8080',
         changeOrigin: true
       }
     }

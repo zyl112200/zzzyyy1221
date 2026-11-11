@@ -91,9 +91,8 @@ const editForm = reactive({
   username: '',
   email: '',
   shells: 0,
-  strength: 10,
+  power: 100,
   goldStones: 0,
-  powerRealm: 1,
   permission: 1
 })
 const editMsg = ref('')
@@ -103,9 +102,8 @@ function openEdit(u) {
   editForm.username = u.username
   editForm.email = u.email
   editForm.shells = u.shells
-  editForm.strength = u.strength
+  editForm.power = u.power || 100
   editForm.goldStones = u.goldStones
-  editForm.powerRealm = u.powerRealm
   editForm.permission = u.permission
   editMsg.value = ''
   showEdit.value = true
@@ -116,9 +114,8 @@ async function submitEdit() {
     id: editForm.id,
     email: editForm.email,
     shells: Number(editForm.shells),
-    strength: Number(editForm.strength),
+    power: Number(editForm.power),
     goldStones: Number(editForm.goldStones),
-    powerRealm: Number(editForm.powerRealm),
     permission: Number(editForm.permission)
   })
   editMsg.value = res.message
@@ -185,9 +182,8 @@ const createForm = reactive({
   password: '',
   permission: 1,
   shells: 50,
-  strength: 10,
-  goldStones: 0,
-  powerRealm: 1
+  power: 100,
+  goldStones: 0
 })
 const createMsg = ref('')
 
@@ -198,9 +194,8 @@ function openCreate() {
     password: '',
     permission: 1,
     shells: 50,
-    strength: 10,
-    goldStones: 0,
-    powerRealm: 1
+    power: 100,
+    goldStones: 0
   })
   createMsg.value = ''
   showCreate.value = true
@@ -213,9 +208,8 @@ async function submitCreate() {
     password: createForm.password,
     permission: Number(createForm.permission),
     shells: Number(createForm.shells),
-    strength: Number(createForm.strength),
-    goldStones: Number(createForm.goldStones),
-    powerRealm: Number(createForm.powerRealm)
+    power: Number(createForm.power),
+    goldStones: Number(createForm.goldStones)
   })
   createMsg.value = res.message
   if (res.code === 200) {
@@ -258,7 +252,7 @@ function formatTime(t) {
       <section class="panel">
         <h2>👥 用户管理</h2>
         <p class="desc">
-          查看并管理仙钓大陆所有已注册道友：调整游戏资源（贝壳 / 金石 / 根骨 / 境界）、修改角色权限、重置密码或删除账号。
+          查看并管理仙钓大陆所有已注册道友：调整游戏资源（贝壳 / 金石 / 力量）、修改角色权限、重置密码或删除账号。
         </p>
 
         <!-- 工具栏 -->
@@ -286,9 +280,8 @@ function formatTime(t) {
                 <th>邮箱</th>
                 <th>角色</th>
                 <th>贝壳 🐚</th>
-                <th>根骨 💪</th>
                 <th>金石 🪙</th>
-                <th>境界</th>
+                <th>力量 💪</th>
                 <th>注册时间</th>
                 <th class="op">操作</th>
               </tr>
@@ -304,9 +297,8 @@ function formatTime(t) {
                   </span>
                 </td>
                 <td>{{ u.shells }}</td>
-                <td>{{ u.strength }}</td>
                 <td>{{ u.goldStones }}</td>
-                <td>{{ u.powerRealm }} 重天</td>
+                <td>{{ u.power || 100 }}</td>
                 <td class="time">{{ formatTime(u.createTime) }}</td>
                 <td class="op">
                   <button class="link" @click="openEdit(u)">编辑</button>
@@ -340,12 +332,10 @@ function formatTime(t) {
           <input v-model="editForm.email" type="email" />
           <label>贝壳 🐚</label>
           <input v-model.number="editForm.shells" type="number" min="0" />
-          <label>根骨 💪</label>
-          <input v-model.number="editForm.strength" type="number" min="0" />
           <label>金石 🪙</label>
           <input v-model.number="editForm.goldStones" type="number" min="0" />
-          <label>钓道境界</label>
-          <input v-model.number="editForm.powerRealm" type="number" min="1" max="999" />
+          <label>力量 💪</label>
+          <input v-model.number="editForm.power" type="number" min="0" />
           <label>角色</label>
           <select v-model.number="editForm.permission">
             <option :value="1">普通玩家</option>
@@ -406,12 +396,10 @@ function formatTime(t) {
           </select>
           <label>贝壳 🐚</label>
           <input v-model.number="createForm.shells" type="number" min="0" />
-          <label>根骨 💪</label>
-          <input v-model.number="createForm.strength" type="number" min="0" />
           <label>金石 🪙</label>
           <input v-model.number="createForm.goldStones" type="number" min="0" />
-          <label>钓道境界</label>
-          <input v-model.number="createForm.powerRealm" type="number" min="1" max="999" />
+          <label>力量 💪</label>
+          <input v-model.number="createForm.power" type="number" min="0" />
         </div>
         <p v-if="createMsg" class="modal-msg">{{ createMsg }}</p>
         <div class="modal-actions">

@@ -10,7 +10,7 @@ const session = getSession()
 const username = session ? session.username : ''
 
 const profile = ref({
-  username, shells: 0, goldStones: 0, strength: 10,
+  username, shells: 0, goldStones: 0, power: 100,
   equippedRodName: '无', equippedLineName: '无', lineStrength: 0, maxCatchWeight: 0,
   totalBait: 0, inventory: []
 })
@@ -62,7 +62,7 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :strength="profile.strength" />
+    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" />
     <OceanBackground />
 
     <main class="inv">
@@ -70,7 +70,7 @@ onMounted(load)
       <p class="sub">装备更强的钓竿与鱼线，去征服百万斤的巨物</p>
 
       <div class="summary">
-        <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.strength }}</b><small>根骨</small></div>
+        <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.power }}</b><small>力量</small></div>
         <div class="sm"><span class="sm-ico">🪙</span><b>{{ profile.goldStones }}</b><small>金石</small></div>
         <div class="sm"><span class="sm-ico">🧵</span><b>{{ fmtWeight(profile.lineStrength) }}</b><small>鱼线承重</small></div>
         <div class="sm"><span class="sm-ico">🎯</span><b>{{ fmtWeight(profile.maxCatchWeight) }}</b><small>最大可钓</small></div>

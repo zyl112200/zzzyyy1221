@@ -11,7 +11,7 @@ const username = session ? session.username : ''
 
 const shells = ref(0)
 const goldStones = ref(0)
-const strength = ref(10)
+const power = ref(100)
 const items = ref([])
 const qty = reactive({})
 const buying = ref(null)
@@ -43,7 +43,7 @@ async function load() {
     if (m.code === 200) {
       shells.value = m.data.shells
       goldStones.value = m.data.goldStones
-      strength.value = m.data.strength
+      power.value = m.data.power || 100
     }
   } catch (e) { showToast(e.message || '后端未启动 🌊') }
   try {
@@ -67,7 +67,7 @@ async function buy(item) {
     if (res.code === 200) {
       shells.value = res.data.shells
       goldStones.value = res.data.goldStones
-      strength.value = res.data.strength
+      power.value = res.data.power || 100
       showToast('购买成功 🎉')
     } else {
       showToast(res.message || '购买失败')
@@ -92,7 +92,7 @@ async function buyMax(item) {
     if (res.code === 200) {
       shells.value = res.data.shells
       goldStones.value = res.data.goldStones
-      strength.value = res.data.strength
+      power.value = res.data.power || 100
       qty[item.id] = maxN
       showToast('已尽数兑换，贝壳散尽 🎉')
     } else {
@@ -118,12 +118,12 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <TopBar :shells="shells" :gold-stones="goldStones" :strength="strength" />
+    <TopBar :shells="shells" :gold-stones="goldStones" :power="power" />
     <OceanBackground />
 
     <main class="shop">
       <h2 class="title">🛒 商店</h2>
-      <p class="sub">贝壳买装备，金石淬根骨 · 承重决定你能拉上多大的灵鱼</p>
+      <p class="sub">贝壳买装备，金石养力量 · 承重决定你能拉上多大的灵鱼</p>
 
       <div class="grid">
         <div class="card" v-for="item in items" :key="item.id" :class="'type-' + item.type.toLowerCase()">

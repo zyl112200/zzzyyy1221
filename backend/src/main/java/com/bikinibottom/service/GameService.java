@@ -42,6 +42,7 @@ public class GameService {
     private final ItemMapper itemMapper;
     private final UserItemMapper userItemMapper;
     private final DropRateService dropRateService;
+    private final AssociationService associationService;
     private final Random random = new Random();
 
     /** 钓道境界上限（重天数） */
@@ -94,11 +95,12 @@ public class GameService {
     private static final long ENCOUNTER_TTL_MS = 10 * 60 * 1000L;
 
     public GameService(UserMapper userMapper, ItemMapper itemMapper, UserItemMapper userItemMapper,
-                       DropRateService dropRateService) {
+                       DropRateService dropRateService, AssociationService associationService) {
         this.userMapper = userMapper;
         this.itemMapper = itemMapper;
         this.userItemMapper = userItemMapper;
         this.dropRateService = dropRateService;
+        this.associationService = associationService;
     }
 
     // ==========================================================
@@ -573,6 +575,11 @@ public class GameService {
             if ("MYTHIC".equals(pe.getTier()) || "SHANHAI".equals(pe.getTier())) {
                 r.setCelebrateMessage(RARE_CHEERS[random.nextInt(RARE_CHEERS.length)]
                         .replace("{fish}", pe.getFishName()));
+            }
+            // 钓鱼协会挂钩：协会任务进度 / 2 分钟钓鱼比赛 / 认证徽章
+            List<String> assocMsgs = associationService.onCatch(u, pe.getFishName(), pe.getWeight());
+            if (assocMsgs != null && !assocMsgs.isEmpty()) {
+                r.setAssocMessages(assocMsgs);
             }
         } else {
             r.setLanded(false);
