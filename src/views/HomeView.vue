@@ -3,7 +3,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
-import { meApi, castApi, settleApi, baitsApi, mapsApi } from '../api/game'
+import { meApi, castApi, settleApi, baitsApi, mapsApi, setMapApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
 import { MAPS, DEFAULT_MAP } from '../data/maps'
@@ -64,6 +64,17 @@ async function loadMaps() {
   if (!maps.value.find((m) => m.id === selectedMapId.value)) {
     selectedMapId.value = profile.currentMap || DEFAULT_MAP
   }
+}
+
+/** 选图：本地即时切换，并持久化到后端 / 本地引擎，供「当前所在」与抛竿默认地图使用 */
+async function selectMap(m) {
+  selectedMapId.value = m.id
+  showMap.value = false
+  profile.currentMap = m.id
+  try {
+    const res = await setMapApi(username, m.id)
+    if (res.code === 200 && res.data) profile.currentMap = res.data.currentMap || m.id
+  } catch { /* 断网也不影响本地选图 */ }
 }
 
 async function loadBaits() {
@@ -862,7 +873,7 @@ onBeforeUnmount(() => {
           :key="m.id"
           class="map-card"
           :class="{ active: m.id === selectedMapId, locked: m.recommendPower > profile.power }"
-          @click="selectedMapId = m.id; showMap = false"
+          @click="selectMap(m)"
         >
           <span class="mc-name">{{ m.icon }} {{ m.name }}</span>
           <span class="mc-desc">{{ m.desc }}</span>

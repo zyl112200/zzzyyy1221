@@ -7,20 +7,25 @@ import com.bikinibottom.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 钓鱼协会业务：协会任务 / 2 分钟钓鱼比赛 / 1-9 星认证徽章。
+ * 钓鱼协会业务：协会任务 / 100 人钓鱼比赛 / 1-9 星认证徽章。
  * <p>与前端离线引擎 localEngine.js 中的协会实现保持同一套规则与返回结构：</p>
  * <ul>
- *   <li>协会不定时发布「钓起一条指定灵鱼」任务，完成后可领取贝壳 / 金石奖励；</li>
- *   <li>钓鱼比赛：报名后开赛 2 分钟，与其他玩家（协会成员，离线模拟）比累计钓获重量，前三名有奖；</li>
+ *   <li>协会不定时发布任务，每波 10 条（≥1 山海 + ≥3 神话），完成后可领取贝壳 / 金石奖励；</li>
+ *   <li>钓鱼比赛：真人在线报名 → 1 分钟匹配 → 不足 100 人由人机补齐 → 比赛 1 小时比累计钓获总重；
+ *       凡参赛有保底奖励，前三名 1 亿 / 5000 万 / 1000 万贝壳；</li>
  *   <li>认证徽章：单独钓起一只 ≥ 门槛重量的灵鱼即授予对应星级（1~9 星）。</li>
  * </ul>
  * <p>任务与比赛状态保存在内存中（服务重启即重置，与 pending 遭遇一致）；
@@ -38,21 +43,35 @@ public class AssociationService {
     private static final long[] BADGE_THRESHOLDS = {
             1000, 5000, 20000, 100000, 500000, 1000000, 2000000, 5000000, 10000000
     };
-    private static final long COMP_DURATION = 2 * 60 * 1000L;
-    private static final int COMP_NPC_COUNT = 4;
-    private static final String[] COMP_NPC_NAMES = {
-            "海棉宝宝", "派大星", "章鱼哥", "蟹老板", "珊迪", "痞老板", "小蜗", "珍珍"
-    };
+    /** 报名后匹配时长：1 分钟；正式比赛时长：1 个小时；每场 100 人 */
+    private static final long COMP_MATCH_DURATION = 60 * 1000L;
+    private static final long COMP_DURATION = 60 * 60 * 1000L;
+    private static final int COMP_TOTAL = 100;
+    /** 参与保底奖励（贝壳）——只要报名并进入比赛，即使名落孙山也有 */
+    private static final long COMP_BASE_REWARD = 1_000_000L;
+    /** 前三名奖励（贝壳）：1 亿 / 5000 万 / 1000 万 */
     private static final int[][] COMP_REWARDS = {
-            // { 名次, 贝壳, 金石 }
-            {1, 2000, 200},
-            {2, 1000, 100},
-            {3, 500, 50}
+            {1, 100000000},
+            {2, 50000000},
+            {3, 10000000}
+    };
+    /** 人机名字池（真人报名不足 100 人时补齐用） */
+    private static final String[] COMP_BOT_NAMES = {
+            "海棉宝宝", "派大星", "章鱼哥", "蟹老板", "珊迪", "痞老板", "小蜗", "珍珍",
+            "云中子", "清风道人", "明月真人", "剑无痕", "灵溪子", "玄霄上人", "青丘散人", "白泽居士",
+            "赤霄客", "金刀客", "木叶真人", "水镜先生", "火云邪神", "土行孙", "天机子", "地藏客",
+            "清虚道长", "紫霞仙子", "碧海潮生", "幽篁居士", "星河散人", "辰砂道人", "扶摇子", "沧溟客",
+            "流光道人", "问天客", "忘机子", "惊鸿客", "照水真人", "横空道人", "青冥子", "白鹭上人",
+            "赤练仙子", "金乌客", "木叶真人", "水月道人", "火德真君", "厚土道人", "天枢子", "地灵客",
+            "玄真道人", "紫电青霜", "碧落散人", "幽谷客", "星辰子", "辰光道人"
     };
     private static final long TASK_LIFETIME_MIN = 20 * 60 * 1000L;
     private static final long TASK_LIFETIME_MAX = 40 * 60 * 1000L;
     private static final long TASK_GAP_MIN = 5 * 60 * 1000L;
     private static final long TASK_GAP_MAX = 15 * 60 * 1000L;
+    /** 每波一次发布 10 条任务（≥1 山海 + ≥3 神话），最多保留 4 波 */
+    private static final int ASSOC_TASKS_PER_BATCH = 10;
+    private static final int ASSOC_TASK_KEEP = 40;
 
     /** 任务鱼池：品级 → 名称池（与 localEngine.js POOLS 一致） */
     private static final Map<String, List<String>> POOLS = new LinkedHashMap<>();
@@ -102,33 +121,62 @@ public class AssociationService {
         }
     }
 
-    private static class NpcEntry {
+    /** 名次奖励：{ 名次, 贝壳, 称号 } */
+    private static class Reward {
+        final int rank;
+        final long shells;
+        final String title;
+        Reward(int rank, long shells, String title) {
+            this.rank = rank;
+            this.shells = shells;
+            this.title = title;
+        }
+    }
+
+    /** 参赛者：真人（player=true）成绩由钓获累计；人机按计划总重随时间推进 */
+    private static class CompEntry {
         final String name;
+        final boolean player;
+        double total;
         final double planned;
-        NpcEntry(String name, double planned) { this.name = name; this.planned = planned; }
+        Integer rank;        // 全场 100 人总重榜名次（含人机，仅展示用）
+        Integer realRank;    // 真人榜名次（人机不占位，发奖依据）
+        Reward reward;
+        CompEntry(String name, boolean player, double planned) {
+            this.name = name;
+            this.player = player;
+            this.planned = planned;
+        }
     }
 
     private static class Competition {
-        String username;
+        String phase;                        // MATCHING / RUNNING / FINALIZED
+        long matchEndsAt;                    // 匹配截止（报名后 1 分钟）
         long startedAt;
-        long endsAt;
-        double total;                       // 玩家累计钓获重量
-        List<NpcEntry> npcs = new ArrayList<>();
+        long endsAt;                         // 比赛截止（开赛后 1 小时）
+        List<String> signups = new ArrayList<>();   // 本场在线报名的真人用户名
+        List<CompEntry> entries = new ArrayList<>(); // 100 名参赛者
+        int realPlayerCount;                        // 实际入场的真人玩家数
         boolean finalized;
-        int rank;
-        int[] reward;                       // { rank, shells, gold } 或 null
     }
 
     private static class CompRecord {
+        String username;
         int rank;
         double total;
         long at;
-        CompRecord(int rank, double total, long at) { this.rank = rank; this.total = total; this.at = at; }
+        CompRecord(String username, int rank, double total, long at) {
+            this.username = username;
+            this.rank = rank;
+            this.total = total;
+            this.at = at;
+        }
     }
 
     private final List<AssocTask> tasks = new ArrayList<>();
     private final List<CompRecord> compRecords = new ArrayList<>();
     private Competition competition;
+    private final List<String> nextSignups = new ArrayList<>(); // 比赛进行中的下一场预报名
     private long nextTaskAt = 0L;
     private final AtomicInteger nextTaskId = new AtomicInteger(1);
 
@@ -146,9 +194,7 @@ public class AssociationService {
         if (u == null) return Result.error("仙门名录上没有此人 🌫️");
         long now = System.currentTimeMillis();
         ensureTasks(now);
-        if (competition != null && !competition.finalized && now >= competition.endsAt) {
-            finalizeComp(now);
-        }
+        advanceComp(now);
         return Result.success(buildInfo(u, now));
     }
 
@@ -177,31 +223,44 @@ public class AssociationService {
         return Result.success("任务奖励到账：" + t.rewardShells + " 🐚 + " + t.rewardGold + " 金石 🪙", data);
     }
 
-    /** 报名并开始一场 2 分钟钓鱼比赛 */
+    /** 报名钓鱼比赛：匹配中加入本场；比赛进行中登记下一场；空闲则开一场新匹配 */
     public synchronized Result<Map<String, Object>> compStart(String username) {
         User u = getUser(username);
         if (u == null) return Result.error("仙门名录上没有此人 🌫️");
         long now = System.currentTimeMillis();
-        if (competition != null && !competition.finalized) {
-            if (now < competition.endsAt) return Result.error("你已在一场比赛中，2 分钟后再来 🐟");
-            finalizeComp(now);
+        advanceComp(now);
+        Competition c = competition;
+        if (c != null && "MATCHING".equals(c.phase)) {
+            if (c.signups.contains(u.getUsername())) {
+                return Result.success("你已报名本场，等待匹配结束…", compSignupData(c));
+            }
+            c.signups.add(u.getUsername());
+            return Result.success("⚔️ 报名成功！匹配中…已有 " + c.signups.size()
+                    + " 名真人在线报名，1 分钟后开赛（不足 100 人由人机补齐）", compSignupData(c));
         }
-        Competition c = new Competition();
-        c.username = u.getUsername();
-        c.startedAt = now;
-        c.endsAt = now + COMP_DURATION;
-        c.total = 0;
-        List<String> names = new ArrayList<>(List.of(COMP_NPC_NAMES));
-        for (int i = 0; i < COMP_NPC_COUNT; i++) {
-            int idx = random.nextInt(names.size());
-            c.npcs.add(new NpcEntry(names.remove(idx), sampleNpcTotal()));
+        if (c != null && "RUNNING".equals(c.phase)) {
+            if (!nextSignups.contains(u.getUsername())) nextSignups.add(u.getUsername());
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("phase", "RUNNING");
+            data.put("endsAt", c.endsAt);
+            data.put("remaining", Math.max(0, c.endsAt - now));
+            return Result.success("比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配 🐟", data);
         }
-        c.finalized = false;
-        competition = c;
+        // 空闲 / 上一场已结束：开新匹配
+        List<String> signups = new ArrayList<>(nextSignups);
+        if (!signups.contains(u.getUsername())) signups.add(u.getUsername());
+        int count = openMatch(now, signups);
+        return Result.success("⚔️ 报名成功！1 分钟匹配中，已有 " + count
+                + " 名真人在线报名；不足 100 人由人机补齐", compSignupData(competition));
+    }
+
+    private Map<String, Object> compSignupData(Competition c) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("endsAt", c.endsAt);
-        data.put("duration", COMP_DURATION);
-        return Result.success("⚔️ 比赛开始！2 分钟内钓的鱼越重越好，快回灵湖抛竿！", data);
+        data.put("phase", c.phase);
+        data.put("matchEndsAt", c.matchEndsAt);
+        data.put("signupCount", c.signups.size());
+        data.put("duration", COMP_MATCH_DURATION);
+        return data;
     }
 
     /** 查询比赛实时战况（到点自动结算并发放奖励） */
@@ -210,9 +269,7 @@ public class AssociationService {
         if (u == null) return Result.error("仙门名录上没有此人 🌫️");
         long now = System.currentTimeMillis();
         ensureTasks(now);
-        if (competition != null && !competition.finalized && now >= competition.endsAt) {
-            finalizeComp(now);
-        }
+        advanceComp(now);
         return Result.success(buildInfo(u, now));
     }
 
@@ -240,14 +297,16 @@ public class AssociationService {
             }
         }
 
-        // 2) 钓鱼比赛：进行中则累计本次钓获重量
+        // 2) 钓鱼比赛：进行中则累计本次钓获重量（只有报名入场的真人参赛者才计入）
+        advanceComp(now);
         Competition c = competition;
-        if (c != null && !c.finalized) {
-            if (now >= c.endsAt) {
-                finalizeComp(now);
-            } else if (c.username.equals(uname)) {
-                c.total = round1(c.total + weight);
-                msgs.add("⚔️ 比赛中！你已累计 " + fmtWeight(c.total) + " 斤");
+        if (c != null && "RUNNING".equals(c.phase)) {
+            for (CompEntry e : c.entries) {
+                if (e.player && e.name.equals(uname)) {
+                    e.total = round1(e.total + weight);
+                    msgs.add("⚔️ 比赛中！你已累计 " + fmtWeight(e.total) + " 斤");
+                    break;
+                }
             }
         }
 
@@ -279,24 +338,34 @@ public class AssociationService {
 
     private void ensureTasks(long now) {
         if (now < nextTaskAt) return;
-        // 随机抽鱼：普通鱼 60% / 稀有 22% / 传说 11% / 神话 5% / 山海 2%
-        double roll = random.nextDouble();
-        String tier = roll < 0.6 ? "COMMON" : roll < 0.82 ? "RARE" : roll < 0.93 ? "LEGENDARY"
-                : roll < 0.98 ? "MYTHIC" : "SHANHAI";
-        List<String> pool = POOLS.get(tier);
-        String fish = pool.get(random.nextInt(pool.size()));
-        double[] range = TIER_RANGE.get(tier);
-        int rewardShells = (int) Math.round(range[2] * (120 + 2 * Math.pow(range[1], 0.6)) * 10);
-        int rewardGold = Math.max(5, (int) Math.round(range[3] * Math.pow(range[1], 0.45) * 4));
-        long lifetime = TASK_LIFETIME_MIN + (long) (random.nextDouble() * (TASK_LIFETIME_MAX - TASK_LIFETIME_MIN));
-        tasks.add(new AssocTask(nextTaskId.getAndIncrement(), fish, tier, (long) range[0],
-                rewardShells, rewardGold, now, now + lifetime));
-        while (tasks.size() > 8) tasks.remove(0);
+        // 每波一次发布 10 条：至少 1 条山海 + 3 条神话，其余按品级权重随机，最后打乱顺序
+        List<String> tiers = new ArrayList<>(List.of("SHANHAI", "MYTHIC", "MYTHIC", "MYTHIC"));
+        while (tiers.size() < ASSOC_TASKS_PER_BATCH) tiers.add(rollTaskTier());
+        Collections.shuffle(tiers, random);
+        for (String tier : tiers) {
+            List<String> pool = POOLS.get(tier);
+            String fish = pool.get(random.nextInt(pool.size()));
+            double[] range = TIER_RANGE.get(tier);
+            int rewardShells = (int) Math.round(range[2] * (120 + 2 * Math.pow(range[1], 0.6)) * 10);
+            int rewardGold = Math.max(5, (int) Math.round(range[3] * Math.pow(range[1], 0.45) * 4));
+            long lifetime = TASK_LIFETIME_MIN
+                    + (long) (random.nextDouble() * (TASK_LIFETIME_MAX - TASK_LIFETIME_MIN));
+            tasks.add(new AssocTask(nextTaskId.getAndIncrement(), fish, tier, (long) range[0],
+                    rewardShells, rewardGold, now, now + lifetime));
+        }
+        while (tasks.size() > ASSOC_TASK_KEEP) tasks.remove(0);
         nextTaskAt = now + TASK_LIFETIME_MAX + TASK_GAP_MIN
                 + (long) (random.nextDouble() * (TASK_GAP_MAX - TASK_GAP_MIN));
     }
 
-    /** 协会比赛 NPC 总重抽样：多数对手可以战胜，偶尔冒出钓鱼高手 */
+    /** 任务品级权重：普通 60% / 稀有 22% / 传说 11% / 神话 5% / 山海 2% */
+    private String rollTaskTier() {
+        double roll = random.nextDouble();
+        return roll < 0.6 ? "COMMON" : roll < 0.82 ? "RARE" : roll < 0.93 ? "LEGENDARY"
+                : roll < 0.98 ? "MYTHIC" : "SHANHAI";
+    }
+
+    /** 协会比赛人机总重抽样：多数对手可以战胜，偶尔冒出钓鱼高手 */
     private double sampleNpcTotal() {
         double roll = random.nextDouble();
         if (roll < 0.6) return 30 + random.nextDouble() * 770;
@@ -305,34 +374,96 @@ public class AssociationService {
         return 100000 + random.nextDouble() * 700000;
     }
 
-    /** 比赛结算：按总重排名并给前三名发奖 */
+    /** 生成不重复的人机名字（真人报名不足 100 人时补齐） */
+    private List<String> botNames(int count) {
+        List<String> names = new ArrayList<>();
+        Set<String> used = new HashSet<>();
+        for (int i = 0; i < count; i++) {
+            String name = COMP_BOT_NAMES[i % COMP_BOT_NAMES.length];
+            if (i >= COMP_BOT_NAMES.length) name = name + (i / COMP_BOT_NAMES.length + 1);
+            while (used.contains(name)) name = name + "·" + (i + 1);
+            used.add(name);
+            names.add(name);
+        }
+        return names;
+    }
+
+    /** 新建一场匹配（1 分钟），报名者来自「下一场预报名 + 当前报名人」 */
+    private int openMatch(long now, List<String> signups) {
+        nextSignups.clear();
+        Competition c = new Competition();
+        c.phase = "MATCHING";
+        c.matchEndsAt = now + COMP_MATCH_DURATION;
+        c.signups = new ArrayList<>(new LinkedHashSet<>(signups)); // 去重且保序
+        competition = c;
+        return c.signups.size();
+    }
+
+    /** 推进比赛状态：匹配到期 → 开赛；比赛到期 → 结算，并自动开启下一场匹配 */
+    private void advanceComp(long now) {
+        Competition c = competition;
+        if (c == null) return;
+        if ("MATCHING".equals(c.phase) && now >= c.matchEndsAt) {
+            startCompRace(now);
+        } else if ("RUNNING".equals(c.phase) && now >= c.endsAt) {
+            finalizeComp(now);
+            if (!nextSignups.isEmpty()) openMatch(now, nextSignups);
+        }
+    }
+
+    /** 匹配结束正式开赛：已报名真人全部入场，不足 100 人用人机补齐 */
+    private void startCompRace(long now) {
+        Competition c = competition;
+        if (c == null || !"MATCHING".equals(c.phase)) return;
+        for (String name : c.signups) c.entries.add(new CompEntry(name, true, 0));
+        int botCount = Math.max(0, COMP_TOTAL - c.entries.size());
+        for (String name : botNames(botCount)) c.entries.add(new CompEntry(name, false, sampleNpcTotal()));
+        c.phase = "RUNNING";
+        c.startedAt = now;
+        c.endsAt = now + COMP_DURATION;
+    }
+
+    /** 结算（双榜）：
+     *  · 全场 100 人（真人 + 人机）按总重排「总重榜」rank，只用于榜单展示；
+     *  · 高额奖励只在在线报名的真人玩家之间按真人榜 realRank 产生，人机不领奖也不占领奖名次；
+     *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，其余真人拿保底 100 万。
+     */
     private void finalizeComp(long now) {
         Competition c = competition;
-        if (c == null || c.finalized) return;
+        if (c == null || c.finalized || "FINALIZED".equals(c.phase)) return;
+        if ("MATCHING".equals(c.phase)) startCompRace(now);
         c.finalized = true;
-        double playerTotal = c.total;
-        List<double[]> others = new ArrayList<>(); // [0]=planned
-        for (NpcEntry n : c.npcs) others.add(new double[]{n.planned});
-        others.sort((a, b) -> Double.compare(b[0], a[0]));
-        // 排名（含玩家）
-        int rank = 1;
-        for (double[] o : others) if (o[0] > playerTotal) rank++;
-        c.rank = rank;
-        c.reward = null;
-        for (int[] rw : COMP_REWARDS) {
-            if (rw[0] == rank) {
-                c.reward = new int[]{rw[0], rw[1], rw[2]};
-                User u = getUser(c.username);
-                if (u != null) {
-                    u.setShells(shellOf(u) + rw[1]);
-                    u.setGoldStones(goldOf(u) + rw[2]);
-                    userMapper.updateById(u);
+        c.phase = "FINALIZED";
+        for (CompEntry e : c.entries) if (!e.player) e.total = e.planned;
+        // 1) 全场总重榜（含人机）
+        List<CompEntry> sorted = new ArrayList<>(c.entries);
+        sorted.sort((a, b) -> Double.compare(b.total, a.total));
+        for (int i = 0; i < sorted.size(); i++) sorted.get(i).rank = i + 1;
+        // 2) 真人榜：人机不占领奖名次（sorted 已按总重降序，真人子序列同样有序）
+        int realRank = 0;
+        for (CompEntry e : sorted) {
+            if (!e.player) continue;
+            realRank++;
+            e.realRank = realRank;
+            long shells = COMP_BASE_REWARD;
+            String title = "参与奖";
+            for (int[] rw : COMP_REWARDS) {
+                if (rw[0] == realRank) {
+                    shells = rw[1];
+                    title = realRank == 1 ? "冠军" : realRank == 2 ? "亚军" : "季军";
+                    break;
                 }
-                break;
             }
+            e.reward = new Reward(realRank, shells, title);
+            User u = getUser(e.name);
+            if (u != null) {
+                u.setShells((int) Math.min(Integer.MAX_VALUE, (long) shellOf(u) + shells));
+                userMapper.updateById(u);
+            }
+            compRecords.add(0, new CompRecord(e.name, realRank, e.total, now));
         }
-        compRecords.add(0, new CompRecord(rank, playerTotal, now));
-        while (compRecords.size() > 5) compRecords.remove(compRecords.size() - 1);
+        c.realPlayerCount = realRank;
+        while (compRecords.size() > 100) compRecords.remove(compRecords.size() - 1);
     }
 
     private Map<String, Object> buildInfo(User u, long now) {
@@ -376,55 +507,94 @@ public class AssociationService {
         // 比赛
         Competition c = competition;
         if (c != null) {
-            long elapsed = Math.min(COMP_DURATION, now - c.startedAt);
+            boolean matching = "MATCHING".equals(c.phase);
             List<Map<String, Object>> entries = new ArrayList<>();
-            // 玩家
-            Map<String, Object> me = new LinkedHashMap<>();
-            me.put("name", u.getUsername());
-            me.put("isPlayer", true);
-            me.put("total", c.total);
-            entries.add(me);
-            // NPC 成绩随时间推进逐步浮出（模拟对手同时在钓）
-            for (NpcEntry n : c.npcs) {
-                Map<String, Object> e = new LinkedHashMap<>();
-                e.put("name", n.name);
-                e.put("isPlayer", false);
-                e.put("total", Math.min(n.planned, Math.round(n.planned * elapsed / (double) COMP_DURATION)));
-                entries.add(e);
+            if (matching) {
+                // 匹配期：只展示在线报名的真人，逐一确认「真人报名才会被匹配」
+                for (String name : c.signups) {
+                    Map<String, Object> e = new LinkedHashMap<>();
+                    e.put("name", name);
+                    e.put("isPlayer", true);
+                    e.put("isMe", name.equals(u.getUsername()));
+                    e.put("total", 0);
+                    e.put("rank", null);
+                    e.put("realRank", null);
+                    e.put("reward", null);
+                    entries.add(e);
+                }
+            } else {
+                long elapsed = Math.max(0, Math.min(COMP_DURATION, now - c.startedAt));
+                for (CompEntry ce : c.entries) {
+                    Map<String, Object> e = new LinkedHashMap<>();
+                    e.put("name", ce.name);
+                    e.put("isPlayer", ce.player);
+                    e.put("isMe", ce.name.equals(u.getUsername()));
+                    e.put("total", ce.player ? ce.total
+                            : Math.min(ce.planned, Math.round(ce.planned * elapsed / (double) COMP_DURATION)));
+                    if ("FINALIZED".equals(c.phase)) {
+                        e.put("rank", ce.rank);          // 全场 100 人总重榜名次
+                        e.put("realRank", ce.realRank);  // 真人榜名次（发奖依据）
+                        if (ce.reward != null) {
+                            Map<String, Object> rw = new LinkedHashMap<>();
+                            rw.put("rank", ce.reward.rank);
+                            rw.put("shells", ce.reward.shells);
+                            rw.put("title", ce.reward.title);
+                            e.put("reward", rw);
+                        } else {
+                            e.put("reward", null);
+                        }
+                    } else {
+                        e.put("rank", null);
+                        e.put("realRank", null);
+                        e.put("reward", null);
+                    }
+                    entries.add(e);
+                }
             }
-            entries.sort(Comparator.comparingDouble(x -> -((Number) x.get("total")).doubleValue()));
-
+            Map<String, Object> mine = null;
+            for (Map<String, Object> e : entries) {
+                if (Boolean.TRUE.equals(e.get("isMe"))) { mine = e; break; }
+            }
+            int humanCount = matching ? c.signups.size() : (int) c.entries.stream().filter(e -> e.player).count();
+            int botCount = matching ? Math.max(0, COMP_TOTAL - c.signups.size())
+                    : (int) c.entries.stream().filter(e -> !e.player).count();
             Map<String, Object> comp = new LinkedHashMap<>();
+            comp.put("phase", c.phase);
+            comp.put("matchEndsAt", c.matchEndsAt);
+            comp.put("signupCount", humanCount);
+            comp.put("botCount", botCount);
+            comp.put("totalPlayers", COMP_TOTAL);
             comp.put("startedAt", c.startedAt);
             comp.put("endsAt", c.endsAt);
             comp.put("duration", COMP_DURATION);
-            comp.put("finalized", c.finalized);
-            comp.put("rank", c.rank);
-            if (c.reward != null) {
-                Map<String, Object> rw = new LinkedHashMap<>();
-                rw.put("rank", c.reward[0]);
-                rw.put("shells", c.reward[1]);
-                rw.put("gold", c.reward[2]);
-                rw.put("title", c.reward[0] == 1 ? "冠军" : c.reward[0] == 2 ? "亚军" : "季军");
-                comp.put("reward", rw);
-            } else {
-                comp.put("reward", null);
+            comp.put("finalized", "FINALIZED".equals(c.phase));
+            comp.put("rank", mine == null ? null : mine.get("realRank"));   // 领奖名次：真人榜
+            comp.put("overallRank", mine == null ? null : mine.get("rank")); // 全场 100 人总重榜名次
+            comp.put("realPlayerCount", matching ? c.signups.size()
+                    : (c.realPlayerCount > 0 ? c.realPlayerCount : humanCount));
+            comp.put("reward", mine == null ? null : mine.get("reward"));
+            comp.put("remaining", matching ? Math.max(0, c.matchEndsAt - now)
+                    : "RUNNING".equals(c.phase) ? Math.max(0, c.endsAt - now) : 0);
+            comp.put("total", mine == null ? 0 : mine.get("total"));
+            if (!matching) {
+                entries.sort(Comparator.comparingDouble(x -> -((Number) x.get("total")).doubleValue()));
             }
-            comp.put("remaining", Math.max(0, c.endsAt - now));
             comp.put("entries", entries);
             data.put("competition", comp);
         } else {
             data.put("competition", null);
         }
 
-        // 参赛记录
+        // 参赛记录（只看当前用户的）
         List<Map<String, Object>> recList = new ArrayList<>();
         for (CompRecord r : compRecords) {
+            if (r.username != null && !r.username.equals(u.getUsername())) continue;
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("rank", r.rank);
             m.put("total", r.total);
             m.put("at", r.at);
             recList.add(m);
+            if (recList.size() >= 10) break;
         }
         data.put("compRecords", recList);
         return data;

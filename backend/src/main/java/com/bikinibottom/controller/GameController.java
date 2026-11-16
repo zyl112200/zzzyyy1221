@@ -45,10 +45,22 @@ public class GameController {
         return gameService.me(username);
     }
 
-    /** 抛竿（生成咬钩遭遇）：POST /api/game/cast  { "username": "xxx" } */
+    /** 抛竿（生成咬钩遭遇）：POST /api/game/cast  { "username": "xxx", "mapId": "linghu" } */
     @PostMapping("/cast")
     public Result<CastResult> cast(@RequestBody Map<String, String> body) {
-        return gameService.cast(body.get("username"));
+        return gameService.cast(body.get("username"), body.get("mapId"));
+    }
+
+    /** 地图目录：GET /api/game/maps —— 返回全部钓场配置（含专属鱼概率与建议力量） */
+    @GetMapping("/maps")
+    public Result<List<Map<String, Object>>> maps() {
+        return gameService.maps();
+    }
+
+    /** 切换当前钓场：POST /api/game/set-map { "username": "xxx", "mapId": "beiyuan" } */
+    @PostMapping("/set-map")
+    public Result<GameProfile> setMap(@RequestBody Map<String, String> body) {
+        return gameService.setMap(body.get("username"), body.get("mapId"));
     }
 
     /** 搏鱼结算：POST /api/game/settle  { "username", "encounterId", "landed", "breakType" } */

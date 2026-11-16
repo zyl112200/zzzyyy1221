@@ -68,6 +68,11 @@ public class CastResult {
     /** 当前金石余额 */
     private Integer goldStones;
 
+    /** 本次抛竿所在钓场地图 id / 名称 */
+    private String mapId;
+
+    private String mapName;
+
     /** 提示文案 */
     private String message;
 }

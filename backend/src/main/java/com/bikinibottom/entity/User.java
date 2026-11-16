@@ -57,6 +57,9 @@ public class User {
     /** 钓鱼协会认证徽章星级（0 = 未认证，1~9 星；单尾 ≥ 对应门槛即授予） */
     private Integer assocBadge = 0;
 
+    /** 当前所在钓场地图 id（对应前端 maps.js，默认灵湖） */
+    private String currentMap = "linghu";
+
     /** 注册时间（插入时自动填充） */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

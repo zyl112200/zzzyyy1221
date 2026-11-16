@@ -28,6 +28,10 @@ export const settleApi = (username, encounterId, landed, breakType = 'NONE') =>
 /** 地图列表：GET /api/game/maps —— 返回全部钓鱼地图（含专属鱼概率与建议力量） */
 export const mapsApi = () => get('/api/game/maps')
 
+/** 切换当前钓场：POST /api/game/set-map { username, mapId } */
+export const setMapApi = (username, mapId) =>
+  request('/api/game/set-map', { username, mapId })
+
 /** 装备钓竿 / 鱼线：POST /api/game/equip */
 export const equipApi = (username, userItemId) =>
   request('/api/game/equip', { username, userItemId })
@@ -49,7 +53,7 @@ export const assocInfoApi = (username) =>
 export const assocTaskClaimApi = (username, taskId) =>
   request('/api/assoc/task-claim', { username, taskId })
 
-/** 报名并开始 2 分钟钓鱼比赛：POST /api/assoc/comp-start { username } */
+/** 在线报名钓鱼比赛（1 分钟匹配 + 100 人 + 1 小时）：POST /api/assoc/comp-start { username } */
 export const assocCompStartApi = (username) =>
   request('/api/assoc/comp-start', { username })
 

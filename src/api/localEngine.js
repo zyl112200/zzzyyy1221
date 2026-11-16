@@ -396,6 +396,11 @@ function cast(username, baitId, mapId) {
   const power = powerOf(u)
 
   const map = MAP_MAP.get(mapId) || MAP_MAP.get(u.currentMap) || MAP_MAP.get(DEFAULT_MAP)
+  // 指定地图时顺带更新「当前所在」，与后端 cast 行为一致
+  if (mapId && MAP_MAP.get(String(mapId)) && u.currentMap !== String(mapId)) {
+    u.currentMap = String(mapId)
+    persist()
+  }
 
   // 后台货币倍率（默认 1）
   const admin = safeAdminConfig()
@@ -541,7 +546,7 @@ function settle({ username, encounterId, landed, breakType }) {
     if (pe.tier === 'MYTHIC' || pe.tier === 'SHANHAI') {
       r.celebrateMessage = RARE_CHEERS[rand(RARE_CHEERS.length)].replace('{fish}', pe.fishName)
     }
-    // 钓鱼协会挂钩：协会任务进度 / 2 分钟钓鱼比赛 / 认证徽章
+    // 钓鱼协会挂钩：协会任务进度 / 100 人钓鱼比赛 / 认证徽章
     const assocMsgs = assocOnCatch(u, pe.fishName, pe.weight)
     if (assocMsgs.length) r.assocMessages = assocMsgs
     // 力量成长：钓到「自身极限的鱼」（重量 ≥ 力量）+1%~10%；
@@ -859,25 +864,37 @@ function createUser(b = {}) {
 }
 
 // ============================================================
-//  钓鱼协会：任务 / 2 分钟钓鱼比赛 / 1-9 星认证徽章
+//  钓鱼协会：任务 / 100 人钓鱼比赛 / 1-9 星认证徽章
 // ============================================================
-//  - 协会不定时发布钓鱼任务（例：钓起一条指定的灵鱼），完成后可领奖励；
-//  - 钓鱼比赛：报名后开赛 2 分钟，与其他玩家（协会成员）比谁钓的鱼总重更高；
+//  - 协会不定时发布钓鱼任务，每波 10 条（≥1 山海 + ≥3 神话），完成后可领奖励；
+//  - 钓鱼比赛：真人在线报名 → 1 分钟匹配 → 不足 100 人由人机补齐 → 比赛 1 小时比总重；
 //  - 认证徽章：单独钓起一只 ≥ 门槛重量的灵鱼即可获得对应星级认证。
 // ============================================================
 const BADGE_THRESHOLDS = [1000, 5000, 20000, 100000, 500000, 1000000, 2000000, 5000000, 10000000]
-const COMP_DURATION = 2 * 60 * 1000          // 比赛时长：2 分钟
-const COMP_NPC_COUNT = 4
-const COMP_NPC_NAMES = ['海棉宝宝', '派大星', '章鱼哥', '蟹老板', '珊迪', '痞老板', '小蜗', '珍珍']
+const COMP_MATCH_DURATION = 60 * 1000        // 报名后匹配时长：1 分钟
+const COMP_DURATION = 60 * 60 * 1000         // 比赛时长：1 个小时
+const COMP_TOTAL = 100                       // 每场参赛人数：100 名（真人优先，不足用人机补齐）
 const COMP_REWARDS = [
-  { rank: 1, shells: 2000, gold: 200, title: '冠军' },
-  { rank: 2, shells: 1000, gold: 100, title: '亚军' },
-  { rank: 3, shells: 500, gold: 50, title: '季军' }
+  { rank: 1, shells: 100000000, title: '冠军' },   // 第一名 1 亿贝壳
+  { rank: 2, shells: 50000000, title: '亚军' },    // 第二名 5000 万贝壳
+  { rank: 3, shells: 10000000, title: '季军' }     // 第三名 1000 万贝壳
+]
+const COMP_BASE_REWARD = 1000000             // 参与保底：只要报名参赛就有 100 万贝壳
+const COMP_BOT_NAMES = [
+  '海棉宝宝', '派大星', '章鱼哥', '蟹老板', '珊迪', '痞老板', '小蜗', '珍珍',
+  '云中子', '清风道人', '明月真人', '剑无痕', '灵溪子', '玄霄上人', '青丘散人', '白泽居士',
+  '赤霄客', '金刀客', '木灵子', '水镜先生', '火云邪神', '土行孙', '天机子', '地藏客',
+  '清虚道长', '紫霞仙子', '碧海潮生', '幽篁居士', '星河散人', '辰砂道人', '扶摇子', '沧溟客',
+  '流光道人', '问天客', '忘机子', '惊鸿客', '照水真人', '横空道人', '青冥子', '白鹭上人',
+  '赤练仙子', '金乌客', '木叶真人', '水月道人', '火德真君', '厚土道人', '天枢子', '地灵客',
+  '玄真道人', '紫电青霜', '碧落散人', '幽谷客', '星辰子', '辰光道人'
 ]
 const TASK_LIFETIME_MIN = 20 * 60 * 1000     // 任务有效期：20~40 分钟
 const TASK_LIFETIME_MAX = 40 * 60 * 1000
 const TASK_GAP_MIN = 5 * 60 * 1000           // 两波任务的发布间隔：5~15 分钟（不定时发布）
 const TASK_GAP_MAX = 15 * 60 * 1000
+const ASSOC_TASKS_PER_BATCH = 10             // 每波一次发布 10 条任务（≥1 山海 + ≥3 神话）
+const ASSOC_TASK_KEEP = 40                   // 最多保留 4 波任务供展示
 
 /** 协会任务鱼池：所有品级灵鱼合并（按品级权重抽样，普通鱼常见、山海鱼稀有） */
 const ALL_ASSOC_FISH = TIER_ORDER.flatMap((code) =>
@@ -886,46 +903,63 @@ const ALL_ASSOC_FISH = TIER_ORDER.flatMap((code) =>
 
 /** 协会数据惰性初始化（兼容旧存档） */
 function ensureAssoc(db) {
-  if (!db.assoc) db.assoc = { nextTaskId: 1, nextTaskAt: 0, tasks: [], competition: null, compRecords: [] }
+  if (!db.assoc) db.assoc = { nextTaskId: 1, nextTaskAt: 0, tasks: [], competition: null, nextSignups: [], compRecords: [] }
   const a = db.assoc
   if (!Array.isArray(a.tasks)) a.tasks = []
   if (!Array.isArray(a.compRecords)) a.compRecords = []
+  if (!Array.isArray(a.nextSignups)) a.nextSignups = []
   if (!a.nextTaskId) a.nextTaskId = 1
   if (a.nextTaskAt == null) a.nextTaskAt = 0
+  // 兼容旧版比赛存档（无 phase 字段）：直接丢弃，避免旧结构干扰新流程
+  if (a.competition && !a.competition.phase) a.competition = null
   return a
 }
 
-/** 不定时发布协会任务：到点后生成一条「钓指定鱼」任务 */
+/** 不定时发布协会任务：到点后一次发布 10 条「钓指定鱼」任务
+ *  · 其中至少 1 条山海鱼任务、3 条神话鱼任务，其余 6 条按品级权重随机
+ *  · 这批任务打乱顺序后入列，避免山海/神话总排在前面
+ */
 function ensureAssocTasks(db, now) {
   const a = ensureAssoc(db)
   if (now < a.nextTaskAt) return
-  // 随机抽鱼：普通鱼 60% / 稀有 22% / 传说 11% / 神话 5% / 山海 2%
-  const roll = Math.random()
-  const tierCode = roll < 0.6 ? 'COMMON' : roll < 0.82 ? 'RARE' : roll < 0.93 ? 'LEGENDARY' : roll < 0.98 ? 'MYTHIC' : 'SHANHAI'
-  const pool = ALL_ASSOC_FISH.filter((f) => f.tier === tierCode)
-  const fish = pool[rand(pool.length)]
-  const rewardShells = Math.round(fish.shellMul * (120 + 2 * Math.pow(fish.maxW, 0.6)) * 10)
-  const rewardGold = Math.max(5, Math.round(fish.goldMul * Math.pow(fish.maxW, 0.45) * 4))
-  a.tasks.push({
-    id: a.nextTaskId++,
-    fishName: fish.name,
-    fishIcon: fish.icon,
-    tier: fish.tier,
-    tierName: fish.tierName,
-    minWeight: fish.minW,
-    rewardShells,
-    rewardGold,
-    publishedAt: now,
-    expiresAt: now + TASK_LIFETIME_MIN + rand(TASK_LIFETIME_MAX - TASK_LIFETIME_MIN),
-    progress: {},   // { username: 该玩家已钓起该鱼的最大重量 }
-    claimedBy: {}   // { username: true 已领奖 }
-  })
-  // 只保留最近 8 条任务供展示
-  while (a.tasks.length > 8) a.tasks.shift()
+  const rollTier = () => {
+    const roll = Math.random()
+    // 普通鱼 60% / 稀有 22% / 传说 11% / 神话 5% / 山海 2%
+    return roll < 0.6 ? 'COMMON' : roll < 0.82 ? 'RARE' : roll < 0.93 ? 'LEGENDARY' : roll < 0.98 ? 'MYTHIC' : 'SHANHAI'
+  }
+  const tiers = ['SHANHAI', 'MYTHIC', 'MYTHIC', 'MYTHIC']
+  while (tiers.length < ASSOC_TASKS_PER_BATCH) tiers.push(rollTier())
+  // Fisher-Yates 打乱，让高品级任务散落在列表各处
+  for (let i = tiers.length - 1; i > 0; i--) {
+    const j = rand(i + 1)
+    const tmp = tiers[i]; tiers[i] = tiers[j]; tiers[j] = tmp
+  }
+  for (const tierCode of tiers) {
+    const pool = ALL_ASSOC_FISH.filter((f) => f.tier === tierCode)
+    const fish = pool[rand(pool.length)]
+    const rewardShells = Math.round(fish.shellMul * (120 + 2 * Math.pow(fish.maxW, 0.6)) * 10)
+    const rewardGold = Math.max(5, Math.round(fish.goldMul * Math.pow(fish.maxW, 0.45) * 4))
+    a.tasks.push({
+      id: a.nextTaskId++,
+      fishName: fish.name,
+      fishIcon: fish.icon,
+      tier: fish.tier,
+      tierName: fish.tierName,
+      minWeight: fish.minW,
+      rewardShells,
+      rewardGold,
+      publishedAt: now,
+      expiresAt: now + TASK_LIFETIME_MIN + rand(TASK_LIFETIME_MAX - TASK_LIFETIME_MIN),
+      progress: {},   // { username: 该玩家已钓起该鱼的最大重量 }
+      claimedBy: {}   // { username: true 已领奖 }
+    })
+  }
+  // 只保留最近 4 波（40 条）任务供展示
+  while (a.tasks.length > ASSOC_TASK_KEEP) a.tasks.splice(0, a.tasks.length - ASSOC_TASK_KEEP)
   a.nextTaskAt = now + TASK_LIFETIME_MAX + TASK_GAP_MIN + rand(TASK_GAP_MAX - TASK_GAP_MIN)
 }
 
-/** 协会比赛 NPC 总重抽样：多数对手可以战胜，偶尔冒出钓鱼高手 */
+/** 协会比赛人机总重抽样：多数对手可以战胜，偶尔冒出钓鱼高手 */
 function sampleNpcTotal() {
   const roll = Math.random()
   if (roll < 0.6) return Math.round(30 + Math.random() * 770)        // 30 ~ 800 斤
@@ -934,29 +968,103 @@ function sampleNpcTotal() {
   return Math.round(100000 + Math.random() * 700000)                 // 100000 ~ 800000 斤
 }
 
-/** 比赛结算：到点后按总重排名并发放前三名奖励 */
+/** 生成不重复的人机名字（真人不够 100 人时补齐用） */
+function compBotNames(count) {
+  const names = []
+  const used = new Set()
+  for (let i = 0; i < count; i++) {
+    let name = COMP_BOT_NAMES[i % COMP_BOT_NAMES.length]
+    if (i >= COMP_BOT_NAMES.length) name = name + (Math.floor(i / COMP_BOT_NAMES.length) + 1)
+    while (used.has(name)) name = name + '·' + (i + 1)
+    used.add(name)
+    names.push(name)
+  }
+  return names
+}
+
+/** 新建一场匹配（1 分钟），报名者来自「下一场预报名 + 当前报名人」 */
+function openMatch(a, now, signups) {
+  const uniq = Array.from(new Set(signups))
+  a.nextSignups = []
+  a.competition = {
+    phase: 'MATCHING',
+    matchEndsAt: now + COMP_MATCH_DURATION,
+    startedAt: 0,
+    endsAt: 0,
+    signups: uniq,          // 本场报名的真人用户名（只有这些人才能进入参赛名单）
+    entries: [],
+    finalized: false,
+    rank: null,
+    reward: null
+  }
+  return uniq.length
+}
+
+/** 推进比赛状态：匹配到期 → 开赛；比赛到期 → 结算，并自动开启下一场匹配 */
+function advanceComp(db, now) {
+  const a = ensureAssoc(db)
+  const c = a.competition
+  if (!c) return
+  if (c.phase === 'MATCHING' && now >= c.matchEndsAt) {
+    startCompRace(a, now)
+  } else if (c.phase === 'RUNNING' && now >= c.endsAt) {
+    finalizeComp(db, now)
+    if (a.nextSignups && a.nextSignups.length) openMatch(a, now, a.nextSignups)
+  }
+}
+
+/** 匹配结束正式开赛：真人（已报名）全部入场，不足 100 人用人机补齐 */
+function startCompRace(a, now) {
+  const c = a.competition
+  if (!c || c.phase !== 'MATCHING') return
+  const entries = c.signups.map((name) => ({
+    name, isPlayer: true, total: 0, planned: 0, reward: null, rank: null
+  }))
+  const botCount = Math.max(0, COMP_TOTAL - entries.length)
+  const names = compBotNames(botCount)
+  for (let i = 0; i < botCount; i++) {
+    entries.push({ name: names[i], isPlayer: false, total: 0, planned: sampleNpcTotal(), reward: null, rank: null })
+  }
+  c.entries = entries
+  c.phase = 'RUNNING'
+  c.startedAt = now
+  c.endsAt = now + COMP_DURATION
+}
+
+/** 比赛结算（双榜）：
+ *  · 全场 100 人（真人 + 人机）按总重排「总重榜」rank，只用于榜单展示；
+ *  · 高额奖励只在「在线报名的真人玩家」之间按真人榜 realRank 产生，
+ *    人机只负责凑满人数，不领奖也不占领奖名额；
+ *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，其余真人拿保底 100 万。
+ */
 function finalizeComp(db, now) {
   const a = ensureAssoc(db)
   const c = a.competition
-  if (!c || c.finalized) return
+  if (!c || c.finalized || c.phase === 'FINALIZED') return
+  if (c.phase === 'MATCHING') startCompRace(a, now) // 极端情况：匹配期被强制结算
   c.finalized = true
-  // NPC 成绩按其计划总重定型（进行中已按时间展示部分进度）
+  c.phase = 'FINALIZED'
+  // 人机成绩按计划总重定型（进行中已按时间展示部分进度）
   for (const e of c.entries) if (!e.isPlayer) e.total = e.planned
+  // 1) 全场总重榜（含人机）
   const sorted = c.entries.slice().sort((x, y) => y.total - x.total)
-  const rankOfPlayer = sorted.findIndex((e) => e.isPlayer) + 1
-  c.rank = rankOfPlayer
+  sorted.forEach((e, i) => { e.rank = i + 1 })
+  // 2) 真人榜：人机不占领奖名次
+  const humans = sorted.filter((e) => e.isPlayer)
+  humans.forEach((e, i) => {
+    e.realRank = i + 1
+    const rw = COMP_REWARDS.find((x) => x.rank === e.realRank)
+    const shells = rw ? rw.shells : COMP_BASE_REWARD
+    const u = db.users.find((x) => x.username === e.name)
+    if (u) u.shells = (u.shells == null ? 0 : u.shells) + shells
+    e.reward = { rank: e.realRank, title: rw ? rw.title : '参与奖', shells }
+    a.compRecords.unshift({ username: e.name, rank: e.realRank, total: e.total, at: now })
+  })
+  if (a.compRecords.length > 100) a.compRecords.length = 100
+  c.realPlayerCount = humans.length
+  // 名次 / 奖励写在各参赛者 entry 上，assocInfo 按当前查询用户动态返回
+  c.rank = null
   c.reward = null
-  const rw = COMP_REWARDS.find((x) => x.rank === rankOfPlayer)
-  if (rw) {
-    const u = db.users.find((x) => x.username === c.username)
-    if (u) {
-      u.shells = (u.shells == null ? 0 : u.shells) + rw.shells
-      u.goldStones = (u.goldStones == null ? 0 : u.goldStones) + rw.gold
-      c.reward = { rank: rw.rank, title: rw.title, shells: rw.shells, gold: rw.gold }
-    }
-  }
-  a.compRecords.unshift({ rank: rankOfPlayer, total: c.entries.find((e) => e.isPlayer)?.total || 0, at: now })
-  if (a.compRecords.length > 5) a.compRecords.pop()
 }
 
 /** 钓获挂钩：任务进度 / 比赛成绩 / 徽章认证。返回需要播报的消息数组 */
@@ -978,15 +1086,14 @@ function assocOnCatch(u, fishName, weight) {
     }
   }
 
-  // 2) 钓鱼比赛：进行中则累计本次钓获重量
+  // 2) 钓鱼比赛：进行中则累计本次钓获重量（只有报名入场的真人参赛者才计入）
+  advanceComp(db, now)
   const c = a.competition
-  if (c && !c.finalized) {
-    if (now >= c.endsAt) finalizeComp(db, now)
-    else if (c.username === u.username) {
-      c.total = round1((c.total || 0) + weight)
-      const me = c.entries.find((e) => e.isPlayer)
-      if (me) me.total = c.total
-      msgs.push(`⚔️ 比赛中！你已累计 ${fmtW(c.total)} 斤`)
+  if (c && c.phase === 'RUNNING') {
+    const me = c.entries.find((e) => e.isPlayer && e.name === u.username)
+    if (me) {
+      me.total = round1((me.total || 0) + weight)
+      msgs.push(`⚔️ 比赛中！你已累计 ${fmtW(me.total)} 斤`)
     }
   }
 
@@ -1014,7 +1121,7 @@ function assocInfo(username) {
   const now = Date.now()
   const a = ensureAssoc(db)
   ensureAssocTasks(db, now)
-  if (a.competition && !a.competition.finalized && now >= a.competition.endsAt) finalizeComp(db, now)
+  advanceComp(db, now)
   persist()
 
   const tasks = a.tasks.slice().reverse().map((t) => ({
@@ -1038,22 +1145,46 @@ function assocInfo(username) {
   let comp = null
   if (a.competition) {
     const c = a.competition
-    const elapsed = Math.min(COMP_DURATION, now - c.startedAt)
-    // NPC 成绩随时间推进逐步浮出（模拟对手同时在钓）
-    const entries = c.entries.map((e) => ({
-      name: e.name,
-      isPlayer: !!e.isPlayer,
-      total: e.isPlayer ? c.total || 0 : Math.min(e.planned, Math.round(e.planned * (elapsed / COMP_DURATION)))
-    }))
+    const matching = c.phase === 'MATCHING'
+    let entries
+    if (matching) {
+      // 匹配期：只展示已报名的真人，逐一确认「真人在线报名才会被匹配」
+      entries = c.signups.map((name) => ({
+        name, isPlayer: true, isMe: name === u.username, total: 0, rank: null, realRank: null, reward: null
+      }))
+    } else {
+      const elapsed = Math.max(0, Math.min(COMP_DURATION, now - c.startedAt))
+      // 人机成绩随时间推进逐步浮出（模拟对手同时在钓）
+      entries = c.entries.map((e) => ({
+        name: e.name,
+        isPlayer: !!e.isPlayer,
+        isMe: e.name === u.username,
+        total: e.isPlayer ? e.total || 0 : Math.min(e.planned, Math.round(e.planned * elapsed / COMP_DURATION)),
+        rank: c.phase === 'FINALIZED' ? e.rank : null,
+        realRank: c.phase === 'FINALIZED' ? (e.realRank || null) : null,
+        reward: c.phase === 'FINALIZED' ? e.reward : null
+      }))
+    }
+    const mine = entries.find((e) => e.isMe)
     comp = {
+      phase: c.phase,
+      matchEndsAt: c.matchEndsAt || 0,
+      signupCount: matching ? (c.signups || []).length : (c.entries || []).filter((e) => e.isPlayer).length,
+      botCount: matching ? Math.max(0, COMP_TOTAL - (c.signups || []).length) : (c.entries || []).filter((e) => !e.isPlayer).length,
+      totalPlayers: COMP_TOTAL,
       startedAt: c.startedAt,
       endsAt: c.endsAt,
       duration: COMP_DURATION,
-      finalized: !!c.finalized,
-      rank: c.rank || null,
-      reward: c.reward || null,
-      remaining: Math.max(0, c.endsAt - now),
-      entries: entries.sort((x, y) => y.total - x.total)
+      finalized: c.phase === 'FINALIZED',
+      rank: mine ? (mine.realRank != null ? mine.realRank : mine.rank) : null, // 领奖名次：真人榜
+      overallRank: mine ? mine.rank : null,                                    // 全场 100 人总重榜名次
+      realPlayerCount: matching ? (c.signups || []).length
+        : (c.realPlayerCount || (c.entries || []).filter((e) => e.isPlayer).length),
+      reward: mine ? mine.reward : null,
+      remaining: matching ? Math.max(0, c.matchEndsAt - now)
+        : c.phase === 'RUNNING' ? Math.max(0, c.endsAt - now) : 0,
+      total: mine ? mine.total : 0,
+      entries: matching ? entries : entries.sort((x, y) => y.total - x.total)
     }
   }
 
@@ -1065,7 +1196,7 @@ function assocInfo(username) {
     tasks,
     nextTaskAt: a.nextTaskAt,
     competition: comp,
-    compRecords: a.compRecords.slice()
+    compRecords: a.compRecords.filter((r) => !r.username || r.username === u.username).slice(0, 10)
   })
 }
 
@@ -1091,40 +1222,55 @@ function assocTaskClaim(username, taskId) {
   )
 }
 
-/** 报名并开始一场 2 分钟钓鱼比赛 */
+/** 报名钓鱼比赛：匹配中加入本场；比赛进行中登记下一场；空闲则开启一场新匹配 */
 function assocCompStart(username) {
   const u = userByName(String(username || '').trim())
   if (!u) return err('仙门名录上没有此人 🌫️')
   const db = readDb()
   const now = Date.now()
   const a = ensureAssoc(db)
-  if (a.competition && !a.competition.finalized) {
-    if (now < a.competition.endsAt) return err('你已在一场比赛中，2 分钟后再来 🐟')
-    finalizeComp(db, now)
+  advanceComp(db, now)
+  const c = a.competition
+  if (c && c.phase === 'MATCHING') {
+    if (c.signups.includes(u.username)) {
+      persist()
+      return ok(
+        { phase: 'MATCHING', matchEndsAt: c.matchEndsAt, signupCount: c.signups.length, duration: COMP_MATCH_DURATION },
+        '你已报名本场，等待匹配结束…'
+      )
+    }
+    c.signups.push(u.username)
+    persist()
+    return ok(
+      { phase: 'MATCHING', matchEndsAt: c.matchEndsAt, signupCount: c.signups.length, duration: COMP_MATCH_DURATION },
+      `⚔️ 报名成功！匹配中…已有 ${c.signups.length} 名真人在线报名，1 分钟后开赛（不足 100 人由人机补齐）`
+    )
   }
-  const npcNames = COMP_NPC_NAMES.slice()
-  const entries = [{ name: u.username, isPlayer: true, total: 0 }]
-  for (let i = 0; i < COMP_NPC_COUNT; i++) {
-    const idx = rand(npcNames.length)
-    entries.push({ name: npcNames.splice(idx, 1)[0], isPlayer: false, planned: sampleNpcTotal() })
+  if (c && c.phase === 'RUNNING') {
+    if (!a.nextSignups.includes(u.username)) a.nextSignups.push(u.username)
+    persist()
+    return ok(
+      { phase: 'RUNNING', endsAt: c.endsAt, remaining: Math.max(0, c.endsAt - now) },
+      '比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配 🐟'
+    )
   }
-  a.competition = { username: u.username, startedAt: now, endsAt: now + COMP_DURATION, total: 0, entries, finalized: false, rank: null, reward: null }
+  // 空闲 / 上一场已结束：开新匹配
+  const signups = openMatch(a, now, a.nextSignups.concat([u.username]))
   persist()
   return ok(
-    { endsAt: a.competition.endsAt, duration: COMP_DURATION },
-    '⚔️ 比赛开始！2 分钟内钓的鱼越重越好，快回灵湖抛竿！'
+    { phase: 'MATCHING', matchEndsAt: a.competition.matchEndsAt, signupCount: signups, duration: COMP_MATCH_DURATION },
+    `⚔️ 报名成功！1 分钟匹配中，已有 ${signups} 名真人在线报名；不足 100 人由人机补齐`
   )
 }
 
-/** 查询比赛实时战况（到点自动结算并发放奖励） */
+/** 查询比赛实时战况（推进状态：匹配到期自动开赛、比赛到期自动结算） */
 function assocCompState(username) {
   const u = userByName(String(username || '').trim())
   if (!u) return err('仙门名录上没有此人 🌫️')
   const db = readDb()
   const now = Date.now()
   const a = ensureAssoc(db)
-  if (!a.competition) return ok({ competition: null, compRecords: a.compRecords.slice() })
-  if (!a.competition.finalized && now >= a.competition.endsAt) finalizeComp(db, now)
+  advanceComp(db, now)
   persist()
   return assocInfo(u.username)
 }
@@ -1141,7 +1287,7 @@ const AI_DIALOGS = [
   { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊' },
   { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱' },
   { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦 💾' },
-  { id: 9, scene: '协会', reply: '钓鱼协会不定时发布任务（钓指定鱼有奖），还能报名 2 分钟钓鱼比赛跟其他玩家比重量；单尾钓起 1000 斤以上就开始授予 1~9 星认证徽章，越重星星越多 🏆' }
+  { id: 9, scene: '协会', reply: '钓鱼协会每波一次发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛要先在线报名，1 分钟匹配后跟 100 名玩家比 1 小时总重，真人不足由人机补齐。凡参赛保底 100 万贝壳，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章 🏆' }
 ]
 
 function aiDialogs() {
@@ -1200,6 +1346,14 @@ export function localCall(method, url, body) {
       return settle(b)
     case '/api/game/maps':
       return ok(MAPS)
+    case '/api/game/set-map': {
+      const u = userByName(b.username)
+      if (!u) return err('仙门名录上没有此人 🌫️')
+      if (!MAP_MAP.get(String(b.mapId))) return err('未知地图：' + b.mapId)
+      u.currentMap = String(b.mapId)
+      persist()
+      return ok(buildProfile(u), '已前往 ' + MAP_MAP.get(u.currentMap).name)
+    }
     case '/api/game/equip':
       return equip(b.username, b.userItemId)
     case '/api/shop/items':

@@ -58,6 +58,9 @@ public class GameProfile {
     /** 是否拥有幸运物 */
     private Boolean luckOwned;
 
+    /** 当前所在钓场地图 id（选图面板高亮「当前所在」用） */
+    private String currentMap;
+
     /** 背包明细 */
     private List<OwnedItemDto> inventory;
 }

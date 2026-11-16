@@ -18,6 +18,7 @@ CREATE TABLE user (
   skills      VARCHAR(255),
   max_caught_weight INT    NOT NULL DEFAULT 0,   -- 历史最重单尾钓获（斤），协会徽章依据
   assoc_badge INT          NOT NULL DEFAULT 0,   -- 钓鱼协会认证徽章星级（0~9）
+  current_map VARCHAR(30)  NOT NULL DEFAULT 'linghu', -- 当前所在钓场地图 id（对应前端 maps.js）
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);

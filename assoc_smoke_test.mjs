@@ -21,7 +21,11 @@ check('注册成功', r1.code === 200)
 const r2 = localCall('GET', '/api/assoc/info?username=tester')
 check('协会信息可访问', r2.code === 200)
 const tasks0 = r2.data.tasks
-check('首波任务已发布', tasks0.length >= 1, `任务数=${tasks0.length}, fish=${tasks0[0]?.fishName}`)
+check('首波一次发布 10 条任务', tasks0.length === 10, `任务数=${tasks0.length}`)
+const shanhaiCount = tasks0.filter((t) => t.tier === 'SHANHAI').length
+const mythicCount = tasks0.filter((t) => t.tier === 'MYTHIC').length
+check('至少 1 条山海鱼任务', shanhaiCount >= 1, `山海=${shanhaiCount}`)
+check('至少 3 条神话鱼任务', mythicCount >= 3, `神话=${mythicCount}`)
 check('徽章初始为 0 星', r2.data.badgeStar === 0)
 check('门槛表 9 档', r2.data.badgeThresholds.length === 9, r2.data.badgeThresholds.join('/'))
 check('暂无进行中比赛', r2.data.competition === null)
@@ -31,13 +35,28 @@ const t0 = tasks0[0]
 const rc0 = localCall('POST', '/api/assoc/task-claim', { username: 'tester', taskId: t0.id })
 check('未完成任务不可领奖', rc0.code === 400)
 
-// ---------- 2. 钓鱼比赛：开赛 → 钓获累计 → 快进 2 分钟自动结算 ----------
+// ---------- 2. 钓鱼比赛：报名 → 1 分钟匹配 → 100 人参赛 → 1 小时结算 ----------
 const rs = localCall('POST', '/api/assoc/comp-start', { username: 'tester' })
 check('比赛报名成功', rs.code === 200, rs.message)
-const dup = localCall('POST', '/api/assoc/comp-start', { username: 'tester' })
-check('比赛中重复报名被拒', dup.code === 400)
+check('报名后进入匹配阶段', rs.data.phase === 'MATCHING', rs.data.phase)
+const matching = localCall('GET', '/api/assoc/info?username=tester').data.competition
+check('匹配阶段展示在线报名真人', matching.phase === 'MATCHING' && matching.signupCount === 1,
+  `报名=${matching.signupCount}, 列表=${matching.entries.length}`)
+// 同一人重复报名不会在匹配池里出现两次
+localCall('POST', '/api/assoc/comp-start', { username: 'tester' })
+const dupInfo = localCall('GET', '/api/assoc/info?username=tester').data.competition
+check('重复报名不产生两个参赛位', dupInfo.signupCount === 1, `报名=${dupInfo.signupCount}`)
 
-// 钓一竿并成功上岸（开局 5 个鱼饵 + 自动装备初级竿）
+// 匹配 1 分钟到期 → 自动开赛，报名真人 + 人机补齐到 100 人
+Date.now = () => realNow() + 61 * 1000
+const running = localCall('POST', '/api/assoc/comp-state', { username: 'tester' }).data.competition
+check('匹配后自动开赛', running.phase === 'RUNNING', running.phase)
+check('参赛人数 100', running.entries.length === 100, `entries=${running.entries.length}`)
+check('真人在场、人机补齐', running.signupCount === 1 && running.botCount === 99,
+  `真人=${running.signupCount}, 人机=${running.botCount}`)
+check('比赛时长 1 小时', running.duration === 60 * 60 * 1000, `${running.duration / 60000} 分钟`)
+
+// 钓一竿并成功上岸，验证比赛累计播报
 let castMsg = null
 for (let i = 0; i < 6 && !castMsg; i++) {
   const c = localCall('POST', '/api/game/cast', { username: 'tester' })
@@ -49,11 +68,13 @@ for (let i = 0; i < 6 && !castMsg; i++) {
 }
 check('比赛中钓获累计播报', !!castMsg, castMsg || '（6 竿内未上岸，跳过）')
 
-// 快进 2 分钟触发自动结算
-Date.now = () => realNow() + 3 * 60 * 1000
+// 1 小时到期 → 自动结算并发保底奖励
+Date.now = () => realNow() + 61 * 1000 + 60 * 60 * 1000 + 1000
 const rs2 = localCall('POST', '/api/assoc/comp-state', { username: 'tester' })
-check('到点自动结算', rs2.code === 200 && rs2.data.competition?.finalized === true,
-  `名次=${rs2.data.competition?.rank}, 奖励=${rs2.data.competition?.reward ? '有' : '无'}`)
+const done = rs2.data.competition
+check('到点自动结算', rs2.code === 200 && done.finalized === true, `名次=${done.rank}`)
+check('参赛保底奖励到账', !!done.reward && done.reward.shells >= 1000000,
+  `第${done.rank}名 ${done.reward?.title} ${done.reward?.shells} 贝壳`)
 check('比赛记录已留存', rs2.data.compRecords.length === 1)
 check('重置时间源', (Date.now = realNow, true))
 
@@ -98,7 +119,9 @@ const rTask = localCall('POST', '/api/auth/register', { username: 'tasker', pass
 check('任务测试号注册', rTask.code === 200, rTask.message)
 
 const info2 = localCall('GET', '/api/assoc/info?username=tasker').data
-const target = info2.tasks.find((t) => !t.expired)
+// 优先挑普通 / 稀有鱼任务，避免山海鱼概率太低导致断言在 800 竿内不稳定
+const target = info2.tasks.find((t) => !t.expired && (t.tier === 'COMMON' || t.tier === 'RARE'))
+  || info2.tasks.find((t) => !t.expired)
 if (target) {
   // 新号只有 50 贝壳，先通过后台接口充值，方便批量补饵
   const list = localCall('GET', '/api/admin/users?keyword=tasker&page=1&pageSize=10').data.list

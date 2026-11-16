@@ -37,6 +37,13 @@ function fmtWeight(w) {
   return w + ' 斤'
 }
 
+function fmtShells(n) {
+  if (!n && n !== 0) return '—'
+  if (n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + ' 亿'
+  if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + ' 万'
+  return String(n)
+}
+
 function fmtTime(ms) {
   const s = Math.max(0, Math.floor(ms / 1000))
   const m = Math.floor(s / 60)
@@ -67,6 +74,20 @@ const nextTaskAt = computed(() => (info.value ? info.value.nextTaskAt : 0))
 const competition = computed(() => (info.value ? info.value.competition : null))
 const compRecords = computed(() => (info.value ? info.value.compRecords : []))
 const compCountdown = ref(0)
+const isMatching = computed(() => competition.value?.phase === 'MATCHING')
+
+/** 百人榜单只展示前 10 名 + 自己（若不在前 10），避免一屏塞满 100 行 */
+const rankRows = computed(() => {
+  const all = competition.value?.entries || []
+  const top = all.slice(0, 10)
+  const meIdx = all.findIndex((e) => e.isMe)
+  return { top, meIdx, meOutside: meIdx >= 10 ? all[meIdx] : null }
+})
+
+/** 真人榜前三标记（领奖名次，与全场总重榜分开，避免误以为人机也能拿奖） */
+const podiumTag = (e) => (e?.realRank >= 1 && e.realRank <= 3
+  ? ['🥇 真人榜冠军', '🥈 真人榜亚军', '🥉 真人榜季军'][e.realRank - 1]
+  : '')
 
 const starEmoji = (n) => '⭐'.repeat(Math.min(n, 5)) + (n > 5 ? ` +${n - 5}` : '')
 
@@ -107,9 +128,9 @@ async function refreshComp() {
       tickCountdown()
       const c = competition.value
       if (c && c.finalized && c.reward) {
-        showToast(`⚔️ 比赛结束！你获得第 ${c.rank} 名（${c.reward.title}），奖励 ${c.reward.shells} 🐚 + ${c.reward.gold} 金石 🪙`)
+        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名（${c.reward.title}），奖励 ${fmtShells(c.reward.shells)} 🐚 已到账`)
       } else if (c && c.finalized) {
-        showToast(`⚔️ 比赛结束！你获得第 ${c.rank} 名，再接再厉 🐟`)
+        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名，再接再厉 🐟`)
       }
     }
   } catch { /* 静默 */ }
@@ -221,51 +242,90 @@ onBeforeUnmount(() => {
 
       <!-- ============ 钓鱼比赛 ============ -->
       <section v-else-if="activeTab === 'comp'" class="panel">
-        <p class="tip">报名后开赛 <b>2 分钟</b>，期间你钓起的每条鱼重量都会累计，与协会其他玩家比总重；前 3 名有大奖 ⚔️</p>
+        <p class="tip">
+          报名后先进行 <b>1 分钟匹配</b>：真人玩家在线报名才会进入对阵，不足 100 人由人机补齐；
+          匹配成功后比赛 <b>1 个小时</b>，钓起的每条鱼重量累计比总重。<br>
+          凡报名参赛 <b>保底 100 万贝壳</b>，前三名分别 <b>1 亿 / 5000 万 / 1000 万</b> ⚔️<br>
+          前三名在 <b>在线报名的真人玩家</b> 之间按累计重量产生；人机只凑满 100 人，不占领奖名次。
+        </p>
 
         <div v-if="!competition" class="comp-idle">
           <button class="start-btn" :disabled="startingComp" @click="startComp">
-            {{ startingComp ? '报名中…' : '⚔️ 报名开赛（2 分钟）' }}
+            {{ startingComp ? '报名中…' : '⚔️ 报名比赛（1 分钟匹配）' }}
           </button>
         </div>
 
         <div v-else class="comp-live">
-          <div class="comp-head">
-            <template v-if="!competition.finalized">
+          <!-- 匹配中：只展示已在线报名的真人 -->
+          <template v-if="isMatching">
+            <div class="comp-head">
               <span class="live-dot"></span>
+              <span class="match-label">匹配中</span>
               <span class="countdown">⏱ {{ fmtTime(compCountdown) }}</span>
-              <span class="my-total">我的累计：{{ fmtWeight(competition.entries.find(e => e.isPlayer)?.total || 0) }}</span>
-              <router-link class="go-fish" to="/home">回灵湖抛竿 🎣</router-link>
-            </template>
-            <template v-else>
-              <span class="comp-done">🏁 比赛已结束</span>
-              <span class="rank" :class="'r' + competition.rank">
-                {{ competition.rank <= 3 ? (competition.reward ? competition.reward.title + '！' : '第 ' + competition.rank + ' 名') : '第 ' + competition.rank + ' 名' }}
-              </span>
-              <span class="reward-txt" v-if="competition.reward">
-                奖励已到账：🐚 {{ competition.reward.shells }} + 🪙 {{ competition.reward.gold }}
-              </span>
-              <button class="again-btn" :disabled="startingComp" @click="startComp">再来一场 ⚔️</button>
-            </template>
-          </div>
-          <table class="rank-table">
-            <thead>
-              <tr><th>名次</th><th>玩家</th><th>2 分钟累计重量</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="(e, i) in competition.entries" :key="e.name" :class="{ me: e.isPlayer }">
-                <td class="rk">{{ ['🥇', '🥈', '🥉'][i] || i + 1 }}</td>
-                <td>{{ e.isPlayer ? username + '（你）' : e.name }}</td>
-                <td>{{ fmtWeight(e.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
+              <span class="my-total">已报名 {{ competition.signupCount }} 人 · 人机补齐至 {{ competition.totalPlayers }} 人</span>
+            </div>
+            <p class="match-tip">只有在线报名的真人玩家才会被匹配到；1 分钟后自动开赛，比赛时长 1 小时。</p>
+            <table class="rank-table">
+              <thead><tr><th>序号</th><th>在线报名的真人玩家</th></tr></thead>
+              <tbody>
+                <tr v-for="(e, i) in competition.entries" :key="e.name" :class="{ me: e.isMe }">
+                  <td class="rk">{{ i + 1 }}</td>
+                  <td>{{ e.isMe ? username + '（你）' : e.name }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+
+          <!-- 比赛中 / 已结束 -->
+          <template v-else>
+            <div class="comp-head">
+              <template v-if="!competition.finalized">
+                <span class="live-dot"></span>
+                <span class="countdown">⏱ {{ fmtTime(compCountdown) }}</span>
+                <span class="my-total">总重榜 {{ competition.totalPlayers }} 人 · 我的累计 {{ fmtWeight(competition.total) }}</span>
+                <button class="next-btn" :disabled="startingComp" @click="startComp">登记下一场</button>
+                <router-link class="go-fish" to="/home">回灵湖抛竿 🎣</router-link>
+              </template>
+              <template v-else>
+                <span class="comp-done">🏁 比赛已结束</span>
+                <span class="rank" :class="'r' + competition.rank">
+                  {{ competition.rank <= 3 ? (competition.reward ? competition.reward.title + '！' : '真人榜第 ' + competition.rank + ' 名') : '真人榜第 ' + competition.rank + ' 名' }}
+                </span>
+                <span class="my-total" v-if="competition.overallRank">
+                  全场总重榜第 {{ competition.overallRank }} / {{ competition.totalPlayers }} 名 · {{ competition.realPlayerCount }} 名真人参赛
+                </span>
+                <span class="reward-txt" v-if="competition.reward">
+                  奖励已到账：🐚 {{ fmtShells(competition.reward.shells) }}
+                </span>
+                <button class="again-btn" :disabled="startingComp" @click="startComp">报名下一场 ⚔️</button>
+              </template>
+            </div>
+            <table class="rank-table">
+              <thead><tr><th>总重榜</th><th>玩家</th><th>累计重量</th></tr></thead>
+              <tbody>
+                <tr v-for="(e, i) in rankRows.top" :key="e.name" :class="{ me: e.isMe }">
+                  <td class="rk">{{ competition.finalized && e.rank ? '#' + e.rank : i + 1 }}</td>
+                  <td>
+                    {{ e.isMe ? username + '（你）' : (e.name + (e.isPlayer ? ' · 真人' : '')) }}
+                    <b v-if="podiumTag(e)" class="podium">{{ podiumTag(e) }}</b>
+                  </td>
+                  <td>{{ fmtWeight(e.total) }}</td>
+                </tr>
+                <tr v-if="rankRows.meOutside" class="me-sep"><td colspan="3">……</td></tr>
+                <tr v-if="rankRows.meOutside" :key="'me-' + rankRows.meIdx" class="me">
+                  <td class="rk">{{ competition.finalized && rankRows.meOutside.rank ? '#' + rankRows.meOutside.rank : rankRows.meIdx + 1 }}</td>
+                  <td>{{ username }}（你）<b v-if="podiumTag(rankRows.meOutside)" class="podium">{{ podiumTag(rankRows.meOutside) }}</b></td>
+                  <td>{{ fmtWeight(rankRows.meOutside.total) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
         </div>
 
         <div class="records" v-if="compRecords.length">
           <h4>📜 我的参赛记录</h4>
           <div class="rec" v-for="(r, i) in compRecords" :key="i">
-            第 {{ r.rank }} 名 · 累计 {{ fmtWeight(r.total) }} · {{ fmtDate(r.at) }}
+            真人榜第 {{ r.rank }} 名 · 累计 {{ fmtWeight(r.total) }} · {{ fmtDate(r.at) }}
           </div>
         </div>
       </section>
@@ -380,6 +440,15 @@ onBeforeUnmount(() => {
 }
 .again-btn { background: linear-gradient(180deg, #ffcc80, #ef6c00); color: #3e2000; margin-left: 12px; }
 .comp-done { font-weight: bold; color: #ffd54f; }
+.match-label { font-weight: bold; color: #ffd54f; }
+.match-tip { font-size: 13px; color: #b3d9ff; margin: 0 0 10px; }
+.next-btn {
+  margin-left: auto; padding: 7px 14px; border: none; border-radius: 11px;
+  cursor: pointer; font-weight: bold; font-size: 12px;
+  background: linear-gradient(180deg, #ffcc80, #ef6c00); color: #3e2000;
+}
+.next-btn:disabled { opacity: .6; cursor: wait; }
+.me-sep td { text-align: center; color: #9fc3e8; padding: 4px; }
 .rank { font-size: 20px; font-weight: bold; }
 .rank.r1 { color: #ffd700; } .rank.r2 { color: #cfd8dc; } .rank.r3 { color: #ffab91; }
 .reward-txt { font-size: 13px; color: #a5d6a7; }
@@ -389,6 +458,7 @@ onBeforeUnmount(() => {
 }
 .rank-table th, .badge-table th { color: #9fc3e8; font-size: 12px; }
 .rank-table tr.me td { color: #ffd54f; font-weight: bold; }
+.podium { margin-left: 6px; font-size: 11px; color: #ffe082; white-space: nowrap; }
 .records { margin-top: 16px; }
 .records h4 { margin: 0 0 8px; font-size: 14px; color: #b3d9ff; }
 .rec { font-size: 12px; color: #9fc3e8; padding: 4px 0; }

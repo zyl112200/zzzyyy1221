@@ -2,6 +2,7 @@ package com.bikinibottom.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.bikinibottom.common.Result;
+import com.bikinibottom.config.GameMaps;
 import com.bikinibottom.dto.CastResult;
 import com.bikinibottom.dto.CultivateResult;
 import com.bikinibottom.dto.GameProfile;
@@ -306,8 +307,28 @@ public class GameService {
         p.setMaxCatchWeight(Math.max(rodMax, lineMax) == 0 ? 800 : Math.max(rodMax, lineMax));
         p.setTotalBait(totalBait);
         p.setLuckOwned(luckOwned);
+        p.setCurrentMap(u.getCurrentMap() == null ? GameMaps.DEFAULT_MAP : u.getCurrentMap());
         p.setInventory(inventory);
         return p;
+    }
+
+    /** 地图目录：返回全部钓场（含专属鱼概率 / 建议力量 / 重量系数），供前端选图面板 */
+    public Result<List<Map<String, Object>>> maps() {
+        return Result.success(GameMaps.maps());
+    }
+
+    /** 切换当前钓场：校验 id 后持久化到 user 表 */
+    public Result<GameProfile> setMap(String username, String mapId) {
+        User u = getUser(username);
+        if (u == null) {
+            return Result.error("仙门名录上没有此人 🌫️");
+        }
+        if (GameMaps.get(mapId) == null) {
+            return Result.error("未知地图：" + mapId);
+        }
+        u.setCurrentMap(mapId);
+        userMapper.updateById(u);
+        return Result.success("已前往 " + GameMaps.get(mapId).get("name"), buildProfile(u));
     }
 
     /** 商店目录 */
@@ -427,7 +448,7 @@ public class GameService {
     // ==========================================================
 
     /** 抛竿钓鱼：消耗 1 鱼饵，生成一条咬钩的鱼交给前端搏斗 */
-    public Result<CastResult> cast(String username) {
+    public Result<CastResult> cast(String username, String mapId) {
         User u = getUser(username);
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
@@ -459,10 +480,50 @@ public class GameService {
         int strength = profile.getStrength() == null ? 10 : profile.getStrength();
         List<String> skills = userSkills(u);
 
-        // 选品级 → 抽重量 → 算奖励（观水诀提升稀有及以上品级权重）
-        String tier = pickTier(maxCatch, rodPower, luck, premiumBait,
-                skills.contains("guanshui") ? GUANSHUI_BOOST : 1.0);
-        double weight = sampleWeight(tier, maxCatch);
+        // 钓场地图：优先指定地图，其次玩家当前所在，最后回退灵湖
+        Map<String, Object> map = GameMaps.get(mapId);
+        if (map == null) {
+            map = GameMaps.get(u.getCurrentMap());
+        }
+        if (map == null) {
+            map = GameMaps.defaultMap();
+        }
+        // 指定地图时顺带更新玩家「当前所在」，选图后无需再点确认
+        if (mapId != null && GameMaps.get(mapId) != null && !mapId.equals(u.getCurrentMap())) {
+            u.setCurrentMap(mapId);
+            userMapper.updateById(u);
+        }
+
+        // 专属鱼概率：地图基础值 + 高级饵 / 幸运物各 +5%
+        double exRate = ((Number) map.get("exclusiveRate")).doubleValue();
+        if (premiumBait) {
+            exRate = Math.min(1, exRate + 0.05);
+        }
+        if (luck) {
+            exRate = Math.min(1, exRate + 0.05);
+        }
+
+        String tier;
+        double weight;
+        FishDef def = null;
+        if (random.nextDouble() < exRate) {
+            // 专属鱼：重量 = 力量 × 地图系数（受钓竿承重上限限制）
+            Map<String, String> exFish = GameMaps.randomExclusiveFish();
+            double exMin = ((Number) map.get("exMin")).doubleValue();
+            double exMax = ((Number) map.get("exMax")).doubleValue();
+            double mul = exMin + random.nextDouble() * (exMax - exMin);
+            weight = Math.round(strength * mul * 10) / 10.0;
+            if (weight > maxCatch) {
+                weight = maxCatch;
+            }
+            tier = tierByMul(weight / Math.max(1, strength));
+            def = new FishDef(exFish.get("name"), exFish.get("icon"), exFish.get("lore"));
+        } else {
+            // 普通鱼：按品级权重抽取（观水诀提升稀有及以上权重）
+            tier = pickTier(maxCatch, rodPower, luck, premiumBait,
+                    skills.contains("guanshui") ? GUANSHUI_BOOST : 1.0);
+            weight = sampleWeight(tier, maxCatch);
+        }
         TierDef td = TIERS.get(tier);
         int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75)));
         int rewardGold = (int) Math.max(1, Math.round(td.goldMul() * Math.pow(weight, 0.45)));
@@ -487,7 +548,9 @@ public class GameService {
                 : Math.min(0.95, 0.10 + 0.65 * (weight - lineStrength) / Math.max(1, lineStrength));
         double berserkChance = Math.min(0.95, td.berserkBase() + Math.min(1.0, weight / Math.max(1, maxCatch)) * 0.15);
 
-        FishDef def = pickFish(tier);
+        if (def == null) {
+            def = pickFish(tier);
+        }
 
         // 暂存遭遇
         cleanupPending();
@@ -526,7 +589,9 @@ public class GameService {
         r.setShells(profile.getShells());
         r.setGoldStones(profile.getGoldStones());
         r.setRealmBonusPct((realmLvl - 1) * REALM_BONUS_PER_LEVEL);
-        r.setMessage("有东西咬钩了！握紧鱼竿，开始收线！");
+        r.setMapId(String.valueOf(map.get("id")));
+        r.setMapName(String.valueOf(map.get("name")));
+        r.setMessage("有东西咬钩了！这是" + map.get("name") + "的" + def.name() + "，握紧鱼竿，开始收线！");
         return Result.success(r);
     }
 
@@ -979,6 +1044,15 @@ public class GameService {
     private FishDef pickFish(String tier) {
         List<FishDef> pool = POOLS.getOrDefault(tier, POOLS.get("COMMON"));
         return pool.get(random.nextInt(pool.size()));
+    }
+
+    /** 专属鱼按「重量 / 力量」倍数定品级（与 localEngine.js tierByMul 一致） */
+    private static String tierByMul(double m) {
+        if (m < 1) return "COMMON";
+        if (m < 1.5) return "RARE";
+        if (m < 5) return "LEGENDARY";
+        if (m < 20) return "MYTHIC";
+        return "SHANHAI";
     }
 
     private void cleanupPending() {

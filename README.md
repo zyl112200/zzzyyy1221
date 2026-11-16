@@ -60,6 +60,8 @@
 
 **连通性自检**：`npm run check`（或 `node check-lan.mjs`）会打印四项检查结果——本机是否真的持有配置里的 IP、后端 8080、前端 8081、`/api` 代理是否打通，失败时直接给出处理建议。别的设备连不上时先跑它。
 
+**新功能验证**：`node verify-features.mjs` 会经局域网地址实测地图目录、选图持久化、协会 10 任务（含山海 / 神话）、真人在线报名与 100 人匹配赛道，共 17 项。
+
 > 仍然保留了离线单文件版（`spongebob-offline.html`），没有 Node 的机器可以直接双击打开，但它只能是「单机存档」，不能局域网共享。
 
 ## 开发模式（需要 Node.js）
@@ -251,8 +253,10 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `POST /api/game/ai-chat` | 助手问答（按触发词匹配本地预设） | `{ "username", "message" }` |
 | `GET  /api/assoc/info` | 钓鱼协会主页（任务 / 徽章 / 比赛战况） | query: username |
 | `POST /api/assoc/task-claim` | 领取协会任务奖励 | `{ "username", "taskId" }` |
-| `POST /api/assoc/comp-start` | 报名并开始 2 分钟钓鱼比赛 | `{ "username" }` |
-| `POST /api/assoc/comp-state` | 比赛实时战况（到点自动结算发奖） | `{ "username" }` |
+| `POST /api/assoc/comp-start` | 在线报名钓鱼比赛（1 分钟匹配，不足 100 人由人机补齐） | `{ "username" }` |
+| `POST /api/assoc/comp-state` | 比赛实时战况（匹配到期自动开赛、1 小时到期自动结算发奖） | `{ "username" }` |
+| `GET  /api/game/maps` | 地图目录（专属鱼概率 / 建议力量 / 重量系数） | — |
+| `POST /api/game/set-map` | 切换当前钓场（持久化到 `current_map`） | `{ "username", "mapId" }` |
 | `GET  /api/admin/users` | 后台用户列表（关键词 / 角色 / 分页） | query: keyword, permission, page, pageSize |
 | `GET  /api/admin/users/detail` | 用户详情 | query: id |
 | `POST /api/admin/users` | 后台新建用户 | `{ "username", "email", "password", "permission", "shells", "strength", "goldStones", "powerRealm" }` |
@@ -280,7 +284,8 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | --- | --- | --- |
 | 数据存储 | H2 / MySQL，多设备共享 | 各浏览器自己的 `localStorage` |
 | 数值体系 | 根骨 + 钓道境界 + 功法（`/api/game/me` 里 `power` 与 `strength` 同值） | 力量成长（钓到超极限鱼提升力量） |
-| 地图目录 | 后端未提供 `/api/game/maps`，前端自动使用内置 `src/data/maps.js` 目录；选图仅影响前端展示 | 完整地图专属鱼概率 |
+| 地图目录 | 完整：后端 `/api/game/maps` 提供 5 张钓场，选图持久化到 `current_map`，专属鱼概率与重量系数两端一致 | 完整：行为与后端一致 |
+| 钓鱼比赛 | 真人在线报名进入同一场匹配池，不足 100 人由人机补齐；比赛状态在后端内存中，重启重置 | 同一局里模拟报名与匹配，可完整跑完 1 分钟匹配 + 1 小时比赛（测试脚本会快进时间） |
 
 
 ---
@@ -289,10 +294,15 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 主页右下角「🏆 协会」按钮（或顶栏「协会」）进入钓鱼协会，三大玩法：
 
-- **协会任务**：协会**不定时**发布「钓起一条指定灵鱼」任务（20~40 分钟有效，
-  普通鱼常见、山海鱼稀有），完成后来协会页面领贝壳 + 金石奖励；两波任务间隔 5~15 分钟随机。
-- **钓鱼比赛**：报名后开赛 **2 分钟**，期间钓起的每条鱼重量实时累计，与 4 位协会玩家
-  （海绵宝宝 / 派大星 / 章鱼哥 / 蟹老板等）比总重，前 3 名发放贝壳 / 金石大奖，比赛页面每 3 秒刷新战况。
+- **协会任务**：协会**不定时**发布任务，**每波一次 10 条**，其中**至少 1 条山海鱼任务、3 条神话鱼任务**，
+  其余 6 条按品级权重随机（普通鱼常见、山海鱼稀有）；任务 20~40 分钟有效，两波间隔 5~15 分钟随机。
+  钓起指定鱼即可领贝壳 + 金石奖励。
+- **钓鱼比赛（100 人对战）**：
+  1. 报名后先进行 **1 分钟匹配**——只有**真人在线报名**才会进入对阵名单；
+  2. 真人不足 100 人时，**暂时由人机补齐**，凑满 100 人后自动开赛；比赛期间再报名会登记到下一场；
+  3. 正式比赛时长 **1 个小时**，期间钓起的每条鱼重量累计比总重，比赛页面每 3 秒刷新战况；
+  4. **凡报名参赛都有保底奖励 100 万贝壳**；前三名额外获得：
+     🥇 **1 亿** / 🥈 **5000 万** / 🥉 **1000 万** 贝壳。
 - **认证徽章**：协会专属徽章共 **1~9 星**，「单独钓起一只」≥ 门槛重量的灵鱼即可认证：
 
 | 星级 | 门槛（单尾） | 星级 | 门槛（单尾） |
@@ -305,8 +315,9 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 > 徽章依据「历史最重单尾钓获」评定，钓起更重的鱼自动升级；离线与后端模式规则一致。
 >
-> 协会功能回归测试：`node assoc_smoke_test.mjs`（Node 直跑本地引擎，覆盖任务 / 比赛 / 徽章全流程）。
+> 协会功能回归测试：`node assoc_smoke_test.mjs`（Node 直跑本地引擎，覆盖 10 任务发布、1 分钟匹配 → 100 人 → 1 小时结算保底、徽章全流程）。
 > 引擎全链路回归测试：`node engine_smoke_test.mjs`（注册登录、抛竿结算、力量成长、地图、商店背包、后台用户管理、AI 助手）。
+> 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.9:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
 
 ---
 
@@ -346,6 +357,7 @@ npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 ├── vite.config.js            # Vite 配置（0.0.0.0 监听 + /api 代理到局域网后端）
 ├── serve-lan.mjs             # ★ 在线浏览：零依赖静态服务 + /api 反向代理（0.0.0.0:8081）
 ├── check-lan.mjs             # ★ 局域网连通性自检（npm run check）
+├── verify-features.mjs       # ★ 新功能端到端验证（地图 / 10 任务 / 100 人比赛报名）
 ├── build-standalone.mjs      # 把 dist 内联成单文件离线版
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）

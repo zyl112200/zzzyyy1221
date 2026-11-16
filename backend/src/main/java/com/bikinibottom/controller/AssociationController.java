@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 钓鱼协会接口：协会任务 / 2 分钟钓鱼比赛 / 1-9 星认证徽章。
+ * 钓鱼协会接口：协会任务 / 100 人钓鱼比赛 / 1-9 星认证徽章。
  * 与离线引擎 localEngine.js 的 /api/assoc/* 返回结构保持一致。
  */
 @RestController
@@ -39,7 +39,7 @@ public class AssociationController {
                 body.get("taskId") == null ? null : Integer.valueOf(String.valueOf(body.get("taskId"))));
     }
 
-    /** 报名并开始 2 分钟钓鱼比赛：POST /api/assoc/comp-start { "username": "xxx" } */
+    /** 在线报名钓鱼比赛（1 分钟匹配 → 100 人 → 1 小时）：POST /api/assoc/comp-start { "username": "xxx" } */
     @PostMapping("/comp-start")
     public Result<Map<String, Object>> compStart(@RequestBody Map<String, String> body) {
         return associationService.compStart(body.get("username"));
