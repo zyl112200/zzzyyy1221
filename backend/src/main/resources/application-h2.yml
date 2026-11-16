@@ -20,6 +20,9 @@ spring:
     console:
       enabled: true
       path: /h2-console
+      # 允许局域网其它设备访问控制台：http://192.168.68.9:8080/h2-console
+      settings:
+        web-allow-others: true
 
 mybatis-plus:
   configuration:

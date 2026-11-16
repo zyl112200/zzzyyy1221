@@ -217,6 +217,8 @@ public class GameService {
         p.setUsername(u.getUsername());
         p.setShells(u.getShells() == null ? 0 : u.getShells());
         p.setStrength(strengthOf(u));
+        // 前端主页展示「力量」（power）：后端以根骨等价映射，保持同一接口契约
+        p.setPower(strengthOf(u));
         p.setGoldStones(goldOf(u));
 
         int realm = realmOf(u);

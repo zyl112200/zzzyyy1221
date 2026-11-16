@@ -91,20 +91,30 @@ if (landedHeavy) {
   check('下一星门槛提示', info.nextBadgeTarget === info.badgeThresholds[info.badgeStar])
 }
 
-// ---------- 4. 协会任务：定向钓目标鱼 → 领奖 ----------
-const info2 = localCall('GET', '/api/assoc/info?username=tester').data
+// ---------- 4. 协会任务：新号定向钓目标鱼 → 达成本次首报 → 领奖 ----------
+// 用全新账号做这一步：任务进度按用户记录，「达成」播报只在首次记录进度时触发，
+// 复用前面的 tester 会因它已钓过同种鱼而拿不到播报（旧版测试就踩了这个坑）。
+const rTask = localCall('POST', '/api/auth/register', { username: 'tasker', password: '123456' })
+check('任务测试号注册', rTask.code === 200, rTask.message)
+
+const info2 = localCall('GET', '/api/assoc/info?username=tasker').data
 const target = info2.tasks.find((t) => !t.expired)
 if (target) {
+  // 新号只有 50 贝壳，先通过后台接口充值，方便批量补饵
+  const list = localCall('GET', '/api/admin/users?keyword=tasker&page=1&pageSize=10').data.list
+  const taskerRow = list.find((u) => u.username === 'tasker')
+  localCall('POST', '/api/admin/users/update', { id: taskerRow.id, shells: 300000 })
+
   // 暴力钓目标鱼（成功率取决于鱼池权重，普通鱼很快；山海鱼可能钓不到则跳过领奖断言）
   let taskMsg = null, caught = false
   for (let i = 0; i < 800 && !caught; i++) {
-    let c = localCall('POST', '/api/game/cast', { username: 'tester' })
+    let c = localCall('POST', '/api/game/cast', { username: 'tasker' })
     if (c.code !== 200 && c.message.includes('鱼饵')) {
-      localCall('POST', '/api/shop/buy', { username: 'tester', itemId: 5, quantity: 500 })
-      c = localCall('POST', '/api/game/cast', { username: 'tester' })
+      localCall('POST', '/api/shop/buy', { username: 'tasker', itemId: 5, quantity: 500 })
+      c = localCall('POST', '/api/game/cast', { username: 'tasker' })
     }
     if (c.code !== 200) break
-    const s = localCall('POST', '/api/game/settle', { username: 'tester', encounterId: c.data.encounterId, landed: true, breakType: 'NONE' })
+    const s = localCall('POST', '/api/game/settle', { username: 'tasker', encounterId: c.data.encounterId, landed: true, breakType: 'NONE' })
     if (s.code === 200 && s.data.landed && s.data.fishName === target.fishName) {
       caught = true
       taskMsg = (s.data.assocMessages || []).find((m) => m.includes('协会任务达成'))
@@ -112,9 +122,9 @@ if (target) {
   }
   if (caught) {
     check('任务达成播报', !!taskMsg, taskMsg || '')
-    const cl = localCall('POST', '/api/assoc/task-claim', { username: 'tester', taskId: target.id })
+    const cl = localCall('POST', '/api/assoc/task-claim', { username: 'tasker', taskId: target.id })
     check('任务奖励领取', cl.code === 200, cl.message)
-    const cl2 = localCall('POST', '/api/assoc/task-claim', { username: 'tester', taskId: target.id })
+    const cl2 = localCall('POST', '/api/assoc/task-claim', { username: 'tasker', taskId: target.id })
     check('重复领奖被拒', cl2.code === 400)
   } else {
     console.log('  ⚠️ 目标鱼 ' + target.fishName + ' 未在 800 竿内钓到（山海级属正常概率），跳过领奖断言')

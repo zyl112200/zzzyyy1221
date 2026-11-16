@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "build:standalone": "vite build && node build-standalone.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node serve-lan.mjs",
+    "online": "vite build && node serve-lan.mjs",
+    "check": "node check-lan.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

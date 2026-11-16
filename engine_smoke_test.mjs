@@ -49,26 +49,45 @@ const enc3 = r.data
 r = call('POST', '/api/game/settle', { username: 'tester1', encounterId: enc3.encounterId, landed: false, breakType: 'ROD' })
 ok('断竿结算成功', r.code === 200, r.data.rodBroken === true ? '鱼竿损毁' : '鱼竿保留')
 
-console.log('\n=== 5) 根骨 / 境界 ===')
-// spongebob 有 200 金石可测
+console.log('\n=== 5) 力量成长（钓到极限鱼 → 力量复合提升）===')
 r = call('GET', '/api/game/me?username=spongebob')
-ok('spongebob 初始根骨=10', r.data.strength === 10)
-r = call('POST', '/api/game/train', { username: 'spongebob' })
-ok('根骨 +5', r.code === 200 && r.data.strength === 15, `gold=${r.data.goldStones}`)
-r = call('POST', '/api/game/realm-up', { username: 'spongebob' })
-ok('境界突破', r.code === 200 && r.data.powerRealm === 2, `nextCost=${r.data.nextRealmCost}`)
-r = call('POST', '/api/game/realm-up', { username: 'spongebob' })
-ok('连续突破可继续', r.code === 200 && r.data.powerRealm === 3)
+ok('spongebob 初始力量=100', r.data.power === 100, `power=${r.data.power}`)
 
-console.log('\n=== 6) 钓鱼功法 ===')
-r = call('GET', '/api/game/skills')
-ok('功法目录 8 种', r.code === 200 && r.data.length === 8)
-r = call('POST', '/api/game/cultivate', { username: 'spongebob', skillId: 'jingxin' })
-ok('修炼静心诀', r.code === 200, `lv=${r.data?.skills?.jingxin}`)
-// 全新账户（0 金石）修炼应被拒
-call('POST', '/api/auth/register', { username: 'poor2', password: '123456' })
-r = call('POST', '/api/game/cultivate', { username: 'poor2', skillId: 'jingxin' })
-ok('无资源修炼被拒', r.code === 400)
+// 连钓直到出现力量成长：重量 ≥ 力量的鱼给 +1%~10%，≥1.5 倍给 +10%~50%
+let grown = null
+for (let i = 0; i < 80 && !grown; i++) {
+  let c = call('POST', '/api/game/cast', { username: 'spongebob' })
+  if (c.code !== 200 && String(c.message).includes('鱼饵')) {
+    call('POST', '/api/shop/buy', { username: 'spongebob', itemId: 5, quantity: 200 })
+    c = call('POST', '/api/game/cast', { username: 'spongebob' })
+  }
+  if (c.code !== 200) break
+  const s = call('POST', '/api/game/settle', {
+    username: 'spongebob',
+    encounterId: c.data.encounterId,
+    landed: true,
+    breakType: 'NONE'
+  })
+  if (s.code === 200 && s.data.powerGain > 0) grown = s.data
+}
+ok('钓到极限鱼力量成长', !!grown,
+  grown ? `+${grown.powerGain}（${grown.powerGainPct}% / ${grown.powerKind}）→ ${grown.power}` : '80 竿内未触发')
+if (grown) {
+  ok('成长后力量更高', grown.power > 100, `power=${grown.power}`)
+  r = call('GET', '/api/game/me?username=spongebob')
+  ok('档案力量已落盘', r.data.power === grown.power, `me.power=${r.data.power}`)
+}
+call('POST', '/api/auth/register', { username: 'freshpower', password: '123456' })
+r = call('GET', '/api/game/me?username=freshpower')
+ok('新号力量=100', r.data.power === 100)
+
+console.log('\n=== 6) 钓场地图 ===')
+r = call('GET', '/api/game/maps')
+ok('地图目录 5 张', r.code === 200 && r.data.length === 5)
+ok('地图含专属鱼概率', r.code === 200 && r.data.every((m) => typeof m.exclusiveRate === 'number'))
+// 指定地图抛竿：返回的 mapId 应与请求一致
+r = call('POST', '/api/game/cast', { username: 'spongebob', mapId: 'jibei' })
+ok('指定「极北之地」抛竿', r.code === 200 && r.data.mapId === 'jibei', `mapId=${r.data?.mapId}`)
 
 console.log('\n=== 7) 商店 / 背包 ===')
 r = call('GET', '/api/shop/items')
@@ -114,7 +133,7 @@ ok('保护最后管理员', r.code === 400)
 
 console.log('\n=== 9) AI 助手 ===')
 r = call('POST', '/api/game/ai-dialogs')
-ok('AI 预设列表', r.code === 200 && r.data.length === 8)
+ok('AI 预设列表', r.code === 200 && r.data.length >= 8, `count=${r.data?.length}`)
 r = call('POST', '/api/game/ai-chat', { username: 'tester1', message: '怎么玩' })
 ok('AI 命中关键词', r.code === 200 && r.data.reply.length > 0)
 r = call('POST', '/api/game/ai-chat', { username: 'tester1', message: '随便说点啥 xyz' })

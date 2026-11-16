@@ -22,6 +22,9 @@ public class GameProfile {
     /** 根骨值（影响收线速度与可抗衡的鱼重） */
     private Integer strength;
 
+    /** 力量（前端主页展示用，与本后端根骨等价映射） */
+    private Integer power;
+
     /** 钓道境界（修仙式层级，1 起步，最高 999） */
     private Integer powerRealm;
 

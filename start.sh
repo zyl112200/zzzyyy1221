@@ -1,49 +1,41 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Bikini Bottom Fishing - Linux / macOS launcher (offline)
-#  直接打开单文件离线版，无需 Node / Java / Maven / 网络
-#  若还没有构建产物，且本机有 Node，会自动构建一次
+#  Bikini Bottom Fishing - Linux / macOS 在线浏览启动器
+#  前端：构建 dist 并用本地 HTTP 服务对外提供（0.0.0.0，局域网可访问）
+#  后端：独立进程，需另行启动（见 README），前端通过 /api 代理访问
+#  局域网 IP / 端口统一在 src/config/lan.js 中配置
 # ============================================================
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-HTML="$ROOT/spongebob-offline.html"
+cd "$ROOT"
 
-if [ ! -f "$HTML" ] && [ -f "$ROOT/dist/spongebob-standalone.html" ]; then
-  HTML="$ROOT/dist/spongebob-standalone.html"
-fi
+LANIP="$(sed -n "s/.*export const LAN_IP = '\([^']*\)'.*/\1/p" src/config/lan.js | head -n 1)"
+[ -n "$LANIP" ] || LANIP="192.168.68.9"
 
-if [ ! -f "$HTML" ]; then
-  echo "[i] 未找到离线版，尝试构建 ..."
-  if command -v node >/dev/null 2>&1 && [ -d "$ROOT/node_modules" ]; then
-    ( cd "$ROOT" && npm run build:standalone )
-    HTML="$ROOT/spongebob-offline.html"
-  fi
-fi
-
-if [ ! -f "$HTML" ]; then
-  echo "[X] 找不到离线版页面，也没有构建环境。"
-  echo "    离线文件应为: spongebob-offline.html"
-  echo "    构建需要 Node.js 并执行一次 npm install（需要网络）。"
+if ! command -v node >/dev/null 2>&1; then
+  echo "[X] 未找到 Node.js。"
+  echo "    备选：直接用浏览器打开离线单文件版 spongebob-offline.html"
   exit 1
 fi
 
-echo "[OK] 打开: $HTML"
-echo "[i] 默认账号 spongebob / 123456，存档保存在当前浏览器"
+if [ ! -d node_modules ]; then
+  echo "[i] 首次运行，安装依赖 ..."
+  npm install
+fi
 
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*)
-    # Windows 下的 Git Bash：用资源管理器按默认浏览器打开
-    explorer.exe "$(cygpath -w "$HTML" 2>/dev/null || echo "$HTML")" || true
-    ;;
-  Darwin*)
-    open "$HTML"
-    ;;
-  *)
-    if command -v xdg-open >/dev/null 2>&1; then
-      xdg-open "$HTML"
-    else
-      echo "[i] 请手动用浏览器打开上面的文件"
-    fi
-    ;;
-esac
+if [ ! -f dist/index.html ]; then
+  echo "[i] 构建前端 ..."
+  npm run build
+fi
+
+echo "============================================================"
+echo "  本机访问 : http://localhost:8081"
+echo "  局域网   : http://$LANIP:8081"
+echo "  后端     : http://$LANIP:8080"
+echo "============================================================"
+echo "[i] 局域网内其它设备打开上面的「局域网」地址即可一起游玩"
+echo "[i] 按 Ctrl + C 停止服务"
+echo
+
+node serve-lan.mjs

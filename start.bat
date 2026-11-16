@@ -1,58 +1,55 @@
 @echo off
 setlocal enabledelayedexpansion
-title Bikini Bottom Fishing - Offline Launcher
+title XianDiao - LAN Online Server
 cd /d "%~dp0"
 
+REM LAN IP is read from src\config\lan.js so it only needs to be changed there.
+set "LANIP="
+for /f "tokens=2 delims='" %%i in ('findstr /r /c:"export const LAN_IP" "src\config\lan.js" 2^>nul') do set "LANIP=%%i"
+if not defined LANIP set "LANIP=192.168.68.9"
+
 echo ============================================================
-echo   Bikini Bottom Fishing  /  offline single-file build
+echo   Bikini Bottom Fishing - online browsing (LAN)
 echo ============================================================
 
-set "HTML=%~dp0spongebob-offline.html"
-if exist "%HTML%" goto open
-
-set "HTML=%~dp0dist\spongebob-standalone.html"
-if exist "%HTML%" goto open
-
-echo [i] Offline build not found, trying to build it...
 where node >nul 2>nul
-if errorlevel 1 goto nobuild
-if not exist "%~dp0node_modules" goto nobuild
+if errorlevel 1 goto nonode
 
-call npm run build:standalone
-if exist "%~dp0spongebob-offline.html" (
-  set "HTML=%~dp0spongebob-offline.html"
-  goto open
+if not exist "node_modules" (
+  echo [i] First run, installing dependencies ...
+  call npm install
+  if errorlevel 1 goto nonode
 )
-goto nobuild
 
-:nobuild
+if not exist "dist\index.html" (
+  echo [i] Building frontend ...
+  call npm run build
+  if errorlevel 1 (
+    echo [X] Build failed.
+    pause
+    exit /b 1
+  )
+)
+
 echo.
-echo [X] Cannot find AND cannot build the offline page.
-echo     - The offline file should be: spongebob-offline.html
-echo     - To build it you need Node.js and one-time "npm install" (network).
+echo   This PC      : http://localhost:8081
+echo   LAN          : http://%LANIP%:8081
+echo   Backend LAN  : http://%LANIP%:8080   (start it with start-backend.bat)
+echo.
+echo [i] Starting web server in a new window, then opening the browser ...
+start "XianDiao LAN Server" cmd /k node serve-lan.mjs
+timeout /t 2 >nul
+start "" "http://%LANIP%:8081"
+echo [i] Keep the "XianDiao LAN Server" window open while playing.
+echo [i] Other devices on the LAN: open http://%LANIP%:8081
+timeout /t 5 >nul
+exit /b 0
+
+:nonode
+echo.
+echo [X] Node.js not found, or npm install failed.
+echo     Fallback: open the single-file offline page instead:
+echo       spongebob-offline.html
 echo.
 pause
 exit /b 1
-
-:open
-echo [OK] Opening: !HTML!
-echo [i] No server, no network, no Java needed. Save data lives in this browser.
-echo.
-
-set "CHROME="
-if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-if not defined CHROME if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-if not defined CHROME if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" set "CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe"
-if not defined CHROME if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "CHROME=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-if not defined CHROME if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "CHROME=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
-
-if defined CHROME (
-  start "" "%CHROME%" "!HTML!"
-) else (
-  start "" "!HTML!"
-)
-
-echo [i] Default account: spongebob / 123456   (or register a new one)
-echo [i] You can close this window now.
-timeout /t 6 >nul
-exit /b 0

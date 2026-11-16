@@ -51,15 +51,18 @@ const selectedMap = computed(() => maps.value.find((m) => m.id === selectedMapId
 async function loadMaps() {
   try {
     const res = await mapsApi()
-    if (res.code === 200) {
-      maps.value = res.data || []
-      // 默认选中当前所在地图
-      if (!maps.value.find((m) => m.id === selectedMapId.value)) {
-        selectedMapId.value = profile.currentMap || DEFAULT_MAP
-      }
+    if (res.code === 200 && Array.isArray(res.data) && res.data.length) {
+      maps.value = res.data
+    } else {
+      // 在线后端未提供地图目录时，退回前端内置配置，保证选图面板可用
+      maps.value = MAPS
     }
   } catch (e) {
-    /* 地图列表加载失败不影响钓鱼 */
+    maps.value = MAPS
+  }
+  // 默认选中当前所在地图
+  if (!maps.value.find((m) => m.id === selectedMapId.value)) {
+    selectedMapId.value = profile.currentMap || DEFAULT_MAP
   }
 }
 

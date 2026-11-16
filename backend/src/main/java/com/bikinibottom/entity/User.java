@@ -33,14 +33,17 @@ public class User {
     /** 贝壳余额（游戏货币，注册时默认 50） */
     private Integer shells;
 
-    /** 力量：决定可抗衡的鱼重与专属鱼规模，注册默认 100（取代原根骨 + 钓道境界 + 功法体系） */
-    private Integer power = 100;
+    /** 根骨：决定收线稳定性与可抗衡的鱼重，注册默认 10（对应前端「力量」展示） */
+    private Integer strength = 10;
 
-    /** 当前所在钓点地图 id（对应前端 maps.js 的 MAP_MAP；默认灵湖） */
-    private String currentMap = "linghu";
-
-    /** 金石：滋养力量的稀有材料，钓到越稀有越重的灵鱼给得越多 */
+    /** 金石：淬炼根骨 / 修炼功法的稀有材料 */
     private Integer goldStones;
+
+    /** 钓道境界（1 ~ 999 重天），突破消耗贝壳 */
+    private Integer powerRealm = 1;
+
+    /** 已修炼钓鱼功法 id 列表（逗号分隔，如 "jingxin,xieli"） */
+    private String skills;
 
     /**
      * 权限：0 = 管理员（可进入后台管理系统），1 = 普通玩家（默认）。

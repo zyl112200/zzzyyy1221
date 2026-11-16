@@ -19,44 +19,73 @@
 | 端 | 技术 |
 | --- | --- |
 | 前端 | Vue 3 + Vite + Vue Router |
-| 离线引擎 | 浏览器内本地游戏引擎（`localStorage` 存档），**无需任何服务端** |
-| 分发 | 单文件 HTML（JS / CSS / 数据全内联，零外部请求） |
-| 后端（可选） | Spring Boot 3 + MyBatis-Plus + BCrypt |
-| 数据库（可选） | MySQL 8 / H2 内存库 |
+| 运行形态 | **在线浏览（HTTP 站点，局域网内任意设备可访问）** |
+| 离线引擎 | 浏览器内本地游戏引擎（`localStorage` 存档），后端不可用时自动降级 |
+| 后端 | Spring Boot 3 + MyBatis-Plus + BCrypt（绑定 `0.0.0.0:8080`，局域网可达） |
+| 数据库 | MySQL 8 / H2 内存库 |
+| 分发（可选） | 单文件 HTML（JS / CSS / 数据全内联，零外部请求） |
 
 ---
 
-## 一键启动（离线，推荐）
+## 局域网地址（唯一配置点）
 
-**不需要后端、不需要数据库、不需要 Java / Maven、不需要网络。**
+前端、后端、代理、脚本里的 IP / 端口都取自 **`src/config/lan.js`**，换 IP 只改这一个文件：
+
+| 项 | 当前值 |
+| --- | --- |
+| 局域网 IP | `192.168.68.9` |
+| 前端在线站点 | `http://192.168.68.9:8081` |
+| 前端开发服务器 | `http://192.168.68.9:5173` |
+| 后端 API | `http://192.168.68.9:8080` |
+| 后端健康检查 | `http://192.168.68.9:8080/api/health` |
+| H2 控制台（h2 profile） | `http://192.168.68.9:8080/h2-console` |
+
+## 一键启动（在线浏览，局域网可访问）
+
+**局域网内任何设备（手机 / 平板 / 其它电脑）打开同一个地址就能一起玩，数据存后端共享。**
 
 | 系统 | 操作 |
 | --- | --- |
-| Windows | 双击 `start.bat`（自动用 Chrome / Edge 打开离线版） |
+| Windows（推荐） | 双击 `start-all.bat`：起后端 + 起网页服务 + 自检 + 打开浏览器 |
+| Windows（只要前端） | 双击 `start.bat`：构建 → 起网页服务 → 打开浏览器 |
 | Linux / macOS | `chmod +x start.sh` 后运行 `./start.sh` |
-| 任意系统 | 直接用浏览器打开根目录的 `spongebob-offline.html` |
+| 只起后端 | 双击 `start-backend.bat`（Spring Boot + H2，自带示例数据） |
 
-- 离线版是一个 **单文件 HTML**（约 270 KB），Vue 运行时、样式、游戏数据、本地存档引擎全部内联，**零外部请求**（无 CDN、无字体、无接口调用）。
-- 默认账号：`spongebob` / `123456`（预置 20 万贝壳 + 200 金石，买得起顶级渔具直接钓巨物）；也可以直接叩仙门注册新道号（50 贝壳 + 5 鱼饵），注册无需邮箱。
-- 存档保存在**当前浏览器**（`localStorage`），换浏览器 / 清缓存会丢失。
+启动后：
 
-> 离线版如何实现？前端内置了一套浏览器端游戏引擎 `src/api/localEngine.js`，
-> 按后端 `GameService` 的规则（品级权重、重量抽样、贝壳 / 金石结算、暴走与断竿、根骨与境界、商店与装备）
-> 完整复刻了全部接口，因此不需要任何服务端进程。
+- 本机访问 `http://localhost:8081`，局域网访问 `http://192.168.68.9:8081`
+- 前端的 `/api` 请求由网页服务反向代理到 `http://192.168.68.9:8080`，浏览器侧同源，**不涉及跨域**
+- **后端没启动也不影响打开**：页面会先探测 `/api/health`，探测不到就自动降级到浏览器内本地引擎（`localStorage` 存档）
+- 默认账号：`spongebob` / `123456`（后端 H2 与本地引擎都预置；本地引擎另有 20 万贝壳 + 200 金石）
+
+**连通性自检**：`npm run check`（或 `node check-lan.mjs`）会打印四项检查结果——本机是否真的持有配置里的 IP、后端 8080、前端 8081、`/api` 代理是否打通，失败时直接给出处理建议。别的设备连不上时先跑它。
+
+> 仍然保留了离线单文件版（`spongebob-offline.html`），没有 Node 的机器可以直接双击打开，但它只能是「单机存档」，不能局域网共享。
 
 ## 开发模式（需要 Node.js）
 
 ```bash
 npm install      # 仅首次需要网络
-npm run dev      # http://localhost:5173 （局域网访问：http://192.168.68.28:5173）
+npm run dev      # 本机 http://localhost:5173 ／ 局域网 http://192.168.68.9:5173
 ```
 
-前端默认也走本地引擎，所以**没有后端也能开发调试**。想要连真实后端时，在地址后加 `?api=server`：
+开发服务器已绑定 `0.0.0.0` 并把 `/api` 代理到 `http://192.168.68.9:8080`，所以：
 
+- 后端在跑 → 页面走真实后端（在线）
+- 后端没跑 → 自动降级到本地引擎，照样能调试
+- 想强制指定模式：`?api=server` / `?api=local`（会记到 `localStorage`，`localStorage.removeItem('bikini_api_mode')` 恢复自动）
+
+## 在线站点（构建产物 + 局域网服务）
+
+```bash
+npm run online    # 等价于 npm run build + node serve-lan.mjs
+npm run serve     # 用已有 dist 直接起服务
 ```
-http://localhost:5173/?api=server
-# 局域网内其他设备：http://192.168.68.28:5173/?api=server
-```
+
+- 服务监听 `0.0.0.0:8081`，局域网访问 `http://192.168.68.9:8081`
+- `/api` 由该服务反向代理到 `http://192.168.68.9:8080`（同源，无需 CORS）
+- 换端口：`node serve-lan.mjs --port 8082`
+- 也支持 `npm run preview`（Vite 预览，`0.0.0.0:4173`，同样带 `/api` 代理）
 
 ## 重新打包离线单文件
 
@@ -67,22 +96,28 @@ npm run build:standalone
 
 ---
 
-## 可选：Spring Boot 后端（已验证，可正常编译启动）
+## 后端：Spring Boot（在线模式的服务端）
 
 后端目录 `backend/` 是完整的 Spring Boot 3 工程（Controller / Service / Mapper / DTO / H2 脚本齐全），
-使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（项目自带 `mvw` / `mvnw.cmd` 即 Maven Wrapper，首次运行自动下载并缓存 Maven 3.9.16 到 `~/.m2/wrapper/dists`，无需本机预装；已用 `mvnw compile` 验证：38 个源文件 BUILD SUCCESS）。
+使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（项目自带 `mvnw` / `mvnw.cmd` 即 Maven Wrapper，首次运行会自动下载并缓存 Maven 到 `~/.m2/wrapper/dists`）。
 
 ```bash
+# Windows：双击 start-backend.bat
+# 命令行：
 cd backend
-unset SERVER__PORT   # Windows: set SERVER__PORT=
-mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=8080 spring-boot:run
+unset SERVER__PORT              # Windows: set SERVER__PORT=
+mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 ```
 
-- 后端地址：http://192.168.68.28:8080 （H2 控制台：http://192.168.68.28:8080/h2-console；后端已绑定 0.0.0.0，局域网可达）
-- 前端连后端：开发模式 `npm run dev` 后访问 `http://localhost:5173/?api=server`（局域网：`http://192.168.68.28:5173/?api=server`），或控制台执行
-  `localStorage.setItem('bikini_api_mode', 'server')`
+- 后端地址 `http://192.168.68.9:8080`，已绑定 `0.0.0.0`，局域网可达
+- 连通性自检：浏览器打开 `http://192.168.68.9:8080/api/health`，返回 `code: 200` 即正常
+- H2 控制台：`http://192.168.68.9:8080/h2-console`（已开启 `web-allow-others`，局域网可访问）
+- 跨域：`CorsConfig` 用 `allowedOriginPatterns` 放行 `192.168.*.*` / `10.*.*.*` / `172.*.*.*` / `localhost` 的任意端口
+- 前端连后端无需配置：开发服务器与在线站点都自带 `/api` 代理；直连后端时前端会自己拼 `http://192.168.68.9:8080`
+- MySQL 模式：改 `backend/src/main/resources/application.yml` 里的数据源（默认已指向 `192.168.68.9:3306/spongebob_db`）
 - 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）都已写入 H2 初始化脚本
-- 不启动后端也完全不影响游玩：前端默认走离线本地引擎，两套模式的接口契约完全一致
+- 后端没启动时前端自动降级到本地引擎，两套模式的接口契约一致
+
 
 
 ---
@@ -188,13 +223,18 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 | `/admin/home` | 后台控制台（爆率 / 货币 / 密码） | 需管理员会话 |
 | `/admin/users` | 后台用户管理（查看 / 编辑 / 重置密码 / 删除 / 新建） | 需管理员会话 |
 
-## 接口约定（本地引擎与后端同构）
+## 接口约定（后端与本地引擎同构）
 
-前端所有 `/api/*` 请求默认由 `src/api/localEngine.js` 在浏览器内处理，**请求 / 返回结构与下表完全一致**，
-所以页面代码在「离线模式」与「后端模式」之间可以无缝切换。
+前端所有 `/api/*` 请求由 `src/api/http.js` 分发：
+
+- **在线后端**（默认）：页面经 HTTP 打开 → 先探测 `/api/health` → 通则全部请求打到后端（`http://192.168.68.9:8080`），数据落库、多设备共享
+- **本地引擎**（降级）：后端探测失败，或显式 `?api=local` → 由 `src/api/localEngine.js` 在浏览器内处理，存档在 `localStorage`
+
+两种通道的请求 / 返回结构与下表完全一致，所以页面代码在两者之间可以无缝切换。
 
 | 接口 | 说明 | 请求体 / 参数 |
 | --- | --- | --- |
+| `GET  /api/health` | 后端健康检查（前端自动模式用来判断在线/降级） | — |
 | `POST /api/auth/register` | 注册（无需邮箱） | `{ "username", "password" }`（`email` 可选，留空自动按道号生成占位邮箱） |
 | `POST /api/auth/login` | 登录 | `{ "username", "password" }` |
 | `GET  /api/game/me?username=` | 玩家档案（含背包、贝壳、金石、根骨、装备） | query: username |
@@ -222,9 +262,10 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 
 统一返回：`{ "code": 200/400, "message": "...", "data": {...} }`。
 > 说明：本项目为演示用途，未引入鉴权框架，接口通过 `username` 定位玩家（前端会话存于 `localStorage`）。
-> 离线版的「AI 助手」是本地预设问答（`AI_DIALOGS`），不调用任何大模型接口，无网络也能用。
-> 后台用户管理接口（`/api/admin/*`）由后台「用户管理」页面调用。后台登录 / UI 当前仅离线（本地引擎）模式可用；
-> 切到 `?api=server` 时，本地引擎与后端 `AdminUserController` 的接口契约完全一致，可直接复用。
+> 「AI 助手」是预设问答（后端 `ai_dialog` 表 / 本地引擎 `AI_DIALOGS`），不调用任何大模型接口。
+> 后台登录已按模式自适应：在线模式走 `/api/auth/login` 校验并判断 `permission === 0`，
+> 本地模式 / 后端不可达时退回本地引擎的管理员校验（预置 `admin` / `admin123`）。
+> 后台用户管理接口（`/api/admin/*`）由后台「用户管理」页面调用，两种模式契约一致。
 > 后端 `user` 表新增 `permission` 字段（0=管理员，1=普通玩家）；若已有 MySQL 库，请先执行
 > `ALTER TABLE user ADD COLUMN permission INT NOT NULL DEFAULT 1;` 再启动后端。
 > 另新增 `skills` 字段（已修炼功法 id 列表，逗号分隔）：`ALTER TABLE user ADD COLUMN skills VARCHAR(255);`
@@ -232,6 +273,15 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 > `ALTER TABLE user ADD COLUMN max_caught_weight INT NOT NULL DEFAULT 0;`
 > `ALTER TABLE user ADD COLUMN assoc_badge INT NOT NULL DEFAULT 0;`
 > H2 内存库（`schema-h2.sql`）已同步加列，无需手动迁移。
+
+### 在线模式与本地引擎的已知差异
+
+| 项 | 在线（后端） | 本地引擎 |
+| --- | --- | --- |
+| 数据存储 | H2 / MySQL，多设备共享 | 各浏览器自己的 `localStorage` |
+| 数值体系 | 根骨 + 钓道境界 + 功法（`/api/game/me` 里 `power` 与 `strength` 同值） | 力量成长（钓到超极限鱼提升力量） |
+| 地图目录 | 后端未提供 `/api/game/maps`，前端自动使用内置 `src/data/maps.js` 目录；选图仅影响前端展示 | 完整地图专属鱼概率 |
+
 
 ---
 
@@ -256,6 +306,7 @@ mvnw -Dspring-boot.run.profiles=h2 -Dspring-boot.run.arguments=--server.port=808
 > 徽章依据「历史最重单尾钓获」评定，钓起更重的鱼自动升级；离线与后端模式规则一致。
 >
 > 协会功能回归测试：`node assoc_smoke_test.mjs`（Node 直跑本地引擎，覆盖任务 / 比赛 / 徽章全流程）。
+> 引擎全链路回归测试：`node engine_smoke_test.mjs`（注册登录、抛竿结算、力量成长、地图、商店背包、后台用户管理、AI 助手）。
 
 ---
 
@@ -267,12 +318,23 @@ mysql -uroot -p123456 < sql/spongebob_db.sql
 
 脚本创建 `spongebob_db` 库、`user` / `item` / `user_item` 三张表，并写入示例账号与商店目录。
 
-## 前端打包
+## 前端打包 / 在线部署
 
 ```bash
-npm run build              # 产物在 dist/（普通静态站点）
+npm run build              # 产物在 dist/（普通静态站点，配合 npm run serve 对外提供）
+npm run online             # 构建 + 起局域网服务（推荐）
 npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 ```
+
+## 局域网常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 其它设备打不开 `http://192.168.68.9:8081` | Windows 防火墙放行 Node / 8081、8080 端口（首次运行会弹窗，选「允许专用网络」） |
+| 页面能开但一直提示连不上后端 | 确认后端在跑：浏览器打开 `http://192.168.68.9:8080/api/health` 应返回 200 |
+| 后端在跑，前端却进了本地存档 | 浏览器里可能留了 `bikini_api_mode=local`，执行 `localStorage.removeItem('bikini_api_mode')` 后刷新 |
+| 端口被占用 | 网页服务：`node serve-lan.mjs --port 8082`；后端：`application.yml` 里改 `server.port` |
+| 本机 IP 变了（换 WiFi / DHCP） | 只改 `src/config/lan.js` 的 `LAN_IP`，然后重启服务与后端、重新 `npm run build` |
 
 ---
 
@@ -281,17 +343,23 @@ npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 ```
 ├── index.html
 ├── package.json
-├── vite.config.js            # Vite 配置（IIFE 打包，便于 file:// 直接打开）
+├── vite.config.js            # Vite 配置（0.0.0.0 监听 + /api 代理到局域网后端）
+├── serve-lan.mjs             # ★ 在线浏览：零依赖静态服务 + /api 反向代理（0.0.0.0:8081）
+├── check-lan.mjs             # ★ 局域网连通性自检（npm run check）
 ├── build-standalone.mjs      # 把 dist 内联成单文件离线版
-├── start.bat / start.sh      # 一键打开离线版（Windows / macOS·Linux）
-├── dev.bat                   # 开发服务器（Vite，无需后端）
-├── spongebob-offline.html    # ★ 构建产物：双击即玩，零外部依赖
+├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
+├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
+├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）
+├── dev.bat                   # 开发服务器（Vite HMR，局域网可访问）
+├── .env.example              # 可选：直连后端时使用 VITE_API_BASE
+├── spongebob-offline.html    # 构建产物：单文件离线版（无服务端，单机存档）
 ├── sql/spongebob_db.sql      # MySQL 初始化脚本（可选）
 ├── src/                      # 前端源码
 │   ├── main.js / App.vue
+│   ├── config/lan.js            # ★ 局域网 IP / 端口唯一配置点
 │   ├── api/
-│   │   ├── {auth,game,http}.js  # 接口封装 + 本地/后端双通道
-│   │   └── localEngine.js       # ★ 离线本地游戏引擎（localStorage 存档）
+│   │   ├── {auth,game,http}.js  # 接口封装 + 在线后端 / 本地引擎双通道（自动探测降级）
+│   │   └── localEngine.js       # 离线本地游戏引擎（localStorage 存档）
 │   ├── data/items.js            # 商店商品目录（与 SQL 保持一致）
 │   ├── store/
 │   │   ├── session.js           # 登录会话
@@ -311,9 +379,9 @@ npm run build:standalone   # 额外生成单文件离线版，可双击直接玩
 │       ├── AiAssistant.vue     # 钓鱼助手（右下角悬浮，离线可用）
 │       ├── LoginCard.vue / RegisterCard.vue
 │       └── ToastMessage.vue
-└── backend/                  # Spring Boot 后端（可选，可正常编译启动）
+└── backend/                  # Spring Boot 后端（绑定 0.0.0.0:8080，局域网可达）
     ├── pom.xml
-    ├── mvnw / mvnw.cmd       # Maven Wrapper（首次运行自动下载 Maven 3.9.16）
+    ├── mvnw / mvnw.cmd       # Maven Wrapper（首次运行自动下载 Maven）
     └── src/main/
         ├── resources/
         │   ├── application.yml        # 默认 MySQL 数据源

@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminLogin } from '../api/localEngine.js'
+import { loginApi } from '../api/auth.js'
 import { setAdminSession, getAdminSession } from '../admin/store.js'
 
 const router = useRouter()
@@ -15,6 +16,29 @@ onMounted(() => {
   if (getAdminSession()) router.replace('/admin/home')
 })
 
+/**
+ * 管理员登录：
+ * · 在线模式 → 后端 /api/auth/login 校验，再判断 permission === 0
+ * · 本地模式 / 后端不可达 → 退回本地引擎的管理员校验
+ */
+async function doLogin(cred) {
+  try {
+    const res = await loginApi(cred)
+    if (res.code !== 200) return { code: res.code, message: res.message }
+    const user = res.data || {}
+    if (user.permission !== 0) {
+      return { code: 403, message: '无权限访问后台系统（当前账号不是管理员）' }
+    }
+    return {
+      code: 200,
+      message: '管理员登录成功 🎉',
+      data: { username: user.username, permission: user.permission, loginAt: Date.now() }
+    }
+  } catch (e) {
+    return adminLogin(cred)
+  }
+}
+
 async function submit() {
   if (!username.value.trim() || !password.value) {
     error.value = '请输入账号和密码'
@@ -22,17 +46,14 @@ async function submit() {
   }
   loading.value = true
   error.value = ''
-  // 模拟一点网络延迟，体验更自然
-  setTimeout(() => {
-    const res = adminLogin({ username: username.value, password: password.value })
-    loading.value = false
-    if (res.code === 200) {
-      setAdminSession(res.data)
-      router.push('/admin/home')
-    } else {
-      error.value = res.message
-    }
-  }, 200)
+  const res = await doLogin({ username: username.value.trim(), password: password.value })
+  loading.value = false
+  if (res.code === 200) {
+    setAdminSession(res.data)
+    router.push('/admin/home')
+  } else {
+    error.value = res.message
+  }
 }
 </script>
 
