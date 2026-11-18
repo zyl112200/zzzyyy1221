@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:standalone": "vite build && node build-standalone.mjs",
     "preview": "vite preview",
     "serve": "node serve-lan.mjs",
     "online": "vite build && node serve-lan.mjs",

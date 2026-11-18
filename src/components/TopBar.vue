@@ -4,7 +4,6 @@ import { clearSession, getSession } from '../store/session'
 
 const props = defineProps({
   shells: { type: Number, default: 0 },
-  goldStones: { type: Number, default: 0 },
   power: { type: Number, default: 100 }
 })
 
@@ -31,8 +30,7 @@ function logout() {
       <router-link v-if="isAdmin" to="/admin" class="admin-link">🛠 后台</router-link>
     </nav>
     <div class="right">
-      <span class="chip shell">🐚 {{ shells }}</span>
-      <span class="chip gold">🪙 {{ goldStones }}</span>
+      <span class="chip gold">🪙 {{ shells }}</span>
       <span class="chip str">💪 力量 {{ power }}</span>
       <span class="user">{{ username }}</span>
       <button class="logout" @click="logout">退出</button>

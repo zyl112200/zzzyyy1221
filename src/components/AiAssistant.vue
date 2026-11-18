@@ -55,7 +55,7 @@ const draft = ref('')
 const dialogs = ref([])
 const listEl = ref(null)
 
-const QUICK = ['怎么玩', '根骨', '金石', '巨物', '存档']
+const QUICK = ['怎么玩', '根骨', '金币', '巨物', '存档']
 
 async function loadDialogs() {
   try {
@@ -131,8 +131,9 @@ onMounted(() => {
 
 <style scoped>
 .ai-assistant {
+  /* 左下角：避开主页右下角的「地图 / 协会」悬浮按钮与地图面板 */
   position: fixed;
-  right: 22px;
+  left: 22px;
   bottom: 22px;
   z-index: 60;
   display: contents;
@@ -143,7 +144,7 @@ onMounted(() => {
 
 .ai-fab {
   position: fixed;
-  right: 22px;
+  left: 22px;
   bottom: 22px;
   width: 62px;
   height: 62px;
@@ -179,7 +180,7 @@ onMounted(() => {
 
 .ai-panel {
   position: fixed;
-  right: 22px;
+  left: 22px;
   bottom: 96px;
   width: 340px;
   max-height: min(66vh, 560px);
@@ -334,7 +335,7 @@ onMounted(() => {
 }
 
 @media (max-width: 520px) {
-  .ai-panel { right: 10px; left: 10px; width: auto; bottom: 88px; }
-  .ai-fab { right: 14px; bottom: 14px; }
+  .ai-panel { left: 10px; right: auto; width: min(340px, calc(100vw - 20px)); bottom: 88px; }
+  .ai-fab { left: 14px; bottom: 14px; }
 }
 </style>

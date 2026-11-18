@@ -2,7 +2,7 @@
  * 后台管理系统 —— 本地引擎（离线，纯浏览器 localStorage）
  * ---------------------------------------------------------------
  * 职责：
- *   1) 游戏「爆率配置」与「货币数量配置」的读写，并供游戏本地引擎读取
+ *   1) 游戏「爆率配置」与「金币数量配置」的读写，并供游戏本地引擎读取
  *   2) 后台登录会话（session）的读写
  *
  * 说明：后台管理员就是「权限字段 = 0」的游戏用户（见 localEngine.js），
@@ -23,7 +23,7 @@ export const TIER_LABELS = {
 }
 export const TIER_ORDER_LIST = ['COMMON', 'RARE', 'LEGENDARY', 'MYTHIC', 'SHANHAI']
 
-/** 默认配置：爆率为「相对权重」，货币为「倍率 + 新手初始值」 */
+/** 默认配置：爆率为「相对权重」，金币为「倍率 + 新手初始值」；goldMultiplier / starterGold 为旧配置兼容字段 */
 export const DEFAULT_CONFIG = {
   dropRates: { COMMON: 60, RARE: 24, LEGENDARY: 10, MYTHIC: 4, SHANHAI: 1 },
   currency: { shellMultiplier: 1.0, goldMultiplier: 1.0, starterShells: 50, starterGold: 0 }

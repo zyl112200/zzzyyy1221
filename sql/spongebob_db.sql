@@ -19,10 +19,10 @@ CREATE TABLE `user` (
   `username`    VARCHAR(50)  NOT NULL                COMMENT '用户名',
   `email`       VARCHAR(100) NOT NULL                COMMENT '邮箱',
   `password`    VARCHAR(100) NOT NULL                COMMENT '密码（BCrypt 加密存储）',
-  `shells`      INT          NOT NULL DEFAULT 50     COMMENT '贝壳余额（游戏货币）',
+  `shells`      INT          NOT NULL DEFAULT 50     COMMENT '金币余额（游戏货币）',
   `strength`    INT          NOT NULL DEFAULT 10     COMMENT '根骨（影响收线与可抗衡鱼重）',
-  `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（淬炼根骨的材料）',
-  `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '钓道境界（修仙式层级，1-999，突破消耗贝壳按 2^(境界-1) 翻倍）',
+  `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（兼容字段，已并入金币）',
+  `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '钓道境界（修仙式层级，1-999，突破消耗金币按 2^(境界-1) 翻倍）',
   `permission`  INT          NOT NULL DEFAULT 1      COMMENT '权限：0=管理员（可进后台），1=普通玩家（默认）',
   `skills`      VARCHAR(255) DEFAULT NULL             COMMENT '已修炼的钓鱼功法 id 列表，逗号分隔（如 "jingxin,xieli"）',
   `max_caught_weight` INT NOT NULL DEFAULT 0          COMMENT '历史最重单尾钓获（斤），协会徽章依据',
@@ -43,7 +43,7 @@ CREATE TABLE `item` (
   `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
   `name`        VARCHAR(50)  NOT NULL                COMMENT '商品名',
   `type`        VARCHAR(10)  NOT NULL                COMMENT 'ROD 钓竿 / BAIT 鱼饵 / LUCK 幸运物 / LINE 鱼线工具',
-  `price`       INT          NOT NULL                COMMENT '售价（贝壳）',
+  `price`       INT          NOT NULL                COMMENT '售价（金币）',
   `power`       INT          NOT NULL DEFAULT 0      COMMENT '钓力 / 幸运加成',
   `line_strength`    INT     NOT NULL DEFAULT 0      COMMENT '鱼线承重（斤）',
   `max_catch_weight` INT     NOT NULL DEFAULT 0      COMMENT '最大可钓重量（斤）',
@@ -118,9 +118,9 @@ CREATE TABLE `catch_rate` (
   COMMENT ='钓鱼爆率配置';
 
 -- 示例数据（密码均为 BCrypt 加密后的 123456）
--- spongebob 为体验号：20 万贝壳 + 200 金石，可直接体验巨物玩法；patrick 为纯新号
+-- spongebob 为体验号：20.02 万金币，可直接体验巨物玩法；patrick 为纯新号
 INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `gold_stones`) VALUES
-  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200000, 10, 200),
+  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0),
   ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0);
 
 -- 商店商品目录（id 固定，便于逻辑引用）

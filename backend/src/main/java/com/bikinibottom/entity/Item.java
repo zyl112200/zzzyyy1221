@@ -23,7 +23,7 @@ public class Item implements Serializable {
     /** 类型：ROD 钓竿 / BAIT 鱼饵 / LUCK 幸运物 */
     private String type;
 
-    /** 售价（贝壳） */
+    /** 售价（金币） */
     private Integer price;
 
     /** 钓力 / 幸运加成 */

@@ -92,7 +92,6 @@ const editForm = reactive({
   email: '',
   shells: 0,
   power: 100,
-  goldStones: 0,
   permission: 1
 })
 const editMsg = ref('')
@@ -103,7 +102,6 @@ function openEdit(u) {
   editForm.email = u.email
   editForm.shells = u.shells
   editForm.power = u.power || 100
-  editForm.goldStones = u.goldStones
   editForm.permission = u.permission
   editMsg.value = ''
   showEdit.value = true
@@ -115,7 +113,6 @@ async function submitEdit() {
     email: editForm.email,
     shells: Number(editForm.shells),
     power: Number(editForm.power),
-    goldStones: Number(editForm.goldStones),
     permission: Number(editForm.permission)
   })
   editMsg.value = res.message
@@ -182,8 +179,7 @@ const createForm = reactive({
   password: '',
   permission: 1,
   shells: 50,
-  power: 100,
-  goldStones: 0
+  power: 100
 })
 const createMsg = ref('')
 
@@ -194,8 +190,7 @@ function openCreate() {
     password: '',
     permission: 1,
     shells: 50,
-    power: 100,
-    goldStones: 0
+    power: 100
   })
   createMsg.value = ''
   showCreate.value = true
@@ -208,8 +203,7 @@ async function submitCreate() {
     password: createForm.password,
     permission: Number(createForm.permission),
     shells: Number(createForm.shells),
-    power: Number(createForm.power),
-    goldStones: Number(createForm.goldStones)
+    power: Number(createForm.power)
   })
   createMsg.value = res.message
   if (res.code === 200) {
@@ -252,7 +246,7 @@ function formatTime(t) {
       <section class="panel">
         <h2>👥 用户管理</h2>
         <p class="desc">
-          查看并管理仙钓大陆所有已注册道友：调整游戏资源（贝壳 / 金石 / 力量）、修改角色权限、重置密码或删除账号。
+          查看并管理仙钓大陆所有已注册道友：调整游戏资源（金币 / 力量）、修改角色权限、重置密码或删除账号。
         </p>
 
         <!-- 工具栏 -->
@@ -279,8 +273,7 @@ function formatTime(t) {
                 <th>用户名</th>
                 <th>邮箱</th>
                 <th>角色</th>
-                <th>贝壳 🐚</th>
-                <th>金石 🪙</th>
+                <th>金币 🪙</th>
                 <th>力量 💪</th>
                 <th>注册时间</th>
                 <th class="op">操作</th>
@@ -297,7 +290,6 @@ function formatTime(t) {
                   </span>
                 </td>
                 <td>{{ u.shells }}</td>
-                <td>{{ u.goldStones }}</td>
                 <td>{{ u.power || 100 }}</td>
                 <td class="time">{{ formatTime(u.createTime) }}</td>
                 <td class="op">
@@ -307,7 +299,7 @@ function formatTime(t) {
                 </td>
               </tr>
               <tr v-if="!loading && list.length === 0">
-                <td colspan="10" class="empty">仙门名录上还没有这样的道友 🌫️</td>
+                <td colspan="9" class="empty">仙门名录上还没有这样的道友 🌫️</td>
               </tr>
             </tbody>
           </table>
@@ -330,10 +322,8 @@ function formatTime(t) {
         <div class="form-grid">
           <label>邮箱</label>
           <input v-model="editForm.email" type="email" />
-          <label>贝壳 🐚</label>
+          <label>金币 🪙</label>
           <input v-model.number="editForm.shells" type="number" min="0" />
-          <label>金石 🪙</label>
-          <input v-model.number="editForm.goldStones" type="number" min="0" />
           <label>力量 💪</label>
           <input v-model.number="editForm.power" type="number" min="0" />
           <label>角色</label>
@@ -394,10 +384,8 @@ function formatTime(t) {
             <option :value="1">普通玩家</option>
             <option :value="0">管理员</option>
           </select>
-          <label>贝壳 🐚</label>
+          <label>金币 🪙</label>
           <input v-model.number="createForm.shells" type="number" min="0" />
-          <label>金石 🪙</label>
-          <input v-model.number="createForm.goldStones" type="number" min="0" />
           <label>力量 💪</label>
           <input v-model.number="createForm.power" type="number" min="0" />
         </div>

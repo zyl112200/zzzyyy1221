@@ -7,6 +7,7 @@ import { meApi, castApi, settleApi, baitsApi, mapsApi, setMapApi } from '../api/
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
 import { MAPS, DEFAULT_MAP } from '../data/maps'
+import { calcFishingOdds } from '../data/fishingOdds'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -46,7 +47,25 @@ const hasBait = computed(() => baits.value.length > 0)
 const maps = ref([])
 const selectedMapId = ref(null)
 const showMap = ref(false)
+const showOdds = ref(false)
 const selectedMap = computed(() => maps.value.find((m) => m.id === selectedMapId.value) || null)
+
+// 钓况预估：按在线后端 cast 算法实时计算各品质概率与可钓重量
+// 随地图 / 鱼饵 / 幸运物 / 装备变化即时刷新，与实际抛竿一致
+const odds = computed(() => {
+  const m = selectedMap.value || {}
+  return calcFishingOdds({
+    strength: profile.power,
+    maxCatch: profile.maxCatchWeight || 800,
+    rodPower: profile.equippedRodPower || 0,
+    luck: !!profile.luckOwned,
+    premium: (selectedBait.value && selectedBait.value.power > 0) || false,
+    guanshui: Array.isArray(profile.skills) && profile.skills.includes('guanshui'),
+    exBaseRate: m.exclusiveRate || 0,
+    exMin: m.exMin != null ? m.exMin : 1,
+    exMax: m.exMax != null ? m.exMax : 1
+  })
+})
 
 async function loadMaps() {
   try {
@@ -863,6 +882,11 @@ onBeforeUnmount(() => {
       🏆<span class="fab-label">协会</span>
     </router-link>
 
+    <!-- 钓况预估悬浮按钮 -->
+    <button class="odds-fab" @click="showOdds = !showOdds; showMap = false" title="钓况预估（可钓重量 / 品质概率）">
+      📊<span class="fab-label">钓况</span>
+    </button>
+
     <!-- ================= 地图选择面板 ================= -->
     <div class="map-panel" v-if="showMap">
       <h4>🗺️ 选择钓点</h4>
@@ -884,6 +908,43 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- ================= 钓况预估面板 ================= -->
+    <div class="odds-panel" v-if="showOdds">
+      <h4>📊 当前钓况预估</h4>
+      <p class="op-tip">按当前钓场 / 装备 / 鱼饵实时计算，与实际抛竿算法一致</p>
+
+      <!-- 能钓多重 -->
+      <div class="op-section-title">🎣 能钓多重</div>
+      <div class="op-weight-grid">
+        <div class="op-wcell">
+          <span class="op-wk">装备可钓上限</span>
+          <b class="op-wv">{{ fmtWeight(odds.maxCatch) }}</b>
+        </div>
+        <div class="op-wcell">
+          <span class="op-wk">当前力量</span>
+          <b class="op-wv">{{ fmtWeight(odds.strength) }}</b>
+        </div>
+      </div>
+      <div class="op-exweight" v-if="odds.exRate > 0">
+        🐋 专属鱼重量区间 <b>{{ fmtWeight(odds.exclusiveWeight.min) }} ~ {{ fmtWeight(odds.exclusiveWeight.max) }}</b>
+      </div>
+
+      <!-- 品质概率 -->
+      <div class="op-section-title">🎯 各品质概率（综合）</div>
+      <div class="op-denom">专属鱼现身率 {{ (odds.exRate * 100).toFixed(0) }}% · 自动叠加高级饵 / 幸运物加成</div>
+      <div class="op-tiers">
+        <div class="op-tier" v-for="t in odds.tiers" :key="t.code">
+          <div class="op-tier-head">
+            <span class="op-tier-name" :class="tierClass(t.code)">{{ t.label }}</span>
+            <span class="op-tier-pct">{{ (t.prob * 100).toFixed(t.prob < 0.01 && t.prob > 0 ? 2 : 1) }}%</span>
+          </div>
+          <div class="op-bar"><i :class="tierClass(t.code)" :style="{ width: (t.prob * 100) + '%' }"></i></div>
+          <div class="op-tier-range">约 {{ fmtWeight(t.weightMin) }} ~ {{ fmtWeight(t.weightMax) }} · 专属 {{ (t.exProb * 100).toFixed(1) }}% / 普通 {{ (t.normalProb * 100).toFixed(1) }}%</div>
+        </div>
+      </div>
+      <p class="op-foot">神话 / 山海受装备承重限制，需升级钓竿才可能钓起；概率为理论值，实际以单次抽取为准。</p>
+    </div>
+
     <!-- ================= 结算弹窗 ================= -->
     <div class="overlay" v-if="phase === 'result' && result" @click="closeResult">
       <div class="result-card" :class="[tierClass(result.tier), { fail: !result.landed }]" @click.stop>
@@ -897,7 +958,7 @@ onBeforeUnmount(() => {
 
         <template v-if="result.landed">
           <div class="r-rewards">
-            <span class="rw">🐚 +{{ result.rewardShells }}</span>
+            <span class="rw">🪙 +{{ result.rewardShells }}</span>
             <span class="rg">🪙 +{{ result.rewardGold }}</span>
           </div>
           <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0">🌟 钓道境界加成 +{{ result.realmBonusPct }}%</div>
@@ -1366,6 +1427,62 @@ onBeforeUnmount(() => {
 }
 .assoc-fab .fab-label { font-size: 10px; letter-spacing: 1px; margin-top: -2px; }
 
+/* 钓况预估入口（右三，避开地图/协会/左下小助手） */
+.odds-fab {
+  position: absolute; z-index: 26; right: 164px; bottom: 22px;
+  width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 24px; color: #fff;
+  background: linear-gradient(180deg, #81c784, #2e7d32);
+  box-shadow: 0 8px 20px rgba(0,0,0,.4), inset 0 0 0 3px rgba(255,255,255,.25);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.odds-fab .fab-label { font-size: 10px; letter-spacing: 1px; margin-top: -2px; }
+
+/* 钓况预估面板 */
+.odds-panel {
+  position: absolute; z-index: 27; right: 20px; bottom: 90px; width: 330px;
+  max-height: 70vh; overflow-y: auto;
+  background: rgba(2, 32, 58, .94);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(129, 199, 132, .4);
+  border-radius: 18px; padding: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,.45);
+}
+.odds-panel h4 { font-size: 16px; margin-bottom: 4px; color: #a5d6a7; }
+.op-tip { font-size: 11px; color: #90caf9; margin-bottom: 12px; line-height: 1.5; }
+.op-section-title { font-size: 13px; font-weight: 800; color: #b3e5fc; margin: 12px 0 8px; }
+.op-weight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.op-wcell {
+  background: rgba(12, 10, 30, .55); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 4px;
+}
+.op-wk { font-size: 11px; color: #90caf9; }
+.op-wv { font-size: 18px; color: #fff; }
+.op-exweight {
+  margin-top: 8px; font-size: 12px; color: #c8e6c9; line-height: 1.5;
+  background: rgba(46, 125, 50, .22); border-radius: 10px; padding: 8px 10px;
+}
+.op-exweight b { color: #fff; }
+.op-denom { font-size: 11px; color: #90caf9; margin-bottom: 8px; }
+.op-tiers { display: flex; flex-direction: column; gap: 11px; }
+.op-tier-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.op-tier-name { font-size: 13px; font-weight: 800; }
+.op-tier-name.tier-common { color: #cfd8dc; }
+.op-tier-name.tier-rare { color: #7e57c2; }
+.op-tier-name.tier-legendary { color: #f9a825; }
+.op-tier-name.tier-mythic { color: #ff7043; }
+.op-tier-name.tier-shanhai { color: #ff5252; }
+.op-tier-pct { font-size: 13px; font-weight: 800; color: #fff; }
+.op-bar { height: 8px; border-radius: 6px; background: rgba(255,255,255,.12); overflow: hidden; }
+.op-bar i { display: block; height: 100%; border-radius: 6px; transition: width .25s ease; }
+.op-bar i.tier-common { background: #90a4ae; }
+.op-bar i.tier-rare { background: linear-gradient(90deg, #9575cd, #7e57c2); }
+.op-bar i.tier-legendary { background: linear-gradient(90deg, #fdd835, #f9a825); }
+.op-bar i.tier-mythic { background: linear-gradient(90deg, #ff8a65, #f4511e); }
+.op-bar i.tier-shanhai { background: linear-gradient(90deg, #ff6b6b, #d32f2f); }
+.op-tier-range { font-size: 10px; color: #81d4fa; margin-top: 3px; }
+.op-foot { font-size: 10px; color: #78909c; margin-top: 12px; line-height: 1.5; }
+
 @media (max-width: 640px) {
   .hud { max-width: 210px; left: 10px; top: 62px; }
   .hud-card .row { font-size: 12px; }
@@ -1377,5 +1494,7 @@ onBeforeUnmount(() => {
   .map-fab { width: 50px; height: 50px; font-size: 20px; right: 12px; }
   .map-panel { right: 12px; bottom: 78px; width: 88vw; max-width: 320px; }
   .assoc-fab { width: 50px; height: 50px; font-size: 20px; right: 70px; }
+  .odds-fab { width: 50px; height: 50px; font-size: 20px; right: 128px; }
+  .odds-panel { right: 12px; bottom: 78px; width: 88vw; max-width: 340px; }
 }
 </style>

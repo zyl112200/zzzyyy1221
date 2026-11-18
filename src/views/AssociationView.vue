@@ -84,10 +84,15 @@ const rankRows = computed(() => {
   return { top, meIdx, meOutside: meIdx >= 10 ? all[meIdx] : null }
 })
 
-/** 真人榜前三标记（领奖名次，与全场总重榜分开，避免误以为人机也能拿奖） */
-const podiumTag = (e) => (e?.realRank >= 1 && e.realRank <= 3
-  ? ['🥇 真人榜冠军', '🥈 真人榜亚军', '🥉 真人榜季军'][e.realRank - 1]
-  : '')
+/** 真人榜领奖名次标记（与全场总重榜分开，避免误以为人机也能拿奖） */
+const podiumTag = (e) => {
+  const r = e?.realRank
+  if (!r) return ''
+  if (r <= 3) return ['🥇 真人榜冠军', '🥈 真人榜亚军', '🥉 真人榜季军'][r - 1]
+  if (r <= 10) return '🏅 真人榜 4~10 名'
+  if (r <= 30) return '🎖 真人榜 11~30 名'
+  return ''
+}
 
 const starEmoji = (n) => '⭐'.repeat(Math.min(n, 5)) + (n > 5 ? ` +${n - 5}` : '')
 
@@ -128,7 +133,7 @@ async function refreshComp() {
       tickCountdown()
       const c = competition.value
       if (c && c.finalized && c.reward) {
-        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名（${c.reward.title}），奖励 ${fmtShells(c.reward.shells)} 🐚 已到账`)
+        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名（${c.reward.title}），奖励 ${fmtShells(c.reward.shells)} 🪙 已到账`)
       } else if (c && c.finalized) {
         showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名，再接再厉 🐟`)
       }
@@ -220,7 +225,7 @@ onBeforeUnmount(() => {
               <span class="min-w" v-if="t.minWeight >= 1">（≥ {{ fmtWeight(t.minWeight) }}）</span>
             </div>
             <div class="t-meta">
-              🐚 {{ t.rewardShells }} + 🪙 {{ t.rewardGold }} · {{ fmtDate(t.publishedAt) }} 发布
+              🪙 {{ t.rewardShells }} + 🪙 {{ t.rewardGold }} · {{ fmtDate(t.publishedAt) }} 发布
               · {{ t.expired ? '已过期' : fmtDate(t.expiresAt) + ' 截止' }}
             </div>
           </div>
@@ -245,8 +250,9 @@ onBeforeUnmount(() => {
         <p class="tip">
           报名后先进行 <b>1 分钟匹配</b>：真人玩家在线报名才会进入对阵，不足 100 人由人机补齐；
           匹配成功后比赛 <b>1 个小时</b>，钓起的每条鱼重量累计比总重。<br>
-          凡报名参赛 <b>保底 100 万贝壳</b>，前三名分别 <b>1 亿 / 5000 万 / 1000 万</b> ⚔️<br>
-          前三名在 <b>在线报名的真人玩家</b> 之间按累计重量产生；人机只凑满 100 人，不占领奖名次。
+          凡报名参赛 <b>保底 100 万金币</b>，真人榜名次奖励：
+          <b>1~3 名 1 亿 / 5000 万 / 1000 万</b>，<b>4~10 名 500 万</b>，<b>11~30 名 300 万</b> ⚔️<br>
+          名次在 <b>在线报名的真人玩家</b> 之间按累计重量产生；人机只凑满 100 人，不占领奖名次。
         </p>
 
         <div v-if="!competition" class="comp-idle">
@@ -295,7 +301,7 @@ onBeforeUnmount(() => {
                   全场总重榜第 {{ competition.overallRank }} / {{ competition.totalPlayers }} 名 · {{ competition.realPlayerCount }} 名真人参赛
                 </span>
                 <span class="reward-txt" v-if="competition.reward">
-                  奖励已到账：🐚 {{ fmtShells(competition.reward.shells) }}
+                  奖励已到账：🪙 {{ fmtShells(competition.reward.shells) }}
                 </span>
                 <button class="again-btn" :disabled="startingComp" @click="startComp">报名下一场 ⚔️</button>
               </template>

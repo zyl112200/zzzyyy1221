@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * 仙钓大陆钓鱼小游戏业务：贝壳经济 + 金石 + 根骨 + 第一人称搏鱼。
+ * 仙钓大陆钓鱼小游戏业务：金币经济 + 根骨 + 第一人称搏鱼。
  * <p>抛竿由 {@link #cast(String)} 生成一次「咬钩遭遇」并暂存在内存里，
  * 前端完成拉扯后由 {@link #settle(SettleRequest)} 结算奖励或断线断竿。</p>
  */
@@ -52,7 +52,7 @@ public class GameService {
     private static final int REALM_BONUS_PER_LEVEL = 5;
     /** 观水诀对稀有及以上品级权重的加成倍率（无此功法则为 1.0） */
     private static final double GUANSHUI_BOOST = 1.6;
-    /** 无钩钓法：境界突破所需贝壳折扣 */
+    /** 无钩钓法：境界突破所需金币折扣 */
     private static final double WUGOU_DISCOUNT = 0.85;
     /** 前端技能「巨型数值」安全上限（与本地引擎一致，超过则视为不可企及） */
     private static final long SAFE_MAX = 9007199254740991L;
@@ -74,9 +74,9 @@ public class GameService {
             new SkillDef("xieli", "卸力诀", "🌊", 50, "借力打力，收线速度提升 18%。", "收线速度 +18%"),
             new SkillDef("guanshui", "观水诀", "👁️", 40, "察水色、辨鱼踪，稀有及以上灵鱼现身概率显著提升。", "稀有概率 ↑"),
             new SkillDef("siji", "四季钓经", "🍂", 35, "顺应天时，咬钩等待时间缩短 25%。", "等待时间 -25%"),
-            new SkillDef("yinling", "引灵诀", "✨", 80, "引动天地灵气入竿，钓鱼收益（贝壳/金石）提升 20%。", "钓鱼收益 +20%"),
+            new SkillDef("yinling", "引灵诀", "✨", 80, "引动天地灵气入竿，钓鱼收益（金币）提升 20%。", "钓鱼收益 +20%"),
             new SkillDef("chaoxi", "潮汐真诀", "🌕", 45, "浮漂信号更清晰，提竿命中窗口延长 0.6 秒。", "命中窗口 +0.6s"),
-            new SkillDef("wugou", "无钩钓法", "🪝", 60, "姜太公直钩钓天下，境界突破所需贝壳降低 15%。", "突破消耗 -15%"),
+            new SkillDef("wugou", "无钩钓法", "🪝", 60, "姜太公直钩钓天下，境界突破所需金币降低 15%。", "突破消耗 -15%"),
             new SkillDef("diaodao", "钓道真解", "📜", 120, "钓形·钓气·钓心三合一，全属性小幅提升。", "全能提升")
     );
 
@@ -116,8 +116,9 @@ public class GameService {
         return u.getStrength() == null ? 10 : u.getStrength();
     }
 
+    /** 兼容字段：货币已统一为金币，金石余额恒为 0（旧存档由数据库迁移脚本折算） */
     private int goldOf(User u) {
-        return u.getGoldStones() == null ? 0 : u.getGoldStones();
+        return 0;
     }
 
     private int realmOf(User u) {
@@ -139,14 +140,14 @@ public class GameService {
     }
 
     /**
-     * 突破到下一重天所需贝壳：每次升级线性递增 100，即 realm 重天突破到 realm+1 重天需要
-     * 100 × realm 贝壳（100→200→300…）。已达上限返回 0。
+     * 突破到下一重天所需金币：每次升级线性递增 100，即 realm 重天突破到 realm+1 重天需要
+     * 100 × realm 金币（100→200→300…）。已达上限返回 0。
      */
     private long realmNextCost(int realm) {
         if (realm >= REALM_MAX) {
             return 0L;
         }
-        return 100L * realm; // realm→realm+1 需 100×realm 贝壳
+        return 100L * realm; // realm→realm+1 需 100×realm 金币
     }
 
     /** 玩家档案（含钓竿兜底，保证新手永远有一把可用的竿） */
@@ -188,7 +189,7 @@ public class GameService {
         }
     }
 
-    /** 救济饵：弹尽粮绝（没饵且贝壳不够 10）时补 3 个普通饵，防止新手彻底卡死 */
+    /** 救济饵：弹尽粮绝（没饵且金币不够 10）时补 3 个普通饵，防止新手彻底卡死 */
     private void claimReliefBait(Long userId) {
         UserItem bait = findFirst(userId, 5L);
         if (bait != null) {
@@ -220,7 +221,7 @@ public class GameService {
         p.setStrength(strengthOf(u));
         // 前端主页展示「力量」（power）：后端以根骨等价映射，保持同一接口契约
         p.setPower(strengthOf(u));
-        p.setGoldStones(goldOf(u));
+        p.setGoldStones(0); // 兼容字段
 
         int realm = realmOf(u);
         p.setPowerRealm(realm);
@@ -372,7 +373,7 @@ public class GameService {
         return Result.success(rows);
     }
 
-    /** 购买：扣贝壳 + 入库（首把竿 / 首条线自动装备） */
+    /** 购买：扣金币 + 入库（首把竿 / 首条线自动装备） */
     public Result<GameProfile> buy(String username, Long itemId, Integer quantity) {
         if (quantity == null || quantity < 1) {
             quantity = 1;
@@ -387,7 +388,7 @@ public class GameService {
         }
         int cost = item.getPrice() * quantity;
         if ((u.getShells() == null ? 0 : u.getShells()) < cost) {
-            return Result.error("贝壳不够啦，先去钓鱼赚点 🐚");
+            return Result.error("金币不够啦，先去钓鱼赚点 🪙");
         }
 
         u.setShells(u.getShells() - cost);
@@ -525,21 +526,22 @@ public class GameService {
             weight = sampleWeight(tier, maxCatch);
         }
         TierDef td = TIERS.get(tier);
-        int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75)));
+        // 货币统一为金币：原「金币口径奖励」与原「金石口径奖励」合并成一份金币
         int rewardGold = (int) Math.max(1, Math.round(td.goldMul() * Math.pow(weight, 0.45)));
+        int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75))) + rewardGold;
 
-        // 钓道境界加成：境界越高，钓到的贝壳 / 金石越多（每重天 +5%）
+        // 钓道境界加成：境界越高，钓到的金币越多（每重天 +5%）
         int realmLvl = realmOf(u);
         if (realmLvl > 1) {
             double realmMul = 1 + (realmLvl - 1) * REALM_BONUS_PER_LEVEL / 100.0;
             rewardShells = (int) Math.round(rewardShells * realmMul);
-            rewardGold = (int) Math.round(rewardGold * realmMul);
+            rewardGold = 0; // 兼容字段：金石已取消
         }
 
         // 钓鱼功法：引灵诀 +20% 收益，钓道真解 +8%（可叠加）
         double skillYield = (skills.contains("yinling") ? 1.2 : 1.0) * (skills.contains("diaodao") ? 1.08 : 1.0);
         rewardShells = (int) Math.round(rewardShells * skillYield);
-        rewardGold = (int) Math.round(rewardGold * skillYield);
+        rewardGold = 0; // 兼容字段：金石已取消
 
         double powerScore = 1500 + strength * 600.0 + rodPower * 2500.0;
         double difficulty = clamp(weight / powerScore, 0.12, 5.0);
@@ -587,7 +589,7 @@ public class GameService {
         r.setBerserkChance(round2(berserkChance));
         r.setTotalBait(profile.getTotalBait() - 1);
         r.setShells(profile.getShells());
-        r.setGoldStones(profile.getGoldStones());
+        r.setGoldStones(0); // 兼容字段
         r.setRealmBonusPct((realmLvl - 1) * REALM_BONUS_PER_LEVEL);
         r.setMapId(String.valueOf(map.get("id")));
         r.setMapName(String.valueOf(map.get("name")));
@@ -630,14 +632,13 @@ public class GameService {
 
         if (landed) {
             u.setShells((u.getShells() == null ? 0 : u.getShells()) + pe.getRewardShells());
-            u.setGoldStones(goldOf(u) + pe.getRewardGold());
             userMapper.updateById(u);
             r.setLanded(true);
             r.setRodBroken(false);
             r.setRewardShells(pe.getRewardShells());
             r.setRewardGold(pe.getRewardGold());
             r.setMessage("钓起来了！" + pe.getFishName() + " " + pe.getWeight() + " 斤，"
-                    + "获得 " + pe.getRewardShells() + " 🐚 与 " + pe.getRewardGold() + " 金石 🪙");
+                    + "获得 " + pe.getRewardShells() + " 金币 🪙");
             // 神话 / 山海级稀有鱼上岸：给 AI 助手一句随机祝贺台词（前端自动唤起播报）
             if ("MYTHIC".equals(pe.getTier()) || "SHANHAI".equals(pe.getTier())) {
                 r.setCelebrateMessage(RARE_CHEERS[random.nextInt(RARE_CHEERS.length)]
@@ -647,6 +648,22 @@ public class GameService {
             List<String> assocMsgs = associationService.onCatch(u, pe.getFishName(), pe.getWeight());
             if (assocMsgs != null && !assocMsgs.isEmpty()) {
                 r.setAssocMessages(assocMsgs);
+            }
+            // 力量成长（与本地引擎同一规则）：成功钓起「重量超过自身重量上限（当前力量）10%」的鱼，
+            // 力量按当前值 +10%（复合增长：100 → 110 → 121 ……）。未超过 10% 不成长。
+            int oldStrength = strengthOf(u);
+            if (pe.getWeight() > oldStrength * 1.1) {
+                int newStrength = (int) Math.min(Integer.MAX_VALUE, Math.round(oldStrength * 1.1));
+                int gained = newStrength - oldStrength;
+                if (gained > 0) {
+                    u.setStrength(newStrength);
+                    userMapper.updateById(u);
+                    r.setPowerGain(gained);
+                    r.setPowerGainPct(10);
+                    r.setPowerKind("over-limit");
+                    r.setMessage(r.getMessage() + " 💪突破极限！力量 +" + gained
+                            + "（当前力量 +10% → " + newStrength + "）");
+                }
             }
         } else {
             r.setLanded(false);
@@ -670,7 +687,7 @@ public class GameService {
         }
 
         r.setShells(u.getShells() == null ? 0 : u.getShells());
-        r.setGoldStones(goldOf(u));
+        r.setGoldStones(0); // 兼容字段
         r.setStrength(strengthOf(u));
         r.setRealmBonusPct((realmOf(u) - 1) * REALM_BONUS_PER_LEVEL);
         return Result.success(r);
@@ -702,7 +719,7 @@ public class GameService {
     }
 
     // ==========================================================
-    //  根骨：用金石升级
+    //  根骨：用金币升级
     // ==========================================================
 
     public Result<TrainResult> train(String username) {
@@ -711,31 +728,31 @@ public class GameService {
             return Result.error("仙门名录上没有此人 🌫️");
         }
         int strength = strengthOf(u);
-        int gold = goldOf(u);
+        int coins = u.getShells() == null ? 0 : u.getShells();
         int cost = 20 + strength * 2;
-        if (gold < cost) {
-            return Result.error("金石不足，升级需要 " + cost + " 金石 🪙（多钓稀有巨物能拿到更多）");
+        if (coins < cost) {
+            return Result.error("金币不足，升级需要 " + cost + " 金币 🪙（多钓稀有巨物能拿到更多）");
         }
         int gained = 5;
-        u.setGoldStones(gold - cost);
+        u.setShells(coins - cost);
         u.setStrength(strength + gained);
         userMapper.updateById(u);
 
         TrainResult r = new TrainResult();
         r.setStrength(u.getStrength());
         r.setCost(cost);
-        r.setGoldStones(u.getGoldStones());
+        r.setGoldStones(0); // 兼容字段
         r.setGained(gained);
         r.setMessage("💪 根骨 +" + gained + "！现在能更稳地拉起巨物了");
         return Result.success(r);
     }
 
     // ==========================================================
-    //  钓道境界：用贝壳突破（成本翻倍 2^境界）
+    //  钓道境界：用金币突破（成本翻倍 2^境界）
     // ==========================================================
 
     /**
-     * 钓道境界突破：消耗贝壳升级到下一重天，成本 = 100 × 当前重天数（100→200→300…），最高 999 重天。
+     * 钓道境界突破：消耗金币升级到下一重天，成本 = 100 × 当前重天数（100→200→300…），最高 999 重天。
      * 突破后钓鱼收益按每重天 +5% 永久提升。
      */
     public Result<RealmUpResult> realmUp(String username) {
@@ -753,7 +770,7 @@ public class GameService {
         }
         int shells = u.getShells() == null ? 0 : u.getShells();
         if (shells < cost) {
-            return Result.error("贝壳不足，突破到 " + (realm + 1) + " 重天需要 " + cost + " 🐚");
+            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + cost + " 🪙");
         }
         u.setShells(shells - (int) cost);
         u.setPowerRealm(realm + 1);
@@ -763,7 +780,7 @@ public class GameService {
         r.setPowerRealm(u.getPowerRealm());
         r.setCost(cost);
         r.setShells(u.getShells());
-        r.setGoldStones(goldOf(u));
+        r.setGoldStones(0); // 兼容字段
         r.setRealmBonusPct((u.getPowerRealm() - 1) * REALM_BONUS_PER_LEVEL);
         long nextCost = realmNextCost(u.getPowerRealm());
         if (nextCost > 0 && nextCost < SAFE_MAX && userSkills(u).contains("wugou")) {
@@ -775,7 +792,7 @@ public class GameService {
     }
 
     /**
-     * 根骨一键修炼：用尽全部金石，能升几级升几级（每次 +5 根骨，成本 20 + 根骨×2）。
+     * 根骨一键修炼：用尽全部金币，能升几级升几级（每次 +5 根骨，成本 20 + 根骨×2）。
      */
     public Result<TrainResult> trainAll(String username) {
         User u = getUser(username);
@@ -783,37 +800,37 @@ public class GameService {
             return Result.error("仙门名录上没有此人 🌫️");
         }
         int strength = strengthOf(u);
-        int gold = goldOf(u);
+        int coins = u.getShells() == null ? 0 : u.getShells();
         int times = 0;
         int totalCost = 0;
         while (true) {
             int cost = 20 + strength * 2;
-            if (gold < cost) {
+            if (coins < cost) {
                 break;
             }
-            gold -= cost;
+            coins -= cost;
             strength += 5;
             totalCost += cost;
             times++;
         }
         if (times == 0) {
-            return Result.error("金石不足，至少需 " + (20 + strength * 2) + " 金石才能修炼 🪙");
+            return Result.error("金币不足，至少需 " + (20 + strength * 2) + " 金币才能修炼 🪙");
         }
-        u.setGoldStones(gold);
+        u.setShells(coins);
         u.setStrength(strength);
         userMapper.updateById(u);
 
         TrainResult r = new TrainResult();
         r.setStrength(u.getStrength());
         r.setCost(totalCost);
-        r.setGoldStones(u.getGoldStones());
+        r.setGoldStones(0); // 兼容字段
         r.setGained(times * 5);
-        r.setMessage("💪 连修 " + times + " 次！根骨 +" + (times * 5) + "，金石耗尽");
+        r.setMessage("💪 连修 " + times + " 次！根骨 +" + (times * 5) + "，金币耗尽");
         return Result.success(r);
     }
 
     /**
-     * 钓道境界一键突破：用尽全部贝壳，能破几重破几重（每重成本 100 × 当前重天数）。
+     * 钓道境界一键突破：用尽全部金币，能破几重破几重（每重成本 100 × 当前重天数）。
      */
     public Result<RealmUpResult> realmUpAll(String username) {
         User u = getUser(username);
@@ -846,7 +863,7 @@ public class GameService {
             if (need > 0 && need < SAFE_MAX && skills.contains("wugou")) {
                 need = Math.round(need * WUGOU_DISCOUNT);
             }
-            return Result.error("贝壳不足，突破到 " + (realm + 1) + " 重天需要 " + need + " 🐚");
+            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + need + " 🪙");
         }
         u.setShells(shells);
         u.setPowerRealm(realm);
@@ -856,7 +873,7 @@ public class GameService {
         r.setPowerRealm(u.getPowerRealm());
         r.setCost(totalCost);
         r.setShells(u.getShells());
-        r.setGoldStones(goldOf(u));
+        r.setGoldStones(0); // 兼容字段
         r.setRealmBonusPct((u.getPowerRealm() - 1) * REALM_BONUS_PER_LEVEL);
         long nextCost = realmNextCost(u.getPowerRealm());
         if (nextCost > 0 && nextCost < SAFE_MAX && skills.contains("wugou")) {
@@ -877,8 +894,8 @@ public class GameService {
     }
 
     /**
-     * 修炼钓鱼功法：消耗金石解锁被动加成。功法 id 与 src/data/skills.js 一一对应。
-     * 与本地引擎 localEngine.js 的 cultivate 同构：校验存在性 / 是否已修炼 / 金石是否充足。
+     * 修炼钓鱼功法：消耗金币解锁被动加成。功法 id 与 src/data/skills.js 一一对应。
+     * 与本地引擎 localEngine.js 的 cultivate 同构：校验存在性 / 是否已修炼 / 金币是否充足。
      */
     public Result<CultivateResult> cultivate(String username, String skillId) {
         User u = getUser(username);
@@ -893,17 +910,17 @@ public class GameService {
         if (skills.contains(skillId)) {
             return Result.error("该功法已修炼，无需重复");
         }
-        int gold = goldOf(u);
-        if (gold < def.cost()) {
-            return Result.error("金石不足，修炼《" + def.name() + "》需要 " + def.cost() + " 金石 🪙");
+        int coins = u.getShells() == null ? 0 : u.getShells();
+        if (coins < def.cost()) {
+            return Result.error("金币不足，修炼《" + def.name() + "》需要 " + def.cost() + " 金币 🪙");
         }
-        u.setGoldStones(gold - def.cost());
+        u.setShells(coins - def.cost());
         skills.add(skillId);
         u.setSkills(String.join(",", skills));
         userMapper.updateById(u);
 
         CultivateResult r = new CultivateResult();
-        r.setGoldStones(u.getGoldStones());
+        r.setGoldStones(0); // 兼容字段
         r.setSkills(skills);
         return Result.success("📜 成功修炼《" + def.name() + "》！", r);
     }

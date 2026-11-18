@@ -26,7 +26,7 @@ public class CastResult {
     /** 重量（斤） */
     private Double weight;
 
-    /** 成功钓起可得贝壳 */
+    /** 成功钓起可得金币 */
     private Integer rewardShells;
 
     /** 成功钓起可得金石 */
@@ -62,10 +62,10 @@ public class CastResult {
     /** 钓后鱼饵剩余 */
     private Integer totalBait;
 
-    /** 当前贝壳余额 */
+    /** 当前金币余额 */
     private Integer shells;
 
-    /** 当前金石余额 */
+    /** 当前金币余额（兼容字段，恒为 0） */
     private Integer goldStones;
 
     /** 本次抛竿所在钓场地图 id / 名称 */

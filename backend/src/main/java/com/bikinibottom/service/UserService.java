@@ -54,7 +54,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         save(user);
         // 新手礼包：注册即赠 1 把初级钓竿（已装备）+ 5 个普通鱼饵。
-        // 与离线引擎 localEngine.js（register 第 844–846 行）及 README「注册新道号（50 贝壳 + 5 鱼饵）」契约一致。
+        // 与离线引擎 localEngine.js（register 第 844–846 行）及 README「注册新道号（50 金币 + 5 鱼饵）」契约一致。
         // 原实现只建 user、不建 user_item，导致新用户 totalBait=0、cast 直接报「没有鱼饵了」而无法游玩。
         grantStarterPack(user.getId());
         return Result.success("入道成功，欢迎踏入仙钓大陆 🎉", user);

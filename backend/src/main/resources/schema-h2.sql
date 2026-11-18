@@ -4,7 +4,7 @@
 -- NON_KEYWORDS=USER 已在 application-h2.yml 中设置，避免 user 被当保留字
 -- ============================================================
 
--- 用户表（新增 shells 贝壳余额字段）
+-- 用户表（新增 shells 金币余额字段）
 CREATE TABLE user (
   id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
   username    VARCHAR(50)  NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE item (
   id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
   name        VARCHAR(50)  NOT NULL,
   type        VARCHAR(10)  NOT NULL,   -- ROD 钓竿 / BAIT 鱼饵 / LUCK 幸运物
-  price       INT          NOT NULL,   -- 售价（贝壳）
+  price       INT          NOT NULL,   -- 售价（金币）
   power       INT          NOT NULL DEFAULT 0, -- 钓力/幸运加成
   line_strength     INT    NOT NULL DEFAULT 0, -- 鱼线承重（斤）
   max_catch_weight  INT    NOT NULL DEFAULT 0, -- 最大可钓重量（斤）

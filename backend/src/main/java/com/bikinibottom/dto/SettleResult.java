@@ -26,16 +26,16 @@ public class SettleResult {
     /** 重量（斤） */
     private Double weight;
 
-    /** 成功获得贝壳（失败为 0） */
+    /** 成功获得金币（失败为 0） */
     private Integer rewardShells;
 
-    /** 成功获得金石（失败为 0） */
+    /** 成功兼容字段（恒为 0）（失败为 0） */
     private Integer rewardGold;
 
-    /** 钓后贝壳余额 */
+    /** 钓后金币余额 */
     private Integer shells;
 
-    /** 钓后金石余额 */
+    /** 钓后金币余额（兼容字段，恒为 0） */
     private Integer goldStones;
 
     /** 钓后根骨 */
@@ -43,6 +43,15 @@ public class SettleResult {
 
     /** 本次钓鱼收益中，钓道境界提供的加成百分比（1 重天为 0%） */
     private Integer realmBonusPct;
+
+    /** 本次力量成长数值（未成长为 0） */
+    private Integer powerGain;
+
+    /** 本次力量成长百分比（固定 10，未成长为 0） */
+    private Integer powerGainPct;
+
+    /** 力量成长类型：over-limit = 钓起超过自身上限 10% 的鱼 */
+    private String powerKind;
 
     /** 失败类型 */
     private String breakType;

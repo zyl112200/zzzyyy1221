@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
 import { meApi, equipApi } from '../api/game'
+import { rodSprite } from '../data/rodSprites'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -71,7 +72,6 @@ onMounted(load)
 
       <div class="summary">
         <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.power }}</b><small>力量</small></div>
-        <div class="sm"><span class="sm-ico">🪙</span><b>{{ profile.goldStones }}</b><small>金石</small></div>
         <div class="sm"><span class="sm-ico">🧵</span><b>{{ fmtWeight(profile.lineStrength) }}</b><small>鱼线承重</small></div>
         <div class="sm"><span class="sm-ico">🎯</span><b>{{ fmtWeight(profile.maxCatchWeight) }}</b><small>最大可钓</small></div>
       </div>
@@ -80,7 +80,10 @@ onMounted(load)
         <h3>🎣 钓竿</h3>
         <div class="row" v-if="rods.length">
           <div class="item" v-for="rod in rods" :key="rod.userItemId" :class="{ on: rod.equipped }">
-            <div class="ico">{{ rod.icon }}</div>
+            <div class="ico">
+              <img v-if="rodSprite(rod.itemId)" :src="rodSprite(rod.itemId)" :alt="rod.name" class="rod-img" />
+              <template v-else>{{ rod.icon }}</template>
+            </div>
             <div class="meta">
               <div class="nm">{{ rod.name }} <span class="lvl">钓力 {{ rod.power }}</span></div>
               <div class="specs">
@@ -199,7 +202,8 @@ section h3 { color: #0277bd; font-size: 17px; margin-bottom: 10px; }
 }
 .item.line { background: #fff3e0; }
 .item.on { background: #fff8e1; box-shadow: inset 0 0 0 2px #ffb300; }
-.ico { font-size: 38px; }
+.ico { font-size: 38px; display: flex; align-items: center; justify-content: center; min-width: 52px; min-height: 52px; }
+.ico .rod-img { max-width: 56px; max-height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
 .meta { flex: 1; }
 .nm { font-weight: bold; color: #37474f; font-size: 15px; }
 .lvl { font-size: 12px; color: #7e57c2; margin-left: 6px; font-weight: bold; }

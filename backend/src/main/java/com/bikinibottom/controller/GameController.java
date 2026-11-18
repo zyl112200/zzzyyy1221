@@ -81,7 +81,7 @@ public class GameController {
         return gameService.train(body.get("username"));
     }
 
-    /** 用贝壳突破钓道境界：POST /api/game/realm-up { "username": "xxx" } */
+    /** 用金币突破钓道境界：POST /api/game/realm-up { "username": "xxx" } */
     @PostMapping("/realm-up")
     public Result<RealmUpResult> realmUp(@RequestBody Map<String, String> body) {
         return gameService.realmUp(body.get("username"));
@@ -93,7 +93,7 @@ public class GameController {
         return gameService.trainAll(body.get("username"));
     }
 
-    /** 钓道境界一键突破（耗尽贝壳，能破几重破几重）：POST /api/game/realm-up-all { "username": "xxx" } */
+    /** 钓道境界一键突破（耗尽金币，能破几重破几重）：POST /api/game/realm-up-all { "username": "xxx" } */
     @PostMapping("/realm-up-all")
     public Result<RealmUpResult> realmUpAll(@RequestBody Map<String, String> body) {
         return gameService.realmUpAll(body.get("username"));

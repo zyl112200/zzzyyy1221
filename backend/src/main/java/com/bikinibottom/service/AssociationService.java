@@ -23,9 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 钓鱼协会业务：协会任务 / 100 人钓鱼比赛 / 1-9 星认证徽章。
  * <p>与前端离线引擎 localEngine.js 中的协会实现保持同一套规则与返回结构：</p>
  * <ul>
- *   <li>协会不定时发布任务，每波 10 条（≥1 山海 + ≥3 神话），完成后可领取贝壳 / 金石奖励；</li>
+ *   <li>协会不定时发布任务，每波 10 条（≥1 山海 + ≥3 神话），完成后可领取金币 / 金石奖励；</li>
  *   <li>钓鱼比赛：真人在线报名 → 1 分钟匹配 → 不足 100 人由人机补齐 → 比赛 1 小时比累计钓获总重；
- *       凡参赛有保底奖励，前三名 1 亿 / 5000 万 / 1000 万贝壳；</li>
+ *       凡参赛有保底奖励（100 万金币）；真人榜 1/2/3 名 1 亿 / 5000 万 / 1000 万，
+ *       4~10 名 500 万，11~30 名 300 万；</li>
  *   <li>认证徽章：单独钓起一只 ≥ 门槛重量的灵鱼即授予对应星级（1~9 星）。</li>
  * </ul>
  * <p>任务与比赛状态保存在内存中（服务重启即重置，与 pending 遭遇一致）；
@@ -47,13 +48,15 @@ public class AssociationService {
     private static final long COMP_MATCH_DURATION = 60 * 1000L;
     private static final long COMP_DURATION = 60 * 60 * 1000L;
     private static final int COMP_TOTAL = 100;
-    /** 参与保底奖励（贝壳）——只要报名并进入比赛，即使名落孙山也有 */
+    /** 参与保底奖励（金币）——只要报名并进入比赛，即使名落孙山也有 */
     private static final long COMP_BASE_REWARD = 1_000_000L;
-    /** 前三名奖励（贝壳）：1 亿 / 5000 万 / 1000 万 */
-    private static final int[][] COMP_REWARDS = {
-            {1, 100000000},
-            {2, 50000000},
-            {3, 10000000}
+    /** 真人榜名次奖励（金币）：{ 起始名次, 结束名次, 金币 }；其余真人拿保底 100 万 */
+    private static final long[][] COMP_REWARDS = {
+            {1, 1, 100000000},
+            {2, 2, 50000000},
+            {3, 3, 10000000},
+            {4, 10, 5000000},
+            {11, 30, 3000000}
     };
     /** 人机名字池（真人报名不足 100 人时补齐用） */
     private static final String[] COMP_BOT_NAMES = {
@@ -121,7 +124,7 @@ public class AssociationService {
         }
     }
 
-    /** 名次奖励：{ 名次, 贝壳, 称号 } */
+    /** 名次奖励：{ 名次, 金币, 称号 } */
     private static class Reward {
         final int rank;
         final long shells;
@@ -214,13 +217,12 @@ public class AssociationService {
         if (t.claimedBy.containsKey(u.getUsername())) return Result.error("奖励已经领过啦，下一次任务加油 🍃");
         t.claimedBy.put(u.getUsername(), true);
         u.setShells(shellOf(u) + t.rewardShells);
-        u.setGoldStones(goldOf(u) + t.rewardGold);
         userMapper.updateById(u);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("shells", u.getShells());
-        data.put("goldStones", u.getGoldStones());
+        data.put("goldStones", 0); // 兼容字段
         data.put("taskId", t.id);
-        return Result.success("任务奖励到账：" + t.rewardShells + " 🐚 + " + t.rewardGold + " 金石 🪙", data);
+        return Result.success("任务奖励到账：" + t.rewardShells + " 金币 🪙", data);
     }
 
     /** 报名钓鱼比赛：匹配中加入本场；比赛进行中登记下一场；空闲则开一场新匹配 */
@@ -346,8 +348,8 @@ public class AssociationService {
             List<String> pool = POOLS.get(tier);
             String fish = pool.get(random.nextInt(pool.size()));
             double[] range = TIER_RANGE.get(tier);
-            int rewardShells = (int) Math.round(range[2] * (120 + 2 * Math.pow(range[1], 0.6)) * 10);
             int rewardGold = Math.max(5, (int) Math.round(range[3] * Math.pow(range[1], 0.45) * 4));
+            int rewardShells = (int) Math.round(range[2] * (120 + 2 * Math.pow(range[1], 0.6)) * 10) + rewardGold;
             long lifetime = TASK_LIFETIME_MIN
                     + (long) (random.nextDouble() * (TASK_LIFETIME_MAX - TASK_LIFETIME_MIN));
             tasks.add(new AssocTask(nextTaskId.getAndIncrement(), fish, tier, (long) range[0],
@@ -426,7 +428,8 @@ public class AssociationService {
     /** 结算（双榜）：
      *  · 全场 100 人（真人 + 人机）按总重排「总重榜」rank，只用于榜单展示；
      *  · 高额奖励只在在线报名的真人玩家之间按真人榜 realRank 产生，人机不领奖也不占领奖名次；
-     *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，其余真人拿保底 100 万。
+     *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，4~10 名 500 万，11~30 名 300 万，
+     *    其余真人拿保底 100 万。
      */
     private void finalizeComp(long now) {
         Competition c = competition;
@@ -447,10 +450,11 @@ public class AssociationService {
             e.realRank = realRank;
             long shells = COMP_BASE_REWARD;
             String title = "参与奖";
-            for (int[] rw : COMP_REWARDS) {
-                if (rw[0] == realRank) {
-                    shells = rw[1];
-                    title = realRank == 1 ? "冠军" : realRank == 2 ? "亚军" : "季军";
+            for (long[] rw : COMP_REWARDS) {
+                if (realRank >= rw[0] && realRank <= rw[1]) {
+                    shells = rw[2];
+                    title = realRank == 1 ? "冠军" : realRank == 2 ? "亚军" : realRank == 3 ? "季军"
+                            : realRank <= 10 ? "四至十名" : "十一至三十名";
                     break;
                 }
             }
@@ -483,7 +487,7 @@ public class AssociationService {
             m.put("tierName", TIER_LABEL.getOrDefault(t.tier, t.tier));
             m.put("minWeight", t.minWeight);
             m.put("rewardShells", t.rewardShells);
-            m.put("rewardGold", t.rewardGold);
+            m.put("rewardGold", 0); // 兼容字段：奖励已并入金币
             m.put("publishedAt", t.publishedAt);
             m.put("expiresAt", t.expiresAt);
             m.put("expired", now >= t.expiresAt);
@@ -639,8 +643,9 @@ public class AssociationService {
         return u.getShells() == null ? 0 : u.getShells();
     }
 
+    /** 兼容字段：货币已统一为金币，金石余额恒为 0 */
     private int goldOf(User u) {
-        return u.getGoldStones() == null ? 0 : u.getGoldStones();
+        return 0;
     }
 
     private double round1(double v) {

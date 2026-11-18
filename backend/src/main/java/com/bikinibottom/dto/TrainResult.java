@@ -11,10 +11,10 @@ public class TrainResult {
     /** 修炼后根骨 */
     private Integer strength;
 
-    /** 本次消耗金石 */
+    /** 兼容字段（恒为 0） */
     private Integer cost;
 
-    /** 升级后金石余额 */
+    /** 升级后金币余额（兼容字段，恒为 0） */
     private Integer goldStones;
 
     /** 本次提升点数 */

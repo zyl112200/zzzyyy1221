@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
 import { meApi, shopItemsApi, buyApi } from '../api/game'
+import { rodSprite } from '../data/rodSprites'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -58,7 +59,7 @@ async function load() {
 async function buy(item) {
   const n = Math.max(1, Math.floor(qty[item.id] || 1))
   if (shells.value < item.price * n) {
-    showToast('贝壳不够啦，先去钓鱼 🐚')
+    showToast('金币不够啦，先去钓鱼 🪙')
     return
   }
   buying.value = item.id
@@ -79,11 +80,11 @@ async function buy(item) {
   }
 }
 
-/** 一键买满：把背包里所有贝壳都花在这件东西上（能买几件买几件） */
+/** 一键买满：把背包里所有金币都花在这件东西上（能买几件买几件） */
 async function buyMax(item) {
   const maxN = Math.floor(shells.value / item.price)
   if (maxN < 1) {
-    showToast('贝壳不够啦，先去钓鱼 🐚')
+    showToast('金币不够啦，先去钓鱼 🪙')
     return
   }
   buying.value = item.id
@@ -94,7 +95,7 @@ async function buyMax(item) {
       goldStones.value = res.data.goldStones
       power.value = res.data.power || 100
       qty[item.id] = maxN
-      showToast('已尽数兑换，贝壳散尽 🎉')
+      showToast('已尽数兑换，金币散尽 🎉')
     } else {
       showToast(res.message || '购买失败')
     }
@@ -123,11 +124,14 @@ onMounted(load)
 
     <main class="shop">
       <h2 class="title">🛒 商店</h2>
-      <p class="sub">贝壳买装备，金石养力量 · 承重决定你能拉上多大的灵鱼</p>
+      <p class="sub">金币买装备、淬炼根骨 · 承重决定你能拉上多大的灵鱼</p>
 
       <div class="grid">
         <div class="card" v-for="item in items" :key="item.id" :class="'type-' + item.type.toLowerCase()">
-          <div class="icon">{{ item.icon }}</div>
+          <div class="icon">
+            <img v-if="rodSprite(item.id)" :src="rodSprite(item.id)" :alt="item.name" class="rod-img" />
+            <template v-else>{{ item.icon }}</template>
+          </div>
           <div class="name">{{ item.name }}</div>
           <span class="tag">{{ typeLabel(item.type) }}</span>
           <p class="desc">{{ item.description }}</p>
@@ -140,7 +144,7 @@ onMounted(load)
             <span class="spec">{{ item.type === 'LUCK' ? '🍀 幸运 +' : '💪 钓力 ' }}{{ item.type === 'LUCK' ? (item.power * 4) + '%' : item.power }}</span>
           </div>
 
-          <div class="price">🐚 {{ item.price }}</div>
+          <div class="price">🪙 {{ item.price }}</div>
 
           <div class="qty" v-if="canQty(item.type)">
             <button @click="dec(item)">−</button>
@@ -160,7 +164,7 @@ onMounted(load)
             @click="buyMax(item)"
             :disabled="buying === item.id || shells < item.price"
           >
-            {{ buying === item.id ? '兑换中…' : '一键买满（花光贝壳）' }}
+            {{ buying === item.id ? '兑换中…' : '一键买满（花光金币）' }}
           </button>
 
           <button
@@ -170,7 +174,7 @@ onMounted(load)
           >
             {{ buying === item.id ? '兑换中…' : '购买' }}
           </button>
-          <div class="lack" v-if="shells < item.price * (qty[item.id] || 1)">贝壳不足 🐚</div>
+          <div class="lack" v-if="shells < item.price * (qty[item.id] || 1)">金币不足 🪙</div>
         </div>
       </div>
     </main>
@@ -217,7 +221,8 @@ onMounted(load)
 .card.type-luck { box-shadow: 0 14px 30px rgba(1,40,80,.35), inset 0 0 0 3px #ffd54f; }
 .card.type-line { box-shadow: 0 14px 30px rgba(1,40,80,.35), inset 0 0 0 3px #ff7043; background: linear-gradient(180deg, #fff, #fff3e0); }
 .card.type-line .name { color: #bf360c; }
-.icon { font-size: 46px; }
+.icon { font-size: 46px; display: flex; align-items: center; justify-content: center; min-height: 56px; }
+.icon .rod-img { max-width: 76px; max-height: 76px; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
 .name { font-size: 17px; font-weight: bold; color: #37474f; }
 .tag {
   font-size: 12px;

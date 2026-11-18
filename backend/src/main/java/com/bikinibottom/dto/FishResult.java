@@ -17,10 +17,10 @@ public class FishResult {
     /** 品级 COMMON / RARE / LEGENDARY */
     private String tier;
 
-    /** 获得贝壳 */
+    /** 获得金币 */
     private Integer reward;
 
-    /** 钓后贝壳余额 */
+    /** 钓后金币余额 */
     private Integer shells;
 
     /** 钓后鱼饵剩余 */

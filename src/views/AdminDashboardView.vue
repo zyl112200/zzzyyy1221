@@ -126,25 +126,16 @@ function pct(k) {
 
       <section class="panel">
         <h2>💰 货币数量管理</h2>
-        <p class="desc">调整钓鱼产出的<b>贝壳 / 金石倍率</b>，以及<b>新玩家初始货币</b>。保存后即时生效。</p>
+        <p class="desc">调整钓鱼产出的<b>金币倍率</b>，以及<b>新玩家初始金币</b>。保存后即时生效。</p>
         <div class="cur-grid">
           <div class="cur-item">
-            <label>贝壳奖励倍率</label>
+            <label>金币奖励倍率</label>
             <input type="number" min="0" step="0.1" v-model.number="form.currency.shellMultiplier" />
             <span class="unit">×</span>
           </div>
           <div class="cur-item">
-            <label>金石奖励倍率</label>
-            <input type="number" min="0" step="0.1" v-model.number="form.currency.goldMultiplier" />
-            <span class="unit">×</span>
-          </div>
-          <div class="cur-item">
-            <label>新玩家初始贝壳 🐚</label>
+            <label>新玩家初始金币 🪙</label>
             <input type="number" min="0" step="1" v-model.number="form.currency.starterShells" />
-          </div>
-          <div class="cur-item">
-            <label>新玩家初始金石 🪙</label>
-            <input type="number" min="0" step="1" v-model.number="form.currency.starterGold" />
           </div>
         </div>
       </section>

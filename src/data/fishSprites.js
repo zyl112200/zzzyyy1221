@@ -1,4 +1,5 @@
-// 鱼类名称 → 卡通立绘映射（素材由 AI 生成，Q 版卡通风格，见 assets/fish/）
+// 鱼类名称 → 立绘映射（素材由 AI 生成，半写实游戏 CG 风格，见 assets/fish/）
+// 已换写实立绘：小丑鱼、鲲、帝王蟹、独角鲸、九尾狐、应龙；其余暂为 Q 版卡通，后续逐步替换。
 import xiaochouyu from '../assets/fish/xiaochouyu.png'
 import redaiyu from '../assets/fish/redaiyu.png'
 import hetun from '../assets/fish/hetun.png'

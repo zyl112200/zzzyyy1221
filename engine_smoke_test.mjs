@@ -33,7 +33,7 @@ ok('咬钩鱼有重量', enc.weight > 0)
 ok('结算参数齐全', enc.encounterId && enc.rewardShells >= 0)
 r = call('POST', '/api/game/settle', { username: 'tester1', encounterId: enc.encounterId, landed: true, breakType: 'NONE' })
 ok('成功上岸入账', r.code === 200 && r.data.landed === true)
-ok('贝壳增加', r.data.shells > 0, `shells=${r.data.shells}`)
+ok('金币增加', r.data.shells > 0, `shells=${r.data.shells}`)
 // 重复结算同一 encounter 应被拒
 let r2 = call('POST', '/api/game/settle', { username: 'tester1', encounterId: enc.encounterId, landed: true })
 ok('重复结算被拒', r2.code === 400)
@@ -49,11 +49,11 @@ const enc3 = r.data
 r = call('POST', '/api/game/settle', { username: 'tester1', encounterId: enc3.encounterId, landed: false, breakType: 'ROD' })
 ok('断竿结算成功', r.code === 200, r.data.rodBroken === true ? '鱼竿损毁' : '鱼竿保留')
 
-console.log('\n=== 5) 力量成长（钓到极限鱼 → 力量复合提升）===')
+console.log('\n=== 5) 力量成长（钓到超过自身上限 10% 的鱼 → 力量 +10%）===')
 r = call('GET', '/api/game/me?username=spongebob')
 ok('spongebob 初始力量=100', r.data.power === 100, `power=${r.data.power}`)
 
-// 连钓直到出现力量成长：重量 ≥ 力量的鱼给 +1%~10%，≥1.5 倍给 +10%~50%
+// 连钓直到出现力量成长：只有重量 > 力量×1.1 才成长，且固定 +10%
 let grown = null
 for (let i = 0; i < 80 && !grown; i++) {
   let c = call('POST', '/api/game/cast', { username: 'spongebob' })
@@ -70,10 +70,12 @@ for (let i = 0; i < 80 && !grown; i++) {
   })
   if (s.code === 200 && s.data.powerGain > 0) grown = s.data
 }
-ok('钓到极限鱼力量成长', !!grown,
+ok('钓到超上限 10% 的鱼后力量成长', !!grown,
   grown ? `+${grown.powerGain}（${grown.powerGainPct}% / ${grown.powerKind}）→ ${grown.power}` : '80 竿内未触发')
 if (grown) {
   ok('成长后力量更高', grown.power > 100, `power=${grown.power}`)
+  ok('成长比例固定 10%', grown.powerGainPct === 10, `${grown.powerGainPct}%`)
+  ok('力量按当前值增长（100→110）', grown.power === 110, `power=${grown.power}`)
   r = call('GET', '/api/game/me?username=spongebob')
   ok('档案力量已落盘', r.data.power === grown.power, `me.power=${r.data.power}`)
 }
@@ -105,7 +107,7 @@ const lineUi = me.inventory.find(i => i.itemId === 9)
 r = call('POST', '/api/game/equip', { username: 'spongebob', userItemId: lineUi.userItemId })
 ok('装备鱼线生效', r.code === 200 && r.data.equippedLineName === '螺纹钢航母阻拦索')
 ok('承重 = max(竿,线)', r.data.lineStrength === 100000, `lineStrength=${r.data.lineStrength}`)
-// 校验全新账户（仅 50 贝壳）买不起 800 贝壳的黄金钓竿（正确拦截）
+// 校验全新账户（仅 50 金币）买不起 800 金币的黄金钓竿（正确拦截）
 call('POST', '/api/auth/register', { username: 'poor3', password: '123456' })
 r = call('POST', '/api/shop/buy', { username: 'poor3', itemId: 3, quantity: 1 })
 ok('资金不足购买被拒', r.code === 400)

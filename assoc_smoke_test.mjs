@@ -74,7 +74,7 @@ const rs2 = localCall('POST', '/api/assoc/comp-state', { username: 'tester' })
 const done = rs2.data.competition
 check('到点自动结算', rs2.code === 200 && done.finalized === true, `名次=${done.rank}`)
 check('参赛保底奖励到账', !!done.reward && done.reward.shells >= 1000000,
-  `第${done.rank}名 ${done.reward?.title} ${done.reward?.shells} 贝壳`)
+  `第${done.rank}名 ${done.reward?.title} ${done.reward?.shells} 金币`)
 check('比赛记录已留存', rs2.data.compRecords.length === 1)
 check('重置时间源', (Date.now = realNow, true))
 
@@ -123,7 +123,7 @@ const info2 = localCall('GET', '/api/assoc/info?username=tasker').data
 const target = info2.tasks.find((t) => !t.expired && (t.tier === 'COMMON' || t.tier === 'RARE'))
   || info2.tasks.find((t) => !t.expired)
 if (target) {
-  // 新号只有 50 贝壳，先通过后台接口充值，方便批量补饵
+  // 新号只有 50 金币，先通过后台接口充值，方便批量补饵
   const list = localCall('GET', '/api/admin/users?keyword=tasker&page=1&pageSize=10').data.list
   const taskerRow = list.find((u) => u.username === 'tasker')
   localCall('POST', '/api/admin/users/update', { id: taskerRow.id, shells: 300000 })
@@ -156,7 +156,37 @@ if (target) {
   console.log('  ⚠️ 无进行中任务可测')
 }
 
-// ---------- 5. 边界：不存在的用户 / 比赛二次结算 ----------
+// ---------- 5. 名次奖励档位：前三 / 4~10 / 11~30 / 31+ ----------
+const rankers = []
+for (let i = 1; i <= 31; i++) {
+  const name = 'ranker' + i
+  const rr = localCall('POST', '/api/auth/register', { username: name, password: '123456' })
+  if (rr.code === 200) rankers.push(name)
+}
+check('奖励档位测试号 31 个', rankers.length === 31, `实际=${rankers.length}`)
+for (const name of rankers) localCall('POST', '/api/assoc/comp-start', { username: name })
+Date.now = () => realNow() + 61 * 1000
+localCall('POST', '/api/assoc/comp-state', { username: rankers[0] }) // 匹配结束 → 开赛
+Date.now = () => realNow() + 61 * 1000 + 60 * 60 * 1000 + 1000
+const tierState = localCall('POST', '/api/assoc/comp-state', { username: rankers[0] }).data.competition
+check('档位测试比赛已结算', tierState.finalized === true && tierState.realPlayerCount === 31,
+  `真人=${tierState.realPlayerCount}`)
+const expectedShells = (rank) =>
+  rank === 1 ? 100000000 : rank === 2 ? 50000000 : rank === 3 ? 10000000
+    : rank <= 10 ? 5000000 : rank <= 30 ? 3000000 : 1000000
+const tierSamples = [1, 2, 3, 4, 10, 11, 30, 31]
+let tiersOk = true
+const tierDetail = []
+for (const rank of tierSamples) {
+  const info = localCall('GET', `/api/assoc/info?username=${rankers[rank - 1]}`).data
+  const got = info.competition?.reward?.shells
+  if (got !== expectedShells(rank)) tiersOk = false
+  tierDetail.push(`#${rank}=${got}`)
+}
+check('名次奖励档位正确', tiersOk, tierDetail.join(' '))
+Date.now = realNow
+
+// ---------- 6. 边界：不存在的用户 / 比赛二次结算 ----------
 const bad = localCall('GET', '/api/assoc/info?username=nobody')
 check('未知用户返回 400', bad.code === 400)
 

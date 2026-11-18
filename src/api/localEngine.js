@@ -50,7 +50,8 @@ function readDb() {
   if (raw) {
     try {
       memoryDb = JSON.parse(raw)
-      migrateDb(memoryDb)
+      // 迁移后立即写回，避免下次打开时把旧「金石」重复折算成金币
+      if (migrateDb(memoryDb)) persist()
       return memoryDb
     } catch {
       /* 数据损坏则重建 */
@@ -62,20 +63,32 @@ function readDb() {
 }
 
 /**
- * 旧存档迁移（v3 → v4）：
- *   · strength（根骨）→ power（力量），初始 100；
- *   · 移除 powerRealm（钓道境界）与 skills（功法）字段（已取消功法与修炼）。
+ * 旧存档迁移：
+ *   v3 → v4：strength（根骨）→ power（力量），移除 powerRealm / skills（已取消功法）；
+ *   v4 → v5：货币统一为金币——旧「金石」余额一次性折算进金币（shells），
+ *            之后不再产出金石；goldStones 仅作为兼容字段保留，恒为 0。
  */
 function migrateDb(db) {
-  if (!db || db.version >= 4) return
-  db.version = 4
-  for (const u of db.users || []) {
-    if (u.power == null) u.power = u.strength != null ? u.strength : 100
-    if (u.currentMap == null) u.currentMap = DEFAULT_MAP
-    delete u.strength
-    delete u.powerRealm
-    delete u.skills
+  if (!db || db.version >= 5) return false
+  if (db.version < 4) {
+    db.version = 4
+    for (const u of db.users || []) {
+      if (u.power == null) u.power = u.strength != null ? u.strength : 100
+      if (u.currentMap == null) u.currentMap = DEFAULT_MAP
+      delete u.strength
+      delete u.powerRealm
+      delete u.skills
+    }
   }
+  for (const u of db.users || []) {
+    const legacy = Number(u.goldStones) || 0
+    if (legacy > 0) {
+      u.shells = (Number(u.shells) || 0) + legacy
+      u.goldStones = 0
+    }
+  }
+  db.version = 5
+  return true
 }
 
 function persist() {
@@ -90,13 +103,13 @@ function persist() {
 
 function seedDb() {
   const db = {
-    version: 4,
+    version: 5,
     nextUserId: 4,
     nextUserItemId: 7,
     // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
       { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-01T08:00:00.000Z' },
-      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200000, power:100, goldStones:200, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
+      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200200, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
       { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-03T10:15:00.000Z' }
     ],
     userItems: [
@@ -310,7 +323,7 @@ function buildProfile(u) {
   return {
     username: u.username,
     shells: u.shells == null ? 0 : u.shells,
-    goldStones: u.goldStones == null ? 0 : u.goldStones,
+    goldStones: 0, // 兼容字段：货币统一为金币后恒为 0
     power: powerOf(u),
     assocBadge: u.assocBadge || 0,
     maxCaughtWeight: u.maxCaughtWeight || 0,
@@ -402,10 +415,9 @@ function cast(username, baitId, mapId) {
     persist()
   }
 
-  // 后台货币倍率（默认 1）
+  // 后台金币奖励倍率（默认 1）
   const admin = safeAdminConfig()
-  const shellMulAdj = admin && admin.currency ? admin.currency.shellMultiplier : 1
-  const goldMulAdj = admin && admin.currency ? admin.currency.goldMultiplier : 1
+  const coinMulAdj = admin && admin.currency ? admin.currency.shellMultiplier : 1
 
   // 鱼饵 / 幸运草小幅提升专属鱼概率
   let exRate = map.exclusiveRate || 0
@@ -435,8 +447,12 @@ function cast(username, baitId, mapId) {
   }
   const td = TIERS[tier]
 
-  let rewardShells = Math.round(td.shellMul * (10 + 3 * Math.pow(weight, 0.75)) * (shellMulAdj || 1))
-  let rewardGold = Math.max(1, Math.round(td.goldMul * Math.pow(weight, 0.45) * (goldMulAdj || 1)))
+  // 货币统一为金币：原「贝壳口径奖励」与原「金石口径奖励」合并成一份金币
+  const rewardShells = Math.round(
+    (td.shellMul * (10 + 3 * Math.pow(weight, 0.75)) + td.goldMul * Math.pow(weight, 0.45))
+    * (coinMulAdj || 1)
+  )
+  const rewardGold = 0 // 兼容字段：金石已取消，恒为 0
 
   const m = weight / power
   const breakRisk = computeBreakRisk(weight, power, lineStrength, maxCatch)
@@ -538,39 +554,28 @@ function settle({ username, encounterId, landed, breakType }) {
 
   if (landed) {
     u.shells = (u.shells == null ? 0 : u.shells) + pe.rewardShells
-    u.goldStones = (u.goldStones == null ? 0 : u.goldStones) + pe.rewardGold
     r.landed = true
     r.rewardShells = pe.rewardShells
     r.rewardGold = pe.rewardGold
-    r.message = `钓起来了！${pe.fishName} ${pe.weight} 斤，获得 ${pe.rewardShells} 🐚 与 ${pe.rewardGold} 金石 🪙`
+    r.message = `钓起来了！${pe.fishName} ${pe.weight} 斤，获得 ${pe.rewardShells} 金币 🪙`
     if (pe.tier === 'MYTHIC' || pe.tier === 'SHANHAI') {
       r.celebrateMessage = RARE_CHEERS[rand(RARE_CHEERS.length)].replace('{fish}', pe.fishName)
     }
     // 钓鱼协会挂钩：协会任务进度 / 100 人钓鱼比赛 / 认证徽章
     const assocMsgs = assocOnCatch(u, pe.fishName, pe.weight)
     if (assocMsgs.length) r.assocMessages = assocMsgs
-    // 力量成长：钓到「自身极限的鱼」（重量 ≥ 力量）+1%~10%；
-    // 钓到「超过自身极限 1.5 倍」的鱼（重量 ≥ 1.5×力量）+10%~50%（复合增长）
+    // 力量成长（唯一规则）：成功钓起「重量超过自身上限（当前力量）10%」的鱼，
+    // 力量按当前值 +10%（复合增长：100 → 110 → 121 ……）。未超过 10% 不成长。
     const pw = powerOf(u)
-    const mul = pe.weight / pw
-    let gainPct = 0
-    let kind = ''
-    if (mul >= 1.5) {
-      gainPct = 10 + Math.floor(Math.random() * 41)
-      kind = 'beyond'
-    } else if (mul >= 1.0) {
-      gainPct = 1 + Math.floor(Math.random() * 10)
-      kind = 'limit'
-    }
+    const gainPct = pe.weight > pw * 1.1 ? 10 : 0
     if (gainPct > 0) {
       const newPower = Math.round(pw * (1 + gainPct / 100))
       const gained = newPower - pw
       u.power = newPower
       r.powerGain = gained
       r.powerGainPct = gainPct
-      r.powerKind = kind
-      const tag = kind === 'beyond' ? '⚡突破极限' : '🔥挑战极限'
-      r.message += ` ${tag}！力量 +${gained}（${gainPct}% → 当前力量 ${newPower}）`
+      r.powerKind = 'over-limit'
+      r.message += ` 💪突破极限！力量 +${gained}（当前力量 +${gainPct}% → ${newPower}）`
     }
   } else {
     if (bt === 'ROD') {
@@ -590,7 +595,7 @@ function settle({ username, encounterId, landed, breakType }) {
   persist()
 
   r.shells = u.shells == null ? 0 : u.shells
-  r.goldStones = u.goldStones == null ? 0 : u.goldStones
+  r.goldStones = 0 // 兼容字段
   r.power = u.power == null ? 100 : u.power
   return ok(r)
 }
@@ -611,7 +616,7 @@ function buy(username, itemId, quantity) {
   if (!item) return err('商店里没有这件商品')
   const cost = item.price * qty
   const shells = u.shells == null ? 0 : u.shells
-  if (shells < cost) return err('贝壳不够啦，先去钓鱼赚点 🐚')
+  if (shells < cost) return err('金币不够啦，先去钓鱼赚点 🪙')
 
   u.shells = shells - cost
   const db = readDb()
@@ -660,24 +665,26 @@ function register({ username, email, password }) {
   const name = String(username || '').trim()
   // 注册界面已取消邮箱：未填写时按道号自动生成占位邮箱，保持数据模型不变
   const mail = String(email || '').trim() || (name ? name + '@xiandao.world' : '')
-  if (!name || !password) return err('注册信息填写不完整哦 🐚')
+  if (!name || !password) return err('注册信息填写不完整哦 🪙')
   const db = readDb()
   if (db.users.some((u) => u.username === name)) return err('此道号已被先人占用，另择一名号吧 🍃')
   if (email && email.trim() && db.users.some((u) => u.email === mail)) return err('该仙讯邮箱已注册过，直接回山门登录吧 🕊️')
 
   const id = db.nextUserId++
-  // 新玩家初始货币：后台可配置，默认贝壳 50 / 金石 0
+  // 新玩家初始金币：后台可配置；旧「初始金石」配置一并折算进来，默认 50
   const admin = safeAdminConfig()
-  const starterShells = admin && admin.currency ? admin.currency.starterShells : 50
-  const starterGold = admin && admin.currency ? admin.currency.starterGold : 0
+  const cur = admin && admin.currency ? admin.currency : null
+  const starterCoins = cur
+    ? (Number(cur.starterShells) || 0) + (Number(cur.starterGold) || 0)
+    : 50
   db.users.push({
     id,
     username: name,
     email: mail,
     password: password, // 按需求：明文存储，不做加密
     permission: 1, // 注册用户默认权限：1 = 默认权限（普通玩家）
-    shells: starterShells,
-    goldStones: starterGold,
+    shells: starterCoins,
+    goldStones: 0,
     power: 100, // 初始力量 = 100
     currentMap: DEFAULT_MAP, // 初始所在地图：灵湖
     createTime: new Date().toISOString()
@@ -744,7 +751,7 @@ function sanitizeUser(u) {
     email: u.email,
     permission: u.permission == null ? 1 : u.permission,
     shells: u.shells == null ? 0 : u.shells,
-    goldStones: u.goldStones == null ? 0 : u.goldStones,
+    goldStones: 0, // 兼容字段：货币统一为金币后恒为 0
     power: powerOf(u),
     currentMap: u.currentMap || DEFAULT_MAP,
     createTime: u.createTime || null
@@ -800,7 +807,6 @@ function updateUser(b = {}) {
   }
   if (b.shells != null) u.shells = clamp(Number(b.shells) || 0, 0, 1e12)
   if (b.power != null) u.power = clamp(Math.round(Number(b.power) || 0), 0, 1e12)
-  if (b.goldStones != null) u.goldStones = clamp(Number(b.goldStones) || 0, 0, 1e12)
   if (b.currentMap != null) {
     if (MAP_MAP.get(String(b.currentMap))) u.currentMap = String(b.currentMap)
     else return err('未知地图：' + b.currentMap)
@@ -853,7 +859,7 @@ function createUser(b = {}) {
     password: String(b.password), // 离线模式：明文存储
     permission: Number(b.permission) === 0 ? 0 : 1,
     shells: b.shells != null ? clamp(Number(b.shells), 0, 1e12) : 50,
-    goldStones: b.goldStones != null ? clamp(Number(b.goldStones), 0, 1e12) : 0,
+    goldStones: 0,
     power: b.power != null ? clamp(Math.round(Number(b.power)), 0, 1e12) : 100,
     currentMap: MAP_MAP.get(String(b.currentMap)) ? String(b.currentMap) : DEFAULT_MAP,
     createTime: new Date().toISOString()
@@ -874,12 +880,16 @@ const BADGE_THRESHOLDS = [1000, 5000, 20000, 100000, 500000, 1000000, 2000000, 5
 const COMP_MATCH_DURATION = 60 * 1000        // 报名后匹配时长：1 分钟
 const COMP_DURATION = 60 * 60 * 1000         // 比赛时长：1 个小时
 const COMP_TOTAL = 100                       // 每场参赛人数：100 名（真人优先，不足用人机补齐）
+// 真人榜名次奖励（金币）：冠军 1 亿 / 亚军 5000 万 / 季军 1000 万 /
+// 4~10 名 500 万 / 11~30 名 300 万；其余真人拿保底 100 万。
 const COMP_REWARDS = [
-  { rank: 1, shells: 100000000, title: '冠军' },   // 第一名 1 亿贝壳
-  { rank: 2, shells: 50000000, title: '亚军' },    // 第二名 5000 万贝壳
-  { rank: 3, shells: 10000000, title: '季军' }     // 第三名 1000 万贝壳
+  { min: 1, max: 1, shells: 100000000, title: '冠军' },
+  { min: 2, max: 2, shells: 50000000, title: '亚军' },
+  { min: 3, max: 3, shells: 10000000, title: '季军' },
+  { min: 4, max: 10, shells: 5000000, title: '四至十名' },
+  { min: 11, max: 30, shells: 3000000, title: '十一至三十名' }
 ]
-const COMP_BASE_REWARD = 1000000             // 参与保底：只要报名参赛就有 100 万贝壳
+const COMP_BASE_REWARD = 1000000             // 参与保底：只要报名参赛就有 100 万金币
 const COMP_BOT_NAMES = [
   '海棉宝宝', '派大星', '章鱼哥', '蟹老板', '珊迪', '痞老板', '小蜗', '珍珍',
   '云中子', '清风道人', '明月真人', '剑无痕', '灵溪子', '玄霄上人', '青丘散人', '白泽居士',
@@ -937,8 +947,8 @@ function ensureAssocTasks(db, now) {
   for (const tierCode of tiers) {
     const pool = ALL_ASSOC_FISH.filter((f) => f.tier === tierCode)
     const fish = pool[rand(pool.length)]
-    const rewardShells = Math.round(fish.shellMul * (120 + 2 * Math.pow(fish.maxW, 0.6)) * 10)
     const rewardGold = Math.max(5, Math.round(fish.goldMul * Math.pow(fish.maxW, 0.45) * 4))
+    const rewardShells = Math.round(fish.shellMul * (120 + 2 * Math.pow(fish.maxW, 0.6)) * 10) + rewardGold
     a.tasks.push({
       id: a.nextTaskId++,
       fishName: fish.name,
@@ -1035,7 +1045,8 @@ function startCompRace(a, now) {
  *  · 全场 100 人（真人 + 人机）按总重排「总重榜」rank，只用于榜单展示；
  *  · 高额奖励只在「在线报名的真人玩家」之间按真人榜 realRank 产生，
  *    人机只负责凑满人数，不领奖也不占领奖名额；
- *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，其余真人拿保底 100 万。
+ *  · 真人榜前三拿 1 亿 / 5000 万 / 1000 万，4~10 名拿 500 万，11~30 名拿 300 万，
+ *    其余真人拿保底 100 万。
  */
 function finalizeComp(db, now) {
   const a = ensureAssoc(db)
@@ -1053,7 +1064,7 @@ function finalizeComp(db, now) {
   const humans = sorted.filter((e) => e.isPlayer)
   humans.forEach((e, i) => {
     e.realRank = i + 1
-    const rw = COMP_REWARDS.find((x) => x.rank === e.realRank)
+    const rw = COMP_REWARDS.find((x) => e.realRank >= x.min && e.realRank <= x.max)
     const shells = rw ? rw.shells : COMP_BASE_REWARD
     const u = db.users.find((x) => x.username === e.name)
     if (u) u.shells = (u.shells == null ? 0 : u.shells) + shells
@@ -1132,7 +1143,7 @@ function assocInfo(username) {
     tierName: t.tierName,
     minWeight: t.minWeight,
     rewardShells: t.rewardShells,
-    rewardGold: t.rewardGold,
+    rewardGold: 0, // 兼容字段：奖励已并入金币
     publishedAt: t.publishedAt,
     expiresAt: t.expiresAt,
     expired: now >= t.expiresAt,
@@ -1214,11 +1225,10 @@ function assocTaskClaim(username, taskId) {
   t.claimedBy = t.claimedBy || {}
   t.claimedBy[u.username] = true
   u.shells = (u.shells == null ? 0 : u.shells) + t.rewardShells
-  u.goldStones = (u.goldStones == null ? 0 : u.goldStones) + t.rewardGold
   persist()
   return ok(
-    { shells: u.shells, goldStones: u.goldStones, taskId: t.id },
-    `任务奖励到账：${t.rewardShells} 🐚 + ${t.rewardGold} 金石 🪙`
+    { shells: u.shells, goldStones: 0, taskId: t.id },
+    `任务奖励到账：${t.rewardShells} 金币 🪙`
   )
 }
 
@@ -1282,12 +1292,12 @@ const AI_DIALOGS = [
   { id: 1, scene: '你好', reply: '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍃' },
   { id: 2, scene: '怎么玩', reply: '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦 🎣' },
   { id: 3, scene: '断线', reply: '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断 🧵' },
-  { id: 4, scene: '根骨', reply: '根骨越高，收线越稳、能抗衡的灵鱼越重。用金石淬炼，每次 +5；贝壳可突破钓道境界，每重天永久 +5% 钓鱼收益 💪' },
-  { id: 5, scene: '金石', reply: '金石靠钓稀有 / 巨物获得，越稀有越重给得越多。钓到 1000 斤以上基本能攒出一大把 🪙' },
+  { id: 4, scene: '根骨', reply: '根骨越高，收线越稳、能抗衡的灵鱼越重。用金币淬炼，每次 +5；金币还能买装备、突破钓道境界 💪' },
+  { id: 5, scene: '金币', reply: '金币是仙钓大陆唯一的货币：钓稀有鱼和巨物给得最多，买装备、淬炼根骨、突破境界全靠它 🪙' },
   { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊' },
   { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱' },
   { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦 💾' },
-  { id: 9, scene: '协会', reply: '钓鱼协会每波一次发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛要先在线报名，1 分钟匹配后跟 100 名玩家比 1 小时总重，真人不足由人机补齐。凡参赛保底 100 万贝壳，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章 🏆' }
+  { id: 9, scene: '协会', reply: '钓鱼协会每波一次发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛要先在线报名，1 分钟匹配后跟 100 名玩家比 1 小时总重，真人不足由人机补齐。凡参赛保底 100 万金币，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章 🏆' }
 ]
 
 function aiDialogs() {
@@ -1300,7 +1310,7 @@ function aiChat(message) {
   if (hit) return { reply: hit.reply, scene: hit.scene }
   const tips = [
     '唔…这个我还在学。不过我知道：张力别拉满，暴走要松手！🎣',
-    '试试问我「怎么玩」「根骨」「金石」「巨物」「存档」这些关键词吧～',
+    '试试问我「怎么玩」「根骨」「金币」「巨物」「存档」这些关键词吧～',
     '老钓仙说：钓大鱼最重要的是耐心…还有别忘了买鱼饵 🪱'
   ]
   return { reply: tips[rand(tips.length)], scene: '其他' }
