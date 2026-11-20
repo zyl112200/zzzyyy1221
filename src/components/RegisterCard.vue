@@ -1,7 +1,6 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import Cultivator from './Cultivator.vue'
 import { registerApi } from '../api/auth'
 import { setSession } from '../store/session'
 
@@ -45,8 +44,6 @@ async function onSubmit() {
 
 <template>
   <div class="card">
-    <Cultivator variant="violet" />
-
     <h1>叩仙门</h1>
     <p class="subtitle">道童引路：入道很简单，本座都会 ⛰️</p>
 
@@ -79,86 +76,127 @@ async function onSubmit() {
 .card {
   position: relative;
   z-index: 5;
-  width: 380px;
+  width: 400px;
   max-width: 92vw;
-  background: rgba(255, 255, 255, 0.93);
-  border-radius: 28px;
-  padding: 140px 36px 36px;
-  box-shadow: 0 24px 60px rgba(30, 12, 60, .5), inset 0 0 0 4px #b388ff;
+  background: linear-gradient(165deg, rgba(40, 30, 72, .52), rgba(18, 12, 38, .64));
+  border: 1px solid rgba(179, 136, 255, .5);
+  border-radius: 22px;
+  padding: 40px 38px 34px;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(240, 225, 255, .12),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 40px rgba(150, 100, 230, .25);
   text-align: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
 }
+
+.card::before,
+.card::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200, 160, 255, .75), transparent);
+}
+.card::before { top: 12px; }
+.card::after { bottom: 12px; }
 
 h1 {
-  color: #7e57c2;
-  font-size: 26px;
-  letter-spacing: 3px;
-  text-shadow: 2px 2px 0 #e1d5ff, 4px 4px 0 rgba(126, 87, 194, .18);
-  margin-bottom: 4px;
-}
-.subtitle {
-  color: #2e9b78;
-  font-size: 13px;
-  margin-bottom: 24px;
+  color: #e8d4ff;
+  font-size: 28px;
+  letter-spacing: 6px;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .6), 0 0 22px rgba(179, 136, 255, .4);
+  margin: 4px 0 6px;
 }
 
-.field { position: relative; margin-bottom: 16px; text-align: left; }
+.subtitle {
+  color: rgba(220, 214, 255, .8);
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin-bottom: 26px;
+}
+
+.field {
+  position: relative;
+  margin-bottom: 16px;
+  text-align: left;
+}
 .field input {
   width: 100%;
-  padding: 13px 14px 13px 44px;
-  border: 3px solid #e1d5ff;
-  border-radius: 14px;
+  padding: 14px 14px 14px 46px;
+  border: 1px solid rgba(179, 136, 255, .32);
+  border-radius: 12px;
   font-size: 15px;
   outline: none;
-  background: #f7f3ff;
-  color: #2e2a4a;
-  transition: border-color .25s, box-shadow .25s;
+  background: rgba(10, 8, 30, .55);
+  color: #f3ecff;
+  transition: border-color .25s, box-shadow .25s, background .25s;
 }
+.field input::placeholder { color: rgba(205, 195, 235, .45); }
 .field input:focus {
-  border-color: #7e57c2;
-  box-shadow: 0 0 0 4px rgba(126, 87, 194, .2);
+  border-color: rgba(200, 160, 255, .85);
+  background: rgba(14, 10, 36, .8);
+  box-shadow: 0 0 0 3px rgba(179, 136, 255, .15), 0 0 18px rgba(179, 136, 255, .14);
 }
 .field .icon {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
   font-size: 17px;
+  opacity: .9;
 }
 
 .options {
   display: flex;
   justify-content: center;
   font-size: 13px;
-  color: #7e57c2;
-  margin-bottom: 20px;
+  color: rgba(226, 216, 255, .9);
+  margin: 6px 2px 22px;
 }
 .options label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.options input[type="checkbox"] { accent-color: #7e57c2; width: 15px; height: 15px; }
+.options input[type="checkbox"] { accent-color: #b388ff; width: 15px; height: 15px; }
 
 .btn {
   width: 100%;
   padding: 14px;
-  border: none;
-  border-radius: 16px;
+  border: 1px solid rgba(235, 215, 255, .6);
+  border-radius: 12px;
   font-size: 17px;
   font-weight: bold;
-  letter-spacing: 6px;
+  letter-spacing: 8px;
   color: #fff;
   cursor: pointer;
-  background: linear-gradient(180deg, #b388ff, #7e57c2);
-  box-shadow: 0 6px 0 #5e3fa0, 0 10px 18px rgba(30, 12, 60, .3);
-  transition: transform .12s, box-shadow .12s;
+  background: linear-gradient(180deg, #c9a6ff, #9b6fe0 60%, #7e57c2);
+  box-shadow: 0 6px 20px rgba(155, 111, 224, .32), inset 0 1px 0 rgba(255, 255, 255, .35);
+  transition: transform .12s, box-shadow .12s, filter .12s;
 }
-.btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #5e3fa0, 0 14px 22px rgba(30, 12, 60, .35); }
-.btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #5e3fa0, 0 6px 10px rgba(30, 12, 60, .3); }
+.btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 26px rgba(155, 111, 224, .45), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.btn:active { transform: translateY(1px); box-shadow: 0 3px 12px rgba(155, 111, 224, .3); }
+.btn:disabled { opacity: .65; cursor: wait; }
 
-.signup { margin-top: 18px; font-size: 13px; color: #7e57c2; }
-.signup a { color: #6a3fb0; font-weight: bold; text-decoration: none; }
+.signup {
+  margin-top: 20px;
+  font-size: 13px;
+  color: rgba(220, 214, 255, .72);
+}
+.signup a {
+  color: #d9bcff;
+  font-weight: bold;
+  text-decoration: none;
+}
 .signup a:hover { text-decoration: underline; }
 
 @media (max-width: 420px) {
-  .card { padding: 130px 22px 28px; }
-  h1 { font-size: 22px; }
+  .card { padding: 30px 24px 26px; }
+  h1 { font-size: 23px; }
 }
 </style>

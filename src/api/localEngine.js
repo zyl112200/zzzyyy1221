@@ -328,6 +328,7 @@ function buildProfile(u) {
     assocBadge: u.assocBadge || 0,
     maxCaughtWeight: u.maxCaughtWeight || 0,
     currentMap: u.currentMap || DEFAULT_MAP,
+    equippedRodId: equippedRod ? equippedRod.id : null,
     equippedRodName: equippedRod ? equippedRod.name : '无',
     equippedRodPower: equippedRod ? equippedRod.power || 0 : 0,
     equippedLineName: equippedLine ? equippedLine.name : '无',
@@ -335,6 +336,12 @@ function buildProfile(u) {
     maxCatchWeight: Math.max(rodMax, lineMax) || 800,
     totalBait,
     luckOwned,
+    // 已解锁图鉴的鱼名列表（兼容数组与逗号分隔字符串两种存档格式）
+    codex: Array.isArray(u.codex)
+      ? u.codex
+      : (typeof u.codex === 'string' && u.codex.trim()
+          ? u.codex.split(',').map((s) => s.trim()).filter(Boolean)
+          : []),
     inventory
   }
 }
@@ -554,6 +561,12 @@ function settle({ username, encounterId, landed, breakType }) {
 
   if (landed) {
     u.shells = (u.shells == null ? 0 : u.shells) + pe.rewardShells
+    // 图鉴解锁：钓起的鱼写入 codex（去重）
+    if (!Array.isArray(u.codex)) u.codex = []
+    if (!u.codex.includes(pe.fishName)) {
+      u.codex.push(pe.fishName)
+      r.codexUnlocked = pe.fishName
+    }
     r.landed = true
     r.rewardShells = pe.rewardShells
     r.rewardGold = pe.rewardGold

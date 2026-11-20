@@ -22,6 +22,7 @@ import lombok.Data;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -301,6 +302,7 @@ public class GameService {
         int rodMax = equippedRod == null || equippedRod.getMaxCatchWeight() == null ? 0 : equippedRod.getMaxCatchWeight();
         int lineMax = equippedLine == null || equippedLine.getMaxCatchWeight() == null ? 0 : equippedLine.getMaxCatchWeight();
 
+        p.setEquippedRodId(equippedRod != null ? equippedRod.getId() : null);
         p.setEquippedRodName(equippedRod != null ? equippedRod.getName() : "无");
         p.setEquippedRodPower(equippedRod != null && equippedRod.getPower() != null ? equippedRod.getPower() : 0);
         p.setEquippedLineName(equippedLine != null ? equippedLine.getName() : "无");
@@ -309,6 +311,14 @@ public class GameService {
         p.setTotalBait(totalBait);
         p.setLuckOwned(luckOwned);
         p.setCurrentMap(u.getCurrentMap() == null ? GameMaps.DEFAULT_MAP : u.getCurrentMap());
+        // 图鉴解锁列表：逗号分隔 → List
+        List<String> codex = new ArrayList<>();
+        if (u.getCodex() != null && !u.getCodex().isBlank()) {
+            for (String name : u.getCodex().split(",")) {
+                if (!name.isBlank()) codex.add(name.trim());
+            }
+        }
+        p.setCodex(codex);
         p.setInventory(inventory);
         return p;
     }
@@ -632,6 +642,11 @@ public class GameService {
 
         if (landed) {
             u.setShells((u.getShells() == null ? 0 : u.getShells()) + pe.getRewardShells());
+            // 图鉴解锁：钓起的鱼写入 codex（逗号分隔，去重）
+            String codex = u.getCodex() == null ? "" : u.getCodex();
+            if (Arrays.stream(codex.split(",")).noneMatch(n -> n.equals(pe.getFishName()))) {
+                u.setCodex(codex.isBlank() ? pe.getFishName() : codex + "," + pe.getFishName());
+            }
             userMapper.updateById(u);
             r.setLanded(true);
             r.setRodBroken(false);

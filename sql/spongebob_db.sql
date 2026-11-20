@@ -28,6 +28,7 @@ CREATE TABLE `user` (
   `max_caught_weight` INT NOT NULL DEFAULT 0          COMMENT '历史最重单尾钓获（斤），协会徽章依据',
   `assoc_badge` INT          NOT NULL DEFAULT 0        COMMENT '钓鱼协会认证徽章星级（0=未认证，1~9）',
   `current_map` VARCHAR(30)  NOT NULL DEFAULT 'linghu' COMMENT '当前所在钓场地图 id（对应前端 maps.js）',
+  `codex`       TEXT                                    COMMENT '已解锁图鉴的鱼名列表，逗号分隔',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),

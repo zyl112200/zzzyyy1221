@@ -6,6 +6,7 @@ import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, baitsApi, mapsApi, setMapApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
+import { rodSprite } from '../data/rodSprites'
 import { MAPS, DEFAULT_MAP } from '../data/maps'
 import { calcFishingOdds } from '../data/fishingOdds'
 
@@ -18,6 +19,7 @@ const profile = reactive({
   goldStones: 0,
   power: 100,
   currentMap: DEFAULT_MAP,
+  equippedRodId: null,
   equippedRodName: '无',
   equippedRodPower: 0,
   equippedLineName: '无',
@@ -213,6 +215,11 @@ const burstSprite = computed(() => {
   const b = burst.value
   return b ? FISH_SPRITES[b.name] || null : null
 })
+/** 当前装备鱼竿的写实立绘（钓鱼场景与 HUD 共用） */
+const equippedRodSprite = computed(() => {
+  const id = profile.equippedRodId
+  return id ? rodSprite(id) : null
+})
 /** 体型随重量对数增长：1 斤小鱼 ~0.8，百万斤巨物 ~2.6 */
 const fishScale = computed(() => {
   const w = encounter.value ? encounter.value.weight : 1
@@ -308,10 +315,47 @@ async function loadProfile() {
 }
 
 // ---------------- 钓竿 / 鱼线几何（SVG） ----------------
+// 写实鱼竿立绘的定位参数（SVG 1600×900 坐标系）。
+// 立绘主体 1024×1024：握把在左下、竿尖在右上；水平翻转后置于右下，竿尖朝水面中央。
+const ROD_GEO = {
+  x: 880, y: 380, size: 820,    // 图片左上角与边长（右下手持视角）
+  tipX: 0.07, tipY: 0.10,       // 翻转后竿尖在图片内的比例位置
+  gripX: 0.90, gripY: 0.90,     // 翻转后握把（旋转支点）在图片内的比例位置
+  bendDeg: 8                    // 搏鱼最大下压旋转角
+}
+const rodFlipX = ROD_GEO.x * 2 + ROD_GEO.size  // 水平镜像位移（绕图片中轴）
+const rodGrip = {
+  x: ROD_GEO.x + ROD_GEO.size * ROD_GEO.gripX,
+  y: ROD_GEO.y + ROD_GEO.size * ROD_GEO.gripY
+}
+
+/** 搏鱼时鱼竿绕握把下压的角度（度） */
+const rodBendDeg = computed(() => {
+  const t = Math.min(1, tension.value / 100)
+  return phase.value === 'fight' ? -t * ROD_GEO.bendDeg : 0
+})
+
+/** 写实立绘的 SVG transform（水平翻转 + 绕握把下压） */
+const rodImageTransform = computed(() =>
+  `rotate(${rodBendDeg.value.toFixed(2)} ${rodGrip.x} ${rodGrip.y}) translate(${rodFlipX} 0) scale(-1 1)`
+)
+
+/** 写实立绘模式下竿尖的屏幕坐标；无立绘时沿用原 SVG 竿尖 */
 const rodTip = computed(() => {
   const t = Math.min(1, tension.value / 100)
-  const fighting = phase.value === 'fight'
-  const bend = fighting ? t : 0
+  const bend = phase.value === 'fight' ? t : 0
+  if (equippedRodSprite.value) {
+    // 翻转后竿尖基准位置，再绕握把旋转 bendDeg
+    const bx = ROD_GEO.x + ROD_GEO.size * ROD_GEO.tipX
+    const by = ROD_GEO.y + ROD_GEO.size * ROD_GEO.tipY
+    const a = rodBendDeg.value * Math.PI / 180
+    const dx = bx - rodGrip.x
+    const dy = by - rodGrip.y
+    return {
+      x: rodGrip.x + dx * Math.cos(a) - dy * Math.sin(a),
+      y: rodGrip.y + dx * Math.sin(a) + dy * Math.cos(a)
+    }
+  }
   return { x: 1185 - bend * 95, y: 458 + bend * 190 }
 })
 const rodPath = computed(() => {
@@ -737,14 +781,23 @@ onBeforeUnmount(() => {
           <circle cx="800" cy="648" r="14" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2" />
         </g>
 
-        <!-- 鱼竿 -->
-        <path :d="rodPath" fill="none" stroke="url(#rodGrad)" stroke-width="13" stroke-linecap="round" />
-        <path :d="rodPath" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3" stroke-linecap="round" />
-        <!-- 握把 -->
-        <path d="M 1512 902 L 1442 812" fill="none" stroke="url(#handleGrad)" stroke-width="26" stroke-linecap="round" />
-        <!-- 渔轮 -->
-        <circle cx="1468" cy="852" r="26" fill="#37474f" stroke="#90a4ae" stroke-width="4" />
-        <circle cx="1468" cy="852" r="9" fill="#cfd8dc" />
+        <!-- 鱼竿：优先显示当前装备的写实立绘（随装备切换、搏鱼下压），无立绘时回退通用 SVG -->
+        <image
+          v-if="equippedRodSprite"
+          class="rod-sprite"
+          :href="equippedRodSprite"
+          :x="ROD_GEO.x" :y="ROD_GEO.y"
+          :width="ROD_GEO.size" :height="ROD_GEO.size"
+          :transform="rodImageTransform"
+          preserveAspectRatio="xMidYMid meet"
+        />
+        <template v-else>
+          <path :d="rodPath" fill="none" stroke="url(#rodGrad)" stroke-width="13" stroke-linecap="round" />
+          <path :d="rodPath" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3" stroke-linecap="round" />
+          <path d="M 1512 902 L 1442 812" fill="none" stroke="url(#handleGrad)" stroke-width="26" stroke-linecap="round" />
+          <circle cx="1468" cy="852" r="26" fill="#37474f" stroke="#90a4ae" stroke-width="4" />
+          <circle cx="1468" cy="852" r="9" fill="#cfd8dc" />
+        </template>
       </svg>
 
       <div class="vignette" :class="{ danger: tension > 72 && phase === 'fight', berserk: berserk && phase === 'fight' }"></div>
@@ -1076,6 +1129,9 @@ onBeforeUnmount(() => {
 .rig {
   position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5;
   pointer-events: none;
+}
+.rig .rod-sprite {
+  filter: drop-shadow(0 18px 24px rgba(0, 20, 40, .55)) drop-shadow(0 0 18px rgba(120, 200, 255, .18));
 }
 .fishing-line {
   stroke: rgba(255,255,255,.85);

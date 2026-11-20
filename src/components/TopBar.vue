@@ -25,6 +25,7 @@ function logout() {
     <nav class="nav">
       <router-link to="/home">🎣 灵湖</router-link>
       <router-link to="/assoc">🏆 协会</router-link>
+      <router-link to="/codex">📖 图鉴</router-link>
       <router-link to="/shop">🛒 仙市</router-link>
       <router-link to="/inventory">🎒 行囊</router-link>
       <router-link v-if="isAdmin" to="/admin" class="admin-link">🛠 后台</router-link>

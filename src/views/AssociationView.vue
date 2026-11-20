@@ -4,6 +4,7 @@ import OceanBackground from '../components/OceanBackground.vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
 import { getSession } from '../store/session'
+import { FISH_SPRITES } from '../data/fishSprites'
 import { meApi, assocInfoApi, assocTaskClaimApi, assocCompStartApi, assocCompStateApi } from '../api/game'
 
 const session = getSession()
@@ -58,6 +59,8 @@ function fmtDate(ts) {
 
 const tierClass = (t) => ({ COMMON: 'tc', RARE: 'tr', LEGENDARY: 'tl', MYTHIC: 'tm', SHANHAI: 'ts' }[t] || 'tc')
 const tierLabel = (t) => ({ COMMON: '普通', RARE: '稀有', LEGENDARY: '传说', MYTHIC: '神话', SHANHAI: '山海' }[t] || t)
+// 任务鱼图标：优先用写实立绘，缺失时回退原 emoji
+const fishSprite = (name) => FISH_SPRITES[name] || null
 
 // ---------------- 徽章 ----------------
 const BADGE_STARS = computed(() => (info.value ? info.value.badgeThresholds : []))
@@ -217,7 +220,10 @@ onBeforeUnmount(() => {
       <section v-if="activeTab === 'task'" class="panel">
         <p class="tip">协会会不定时发布钓鱼任务（如「钓起一条指定的灵鱼」），完成后回协会领取奖励；新任务请留意发布时间 📢</p>
         <div class="task-card" v-for="t in tasks" :key="t.id" :class="{ expired: t.expired, done: t.done && !t.claimed }">
-          <div class="t-fish" :class="tierClass(t.tier)">{{ t.fishIcon }}</div>
+          <div class="t-fish" :class="tierClass(t.tier)">
+            <img v-if="fishSprite(t.fishName)" :src="fishSprite(t.fishName)" :alt="t.fishName">
+            <span v-else>{{ t.fishIcon }}</span>
+          </div>
           <div class="t-info">
             <div class="t-title">
               钓起一条 <b>{{ t.fishName }}</b>
@@ -402,7 +408,8 @@ onBeforeUnmount(() => {
 }
 .task-card.done { border-color: rgba(102, 187, 106, .55); }
 .task-card.expired { opacity: .5; }
-.t-fish { font-size: 30px; width: 44px; text-align: center; }
+.t-fish { font-size: 30px; width: 52px; height: 52px; text-align: center; flex: 0 0 52px; display: flex; align-items: center; justify-content: center; }
+.t-fish img { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
 .t-info { flex: 1; min-width: 0; }
 .t-title { font-size: 15px; font-weight: bold; }
 .t-title b { color: #ffd54f; }

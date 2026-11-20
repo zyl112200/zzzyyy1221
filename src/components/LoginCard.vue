@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import Cultivator from './Cultivator.vue'
 import { loginApi } from '../api/auth'
 import { setSession } from '../store/session'
 
@@ -46,8 +45,6 @@ function forgot() {
 
 <template>
   <div class="card">
-    <Cultivator variant="jade" />
-
     <h1>仙门登录</h1>
     <p class="subtitle">道友请留步，入我仙钓大陆 ⛰️</p>
 
@@ -87,28 +84,49 @@ function forgot() {
 .card {
   position: relative;
   z-index: 5;
-  width: 380px;
+  width: 400px;
   max-width: 92vw;
-  background: rgba(255, 255, 255, 0.93);
-  border-radius: 28px;
-  padding: 150px 36px 36px;
-  box-shadow: 0 24px 60px rgba(30, 12, 60, .5), inset 0 0 0 4px #7e57c2;
+  background: linear-gradient(165deg, rgba(30, 26, 60, .52), rgba(14, 12, 34, .64));
+  border: 1px solid rgba(212, 175, 55, .5);
+  border-radius: 22px;
+  padding: 40px 38px 34px;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 240, 190, .12),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 40px rgba(120, 90, 200, .22);
   text-align: center;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
 }
 
+/* 顶部/底部鎏金装饰线 */
+.card::before,
+.card::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, .75), transparent);
+}
+.card::before { top: 12px; }
+.card::after { bottom: 12px; }
+
 h1 {
-  color: #6a3fb0;
-  font-size: 26px;
-  letter-spacing: 3px;
-  text-shadow: 2px 2px 0 #d1c4e9, 4px 4px 0 rgba(106, 63, 176, .18);
-  margin-bottom: 4px;
+  color: #f6e2a8;
+  font-size: 28px;
+  letter-spacing: 6px;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .6), 0 0 22px rgba(212, 175, 55, .35);
+  margin: 4px 0 6px;
 }
 
 .subtitle {
-  color: #2e9b78;
+  color: rgba(214, 224, 255, .78);
   font-size: 13px;
-  margin-bottom: 24px;
+  letter-spacing: 1px;
+  margin-bottom: 26px;
 }
 
 .field {
@@ -118,25 +136,28 @@ h1 {
 }
 .field input {
   width: 100%;
-  padding: 13px 14px 13px 44px;
-  border: 3px solid #c5e1d6;
-  border-radius: 14px;
+  padding: 14px 14px 14px 46px;
+  border: 1px solid rgba(212, 175, 55, .32);
+  border-radius: 12px;
   font-size: 15px;
   outline: none;
-  background: #f3fbf7;
-  color: #2e4034;
-  transition: border-color .25s, box-shadow .25s;
+  background: rgba(8, 8, 24, .55);
+  color: #f3ecff;
+  transition: border-color .25s, box-shadow .25s, background .25s;
 }
+.field input::placeholder { color: rgba(200, 195, 230, .45); }
 .field input:focus {
-  border-color: #2e9b78;
-  box-shadow: 0 0 0 4px rgba(46, 155, 120, .2);
+  border-color: rgba(212, 175, 55, .85);
+  background: rgba(12, 10, 32, .8);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, .15), 0 0 18px rgba(212, 175, 55, .12);
 }
 .field .icon {
   position: absolute;
-  left: 14px;
+  left: 15px;
   top: 50%;
   transform: translateY(-50%);
   font-size: 17px;
+  opacity: .9;
 }
 
 .options {
@@ -144,8 +165,8 @@ h1 {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #6a3fb0;
-  margin-bottom: 20px;
+  color: rgba(230, 220, 190, .9);
+  margin: 6px 2px 22px;
 }
 .options label {
   display: flex;
@@ -154,57 +175,55 @@ h1 {
   cursor: pointer;
 }
 .options input[type="checkbox"] {
-  accent-color: #7e57c2;
+  accent-color: #d4af37;
   width: 15px;
   height: 15px;
 }
 .options a {
-  color: #2e9b78;
+  color: #e8cf88;
   text-decoration: none;
 }
-.options a:hover {
-  text-decoration: underline;
-}
+.options a:hover { text-decoration: underline; }
 
 .btn {
   width: 100%;
   padding: 14px;
-  border: none;
-  border-radius: 16px;
+  border: 1px solid rgba(255, 236, 170, .6);
+  border-radius: 12px;
   font-size: 17px;
   font-weight: bold;
-  letter-spacing: 6px;
-  color: #06321f;
+  letter-spacing: 8px;
+  color: #2a1e08;
   cursor: pointer;
-  background: linear-gradient(180deg, #6fe0b6, #2e9b78);
-  box-shadow: 0 6px 0 #176b54, 0 10px 18px rgba(30, 12, 60, .3);
-  transition: transform .12s, box-shadow .12s;
+  background: linear-gradient(180deg, #f6dfa0, #d4af37 60%, #b8912a);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, .28), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform .12s, box-shadow .12s, filter .12s;
 }
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 0 #176b54, 0 14px 22px rgba(30, 12, 60, .35);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 26px rgba(212, 175, 55, .4), inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 .btn:active {
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 #176b54, 0 6px 10px rgba(30, 12, 60, .3);
+  transform: translateY(1px);
+  box-shadow: 0 3px 12px rgba(212, 175, 55, .3);
 }
+.btn:disabled { opacity: .65; cursor: wait; }
 
 .signup {
-  margin-top: 18px;
+  margin-top: 20px;
   font-size: 13px;
-  color: #6a3fb0;
+  color: rgba(214, 224, 255, .72);
 }
 .signup a {
-  color: #7e57c2;
+  color: #f0d68f;
   font-weight: bold;
   text-decoration: none;
 }
-.signup a:hover {
-  text-decoration: underline;
-}
+.signup a:hover { text-decoration: underline; }
 
 @media (max-width: 420px) {
-  .card { padding: 140px 22px 28px; }
-  h1 { font-size: 22px; }
+  .card { padding: 30px 24px 26px; }
+  h1 { font-size: 23px; }
 }
 </style>

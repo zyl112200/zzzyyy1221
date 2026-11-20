@@ -37,6 +37,9 @@ public class GameProfile {
     /** 钓道境界带来的钓鱼收益加成百分比（每级 +5%） */
     private Integer realmBonusPct;
 
+    /** 已装备钓竿商品 id（前端按此加载对应写实立绘） */
+    private Integer equippedRodId;
+
     /** 已装备钓竿名称 */
     private String equippedRodName;
 
@@ -60,6 +63,9 @@ public class GameProfile {
 
     /** 当前所在钓场地图 id（选图面板高亮「当前所在」用） */
     private String currentMap;
+
+    /** 已解锁图鉴的鱼名列表（钓到对应鱼后解锁） */
+    private List<String> codex;
 
     /** 背包明细 */
     private List<OwnedItemDto> inventory;
