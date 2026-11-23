@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from '../components/GameIcon.vue'
 import { reactive, ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAdminSession, clearAdminSession } from '../admin/store.js'
@@ -55,7 +56,7 @@ async function loadUsers() {
       showToast(res.message || '加载失败')
     }
   } catch (e) {
-    showToast('网络开小差了，请稍后再试 🌊')
+    showToast('网络开小差了，请稍后再试')
   } finally {
     loading.value = false
   }
@@ -92,6 +93,7 @@ const editForm = reactive({
   email: '',
   shells: 0,
   power: 100,
+  cultivation: 0,
   permission: 1
 })
 const editMsg = ref('')
@@ -102,6 +104,7 @@ function openEdit(u) {
   editForm.email = u.email
   editForm.shells = u.shells
   editForm.power = u.power || 100
+  editForm.cultivation = u.cultivation || 0
   editForm.permission = u.permission
   editMsg.value = ''
   showEdit.value = true
@@ -113,6 +116,7 @@ async function submitEdit() {
     email: editForm.email,
     shells: Number(editForm.shells),
     power: Number(editForm.power),
+    cultivation: Number(editForm.cultivation),
     permission: Number(editForm.permission)
   })
   editMsg.value = res.message
@@ -151,7 +155,7 @@ const deleteTarget = ref(null)
 
 function openDelete(u) {
   if (u.username === adminName) {
-    showToast('不能删除当前登录的管理员账号 🛑')
+    showToast('不能删除当前登录的管理员账号')
     return
   }
   deleteTarget.value = u
@@ -179,7 +183,8 @@ const createForm = reactive({
   password: '',
   permission: 1,
   shells: 50,
-  power: 100
+  power: 100,
+  cultivation: 0
 })
 const createMsg = ref('')
 
@@ -190,7 +195,8 @@ function openCreate() {
     password: '',
     permission: 1,
     shells: 50,
-    power: 100
+    power: 100,
+    cultivation: 0
   })
   createMsg.value = ''
   showCreate.value = true
@@ -203,7 +209,8 @@ async function submitCreate() {
     password: createForm.password,
     permission: Number(createForm.permission),
     shells: Number(createForm.shells),
-    power: Number(createForm.power)
+    power: Number(createForm.power),
+    cultivation: Number(createForm.cultivation)
   })
   createMsg.value = res.message
   if (res.code === 200) {
@@ -231,20 +238,20 @@ function formatTime(t) {
 <template>
   <div class="admin">
     <header class="topbar">
-      <div class="brand">🛠️ 后台管理系统</div>
+      <div class="brand"><GameIcon name="tools" :size="19" /> 后台管理系统</div>
       <nav class="nav">
         <router-link to="/admin/home">控制台</router-link>
         <router-link to="/admin/users" class="active">用户管理</router-link>
       </nav>
       <div class="right">
-        <span class="who">👤 {{ adminName }}</span>
+        <span class="who"><GameIcon name="user" :size="16" /> {{ adminName }}</span>
         <button class="logout" @click="logout">退出登录</button>
       </div>
     </header>
 
     <main class="content">
       <section class="panel">
-        <h2>👥 用户管理</h2>
+        <h2><GameIcon name="user" :size="19" /> 用户管理</h2>
         <p class="desc">
           查看并管理仙钓大陆所有已注册道友：调整游戏资源（金币 / 力量）、修改角色权限、重置密码或删除账号。
         </p>
@@ -253,14 +260,14 @@ function formatTime(t) {
         <div class="toolbar">
           <div class="search">
             <input v-model="keyword" @keyup.enter="onSearch" placeholder="搜索用户名 / 邮箱" />
-            <button class="btn-search" @click="onSearch">🔍 搜索</button>
+            <button class="btn-search" @click="onSearch"><GameIcon name="search" :size="15" /> 搜索</button>
           </div>
           <select v-model="permissionFilter" @change="onFilterChange" class="role-select">
             <option value="">全部角色</option>
             <option value="0">管理员</option>
             <option value="1">普通玩家</option>
           </select>
-          <button class="btn-create" @click="openCreate">➕ 新建用户</button>
+          <button class="btn-create" @click="openCreate"><GameIcon name="plus" :size="15" /> 新建用户</button>
           <button class="btn-refresh" @click="loadUsers">↻ 刷新</button>
         </div>
 
@@ -273,8 +280,9 @@ function formatTime(t) {
                 <th>用户名</th>
                 <th>邮箱</th>
                 <th>角色</th>
-                <th>金币 🪙</th>
-                <th>力量 💪</th>
+                <th>金币 <GameIcon name="coin" :size="14" /></th>
+                <th>力量 <GameIcon name="power" :size="14" /></th>
+                <th>修为 <GameIcon name="cultivation" :size="14" /></th>
                 <th>注册时间</th>
                 <th class="op">操作</th>
               </tr>
@@ -291,6 +299,7 @@ function formatTime(t) {
                 </td>
                 <td>{{ u.shells }}</td>
                 <td>{{ u.power || 100 }}</td>
+                <td>{{ u.cultivation || 0 }}%</td>
                 <td class="time">{{ formatTime(u.createTime) }}</td>
                 <td class="op">
                   <button class="link" @click="openEdit(u)">编辑</button>
@@ -299,7 +308,7 @@ function formatTime(t) {
                 </td>
               </tr>
               <tr v-if="!loading && list.length === 0">
-                <td colspan="9" class="empty">仙门名录上还没有这样的道友 🌫️</td>
+                <td colspan="10" class="empty">仙门名录上还没有这样的道友</td>
               </tr>
             </tbody>
           </table>
@@ -318,14 +327,16 @@ function formatTime(t) {
     <!-- 编辑弹窗 -->
     <div class="modal" v-if="showEdit" @click.self="showEdit = false">
       <div class="modal-card">
-        <h3>✏️ 编辑用户 · {{ editForm.username }}</h3>
+        <h3><GameIcon name="edit" :size="17" /> 编辑用户 · {{ editForm.username }}</h3>
         <div class="form-grid">
           <label>邮箱</label>
           <input v-model="editForm.email" type="email" />
-          <label>金币 🪙</label>
+          <label>金币 <GameIcon name="coin" :size="14" /></label>
           <input v-model.number="editForm.shells" type="number" min="0" />
-          <label>力量 💪</label>
+          <label>力量 <GameIcon name="power" :size="14" /></label>
           <input v-model.number="editForm.power" type="number" min="0" />
+          <label>修为% <GameIcon name="cultivation" :size="14" /></label>
+          <input v-model.number="editForm.cultivation" type="number" min="0" />
           <label>角色</label>
           <select v-model.number="editForm.permission">
             <option :value="1">普通玩家</option>
@@ -343,7 +354,7 @@ function formatTime(t) {
     <!-- 重置密码弹窗 -->
     <div class="modal" v-if="showReset" @click.self="showReset = false">
       <div class="modal-card">
-        <h3>🔑 重置密码 · {{ resetTarget && resetTarget.username }}</h3>
+        <h3><GameIcon name="key" :size="17" /> 重置密码 · {{ resetTarget && resetTarget.username }}</h3>
         <p class="desc">为该用户设置一个新密码（至少 6 位），重置后旧密码失效。</p>
         <input v-model="resetPwd" type="password" placeholder="请输入新密码（≥6 位）" />
         <p v-if="resetMsg" class="modal-msg">{{ resetMsg }}</p>
@@ -357,7 +368,7 @@ function formatTime(t) {
     <!-- 删除确认弹窗 -->
     <div class="modal" v-if="showDelete" @click.self="showDelete = false">
       <div class="modal-card">
-        <h3>⚠️ 删除用户</h3>
+        <h3><GameIcon name="warning" :size="17" /> 删除用户</h3>
         <p class="desc">
           确定要删除用户 <b>{{ deleteTarget && deleteTarget.username }}</b> 吗？该操作不可恢复，其背包数据不受影响但账号将无法登录。
         </p>
@@ -371,7 +382,7 @@ function formatTime(t) {
     <!-- 新建用户弹窗 -->
     <div class="modal" v-if="showCreate" @click.self="showCreate = false">
       <div class="modal-card">
-        <h3>➕ 新建用户</h3>
+        <h3><GameIcon name="plus" :size="17" /> 新建用户</h3>
         <div class="form-grid">
           <label>用户名</label>
           <input v-model="createForm.username" placeholder="登录用户名" />
@@ -384,10 +395,12 @@ function formatTime(t) {
             <option :value="1">普通玩家</option>
             <option :value="0">管理员</option>
           </select>
-          <label>金币 🪙</label>
+          <label>金币 <GameIcon name="coin" :size="14" /></label>
           <input v-model.number="createForm.shells" type="number" min="0" />
-          <label>力量 💪</label>
+          <label>力量 <GameIcon name="power" :size="14" /></label>
           <input v-model.number="createForm.power" type="number" min="0" />
+          <label>修为% <GameIcon name="cultivation" :size="14" /></label>
+          <input v-model.number="createForm.cultivation" type="number" min="0" />
         </div>
         <p v-if="createMsg" class="modal-msg">{{ createMsg }}</p>
         <div class="modal-actions">

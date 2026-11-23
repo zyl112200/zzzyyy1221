@@ -14,6 +14,8 @@ public class AdminUserDto {
     private String newPassword;
     private Integer shells;
     private Integer strength;
+    /** 修为百分比（无上限） */
+    private Integer cultivation;
     private Integer goldStones;
     private Integer powerRealm;
     private Integer permission;

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import OceanBackground from '../components/OceanBackground.vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { FISH_SPRITES } from '../data/fishSprites'
 import { meApi, assocInfoApi, assocTaskClaimApi, assocCompStartApi, assocCompStateApi } from '../api/game'
@@ -13,6 +14,7 @@ const username = session ? session.username : ''
 const shells = ref(0)
 const goldStones = ref(0)
 const power = ref(100)
+const cultivation = ref(0)
 
 const activeTab = ref('task') // task | comp | badge
 const info = ref(null)
@@ -91,13 +93,16 @@ const rankRows = computed(() => {
 const podiumTag = (e) => {
   const r = e?.realRank
   if (!r) return ''
-  if (r <= 3) return ['🥇 真人榜冠军', '🥈 真人榜亚军', '🥉 真人榜季军'][r - 1]
-  if (r <= 10) return '🏅 真人榜 4~10 名'
-  if (r <= 30) return '🎖 真人榜 11~30 名'
+  if (r <= 3) return ['真人榜冠军', '真人榜亚军', '真人榜季军'][r - 1]
+  if (r <= 10) return '真人榜 4~10 名'
+  if (r <= 30) return '真人榜 11~30 名'
   return ''
 }
 
-const starEmoji = (n) => '⭐'.repeat(Math.min(n, 5)) + (n > 5 ? ` +${n - 5}` : '')
+/** 写实星级：实心星（已达成） + 空心星（未达成），最多显示 5 颗，超出用 +N */
+const starFilledCount = (n) => Math.min(n, 5)
+const starEmptyCount = (n) => Math.max(0, 5 - Math.min(n, 5))
+const starExtra = (n) => (n > 5 ? ` +${n - 5}` : '')
 
 async function load(showErr = true) {
   try {
@@ -106,6 +111,7 @@ async function load(showErr = true) {
       shells.value = m.data.shells
       goldStones.value = m.data.goldStones
       power.value = m.data.power || 100
+      cultivation.value = m.data.cultivation || 0
     }
   } catch { /* 静默 */ }
   try {
@@ -115,7 +121,7 @@ async function load(showErr = true) {
       tickCountdown()
     }
   } catch (e) {
-    if (showErr) showToast(e.message || '协会暂时无法连接 🌊')
+    if (showErr) showToast(e.message || '协会暂时无法连接')
   }
 }
 
@@ -136,9 +142,9 @@ async function refreshComp() {
       tickCountdown()
       const c = competition.value
       if (c && c.finalized && c.reward) {
-        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名（${c.reward.title}），奖励 ${fmtShells(c.reward.shells)} 🪙 已到账`)
+        showToast(`比赛结束！真人榜第 ${c.rank} 名（${c.reward.title}），奖励 ${fmtShells(c.reward.shells)} 已到账`)
       } else if (c && c.finalized) {
-        showToast(`⚔️ 比赛结束！真人榜第 ${c.rank} 名，再接再厉 🐟`)
+        showToast(`比赛结束！真人榜第 ${c.rank} 名，再接再厉`)
       }
     }
   } catch { /* 静默 */ }
@@ -156,7 +162,7 @@ async function startComp() {
       showToast(res.message || '报名失败')
     }
   } catch (e) {
-    showToast(e.message || '协会暂时无法连接 🌊')
+    showToast(e.message || '协会暂时无法连接')
   } finally {
     startingComp.value = false
   }
@@ -168,13 +174,13 @@ async function claimTask(t) {
   try {
     const res = await assocTaskClaimApi(username, t.id)
     if (res.code === 200) {
-      showToast(res.message || '奖励到账 🎉')
+      showToast(res.message || '奖励到账')
       await load(false)
     } else {
       showToast(res.message || '领取失败')
     }
   } catch (e) {
-    showToast(e.message || '协会暂时无法连接 🌊')
+    showToast(e.message || '协会暂时无法连接')
   } finally {
     claiming.value = null
   }
@@ -201,28 +207,29 @@ onBeforeUnmount(() => {
       :shells="shells"
       :gold-stones="goldStones"
       :power="power"
+      :cultivation="cultivation"
     />
 
     <main class="wrap">
       <div class="head">
-        <h2>🎣 钓鱼协会</h2>
-        <span class="badge-chip" v-if="badgeStar > 0">🏆 {{ starNames[badgeStar - 1] }}星认证</span>
-        <span class="badge-chip none" v-else>🏆 暂无认证</span>
+        <h2><GameIcon name="trophy" :size="24" /> 钓鱼协会</h2>
+        <span class="badge-chip" v-if="badgeStar > 0">{{ starNames[badgeStar - 1] }}星认证</span>
+        <span class="badge-chip none" v-else>暂无认证</span>
       </div>
 
       <div class="tabs">
-        <button :class="{ active: activeTab === 'task' }" @click="activeTab = 'task'">📋 协会任务</button>
-        <button :class="{ active: activeTab === 'comp' }" @click="activeTab = 'comp'">⚔️ 钓鱼比赛</button>
-        <button :class="{ active: activeTab === 'badge' }" @click="activeTab = 'badge'">🏆 认证徽章</button>
+        <button :class="{ active: activeTab === 'task' }" @click="activeTab = 'task'"><GameIcon name="scroll" :size="15" /> 协会任务</button>
+        <button :class="{ active: activeTab === 'comp' }" @click="activeTab = 'comp'"><GameIcon name="swords" :size="15" /> 钓鱼比赛</button>
+        <button :class="{ active: activeTab === 'badge' }" @click="activeTab = 'badge'"><GameIcon name="trophy" :size="15" /> 认证徽章</button>
       </div>
 
       <!-- ============ 协会任务 ============ -->
       <section v-if="activeTab === 'task'" class="panel">
-        <p class="tip">协会会不定时发布钓鱼任务（如「钓起一条指定的灵鱼」），完成后回协会领取奖励；新任务请留意发布时间 📢</p>
+        <p class="tip">协会会不定时发布钓鱼任务（如「钓起一条指定的灵鱼」），完成后回协会领取奖励；新任务请留意发布时间</p>
         <div class="task-card" v-for="t in tasks" :key="t.id" :class="{ expired: t.expired, done: t.done && !t.claimed }">
           <div class="t-fish" :class="tierClass(t.tier)">
             <img v-if="fishSprite(t.fishName)" :src="fishSprite(t.fishName)" :alt="t.fishName">
-            <span v-else>{{ t.fishIcon }}</span>
+            <GameIcon v-else :name="t.fishName" :size="44" />
           </div>
           <div class="t-info">
             <div class="t-title">
@@ -231,7 +238,7 @@ onBeforeUnmount(() => {
               <span class="min-w" v-if="t.minWeight >= 1">（≥ {{ fmtWeight(t.minWeight) }}）</span>
             </div>
             <div class="t-meta">
-              🪙 {{ t.rewardShells }} + 🪙 {{ t.rewardGold }} · {{ fmtDate(t.publishedAt) }} 发布
+              <GameIcon name="coin" :size="14" /> {{ t.rewardShells }} + <GameIcon name="gem" :size="14" /> {{ t.rewardGold }} · {{ fmtDate(t.publishedAt) }} 发布
               · {{ t.expired ? '已过期' : fmtDate(t.expiresAt) + ' 截止' }}
             </div>
           </div>
@@ -241,13 +248,13 @@ onBeforeUnmount(() => {
               :disabled="claiming === t.id || t.claimed || t.expired || !t.done"
               @click="claimTask(t)"
             >
-              {{ t.claimed ? '已领奖' : t.expired ? '已过期' : t.done ? '领奖励 🎁' : '未完成' }}
+              {{ t.claimed ? '已领奖' : t.expired ? '已过期' : t.done ? '领奖励 ' : '未完成' }}
             </button>
             <span class="my-weight" v-if="t.myWeight > 0">我的最佳：{{ fmtWeight(t.myWeight) }}</span>
           </div>
         </div>
         <div class="next-task" v-if="nextTaskAt">
-          🕐 下一波任务预计 <b>{{ fmtDate(nextTaskAt) }}</b> 发布，协会不定时加更，记得常来看看～
+          下一波任务预计 <b>{{ fmtDate(nextTaskAt) }}</b> 发布，协会不定时加更，记得常来看看～
         </div>
       </section>
 
@@ -257,13 +264,13 @@ onBeforeUnmount(() => {
           报名后先进行 <b>1 分钟匹配</b>：真人玩家在线报名才会进入对阵，不足 100 人由人机补齐；
           匹配成功后比赛 <b>1 个小时</b>，钓起的每条鱼重量累计比总重。<br>
           凡报名参赛 <b>保底 100 万金币</b>，真人榜名次奖励：
-          <b>1~3 名 1 亿 / 5000 万 / 1000 万</b>，<b>4~10 名 500 万</b>，<b>11~30 名 300 万</b> ⚔️<br>
+          <b>1~3 名 1 亿 / 5000 万 / 1000 万</b>，<b>4~10 名 500 万</b>，<b>11~30 名 300 万</b> <br>
           名次在 <b>在线报名的真人玩家</b> 之间按累计重量产生；人机只凑满 100 人，不占领奖名次。
         </p>
 
         <div v-if="!competition" class="comp-idle">
           <button class="start-btn" :disabled="startingComp" @click="startComp">
-            {{ startingComp ? '报名中…' : '⚔️ 报名比赛（1 分钟匹配）' }}
+            {{ startingComp ? '报名中…' : '报名比赛（1 分钟匹配）' }}
           </button>
         </div>
 
@@ -273,7 +280,7 @@ onBeforeUnmount(() => {
             <div class="comp-head">
               <span class="live-dot"></span>
               <span class="match-label">匹配中</span>
-              <span class="countdown">⏱ {{ fmtTime(compCountdown) }}</span>
+              <span class="countdown">{{ fmtTime(compCountdown) }}</span>
               <span class="my-total">已报名 {{ competition.signupCount }} 人 · 人机补齐至 {{ competition.totalPlayers }} 人</span>
             </div>
             <p class="match-tip">只有在线报名的真人玩家才会被匹配到；1 分钟后自动开赛，比赛时长 1 小时。</p>
@@ -293,13 +300,13 @@ onBeforeUnmount(() => {
             <div class="comp-head">
               <template v-if="!competition.finalized">
                 <span class="live-dot"></span>
-                <span class="countdown">⏱ {{ fmtTime(compCountdown) }}</span>
+                <span class="countdown">{{ fmtTime(compCountdown) }}</span>
                 <span class="my-total">总重榜 {{ competition.totalPlayers }} 人 · 我的累计 {{ fmtWeight(competition.total) }}</span>
                 <button class="next-btn" :disabled="startingComp" @click="startComp">登记下一场</button>
-                <router-link class="go-fish" to="/home">回灵湖抛竿 🎣</router-link>
+                <router-link class="go-fish" to="/home">回灵湖抛竿 </router-link>
               </template>
               <template v-else>
-                <span class="comp-done">🏁 比赛已结束</span>
+                <span class="comp-done">比赛已结束</span>
                 <span class="rank" :class="'r' + competition.rank">
                   {{ competition.rank <= 3 ? (competition.reward ? competition.reward.title + '！' : '真人榜第 ' + competition.rank + ' 名') : '真人榜第 ' + competition.rank + ' 名' }}
                 </span>
@@ -307,9 +314,9 @@ onBeforeUnmount(() => {
                   全场总重榜第 {{ competition.overallRank }} / {{ competition.totalPlayers }} 名 · {{ competition.realPlayerCount }} 名真人参赛
                 </span>
                 <span class="reward-txt" v-if="competition.reward">
-                  奖励已到账：🪙 {{ fmtShells(competition.reward.shells) }}
+                  奖励已到账：<GameIcon name="coin" :size="14" /> {{ fmtShells(competition.reward.shells) }}
                 </span>
-                <button class="again-btn" :disabled="startingComp" @click="startComp">报名下一场 ⚔️</button>
+                <button class="again-btn" :disabled="startingComp" @click="startComp">报名下一场 </button>
               </template>
             </div>
             <table class="rank-table">
@@ -335,7 +342,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="records" v-if="compRecords.length">
-          <h4>📜 我的参赛记录</h4>
+          <h4>我的参赛记录</h4>
           <div class="rec" v-for="(r, i) in compRecords" :key="i">
             真人榜第 {{ r.rank }} 名 · 累计 {{ fmtWeight(r.total) }} · {{ fmtDate(r.at) }}
           </div>
@@ -344,16 +351,20 @@ onBeforeUnmount(() => {
 
       <!-- ============ 认证徽章 ============ -->
       <section v-else class="panel">
-        <p class="tip">协会专属认证徽章：<b>单独钓起一只</b>达到门槛重量的灵鱼即可获得对应星级认证，共 1~9 星，星星越多身份越尊贵 🏆</p>
+        <p class="tip">协会专属认证徽章：<b>单独钓起一只</b>达到门槛重量的灵鱼即可获得对应星级认证，共 1~9 星，星星越多身份越尊贵</p>
         <div class="my-badge">
           <div class="big-badge" :class="{ glow: badgeStar > 0 }">
-            <div class="bb-star">{{ badgeStar > 0 ? starEmoji(badgeStar) : '☆☆☆' }}</div>
+            <div class="bb-star">
+              <GameIcon v-for="i in starFilledCount(badgeStar)" :key="'sf-' + i" name="starFilled" :size="19" />
+              <GameIcon v-for="i in starEmptyCount(badgeStar)" :key="'se-' + i" name="starEmpty" :size="19" />
+              <span class="bb-star-extra">{{ starExtra(badgeStar) }}</span>
+            </div>
             <div class="bb-name">{{ badgeStar > 0 ? starNames[badgeStar - 1] + '星认证钓手' : '未认证' }}</div>
           </div>
           <div class="my-stat">
             <p>历史最重单尾：<b>{{ fmtWeight(maxCaughtWeight) }}</b></p>
             <p v-if="nextBadgeTarget">下一星门槛：<b>{{ fmtWeight(nextBadgeTarget) }}</b>（差 {{ fmtWeight(Math.max(0, nextBadgeTarget - maxCaughtWeight)) }}）</p>
-            <p v-else>✨ 已获得最高 9 星认证，协会传奇！</p>
+            <p v-else>已获得最高 9 星认证，协会传奇！</p>
           </div>
         </div>
         <table class="badge-table">
@@ -363,7 +374,7 @@ onBeforeUnmount(() => {
               <td>{{ i + 1 }} 星</td>
               <td>{{ fmtWeight(w) }}</td>
               <td>
-                <span v-if="badgeStar >= i + 1" class="ok">✅ 已认证</span>
+                <span v-if="badgeStar >= i + 1" class="ok">已认证</span>
                 <span v-else-if="maxCaughtWeight > 0" class="lack">差 {{ fmtWeight(Math.max(1, w - maxCaughtWeight)) }}</span>
                 <span v-else class="lack">未达成</span>
               </td>
@@ -485,7 +496,8 @@ onBeforeUnmount(() => {
   border: 2px solid rgba(255,255,255,.3);
 }
 .big-badge.glow { border-color: #ffd54f; box-shadow: 0 0 26px rgba(255, 213, 79, .45); }
-.bb-star { font-size: 16px; text-align: center; line-height: 1.5; }
+.bb-star { display: flex; align-items: center; justify-content: center; gap: 2px; min-height: 24px; }
+.bb-star-extra { color: #ffd54f; font-weight: bold; font-size: 14px; margin-left: 3px; }
 .bb-name { font-weight: bold; color: #ffd54f; font-size: 15px; }
 .my-stat p { margin: 6px 0; font-size: 14px; color: #b3d9ff; }
 .my-stat b { color: #fff; }

@@ -47,7 +47,7 @@ export const SKILLS = [
   {
     id: 'jingxin',
     name: '静心诀',
-    icon: '🧘',
+    icon: 'lotus',
     cost: 30,
     desc: '心如止水，波澜不惊。搏鱼时鱼线张力上升减缓，更易将张力稳在绿色安全区。',
     effect: '张力上升减缓',
@@ -58,7 +58,7 @@ export const SKILLS = [
   {
     id: 'xieli',
     name: '卸力诀',
-    icon: '🌊',
+    icon: 'shell',
     cost: 50,
     desc: '借力打力，四两拨千斤。收线速度提升，巨物也拉得动。',
     effect: '收线速度提升',
@@ -69,7 +69,7 @@ export const SKILLS = [
   {
     id: 'guanshui',
     name: '观水诀',
-    icon: '👁️',
+    icon: 'search',
     cost: 40,
     desc: '察水色、辨鱼踪，于无声处听惊雷。稀有及以上灵鱼现身概率显著提升。',
     effect: '稀有概率提升',
@@ -80,7 +80,7 @@ export const SKILLS = [
   {
     id: 'siji',
     name: '四季钓经',
-    icon: '🍂',
+    icon: 'leaf',
     cost: 35,
     desc: '春钓滩、夏钓潭、秋钓荫、冬钓阳。顺应天时，咬钩等待时间显著缩短。',
     effect: '等待时间缩短',
@@ -91,7 +91,7 @@ export const SKILLS = [
   {
     id: 'yinling',
     name: '引灵诀',
-    icon: '✨',
+    icon: 'star',
     cost: 80,
     desc: '引动天地灵气入竿。钓鱼收益（金币 / 金币）提升，钓一尾抵往日数尾。',
     effect: '钓鱼收益提升',
@@ -102,7 +102,7 @@ export const SKILLS = [
   {
     id: 'chaoxi',
     name: '潮汐真诀',
-    icon: '🌕',
+    icon: 'moon',
     cost: 45,
     desc: '涨潮满潮鱼来钓，落潮潮平去睡觉。浮漂信号更清晰，提竿命中窗口大幅延长。',
     effect: '命中窗口延长',
@@ -113,7 +113,7 @@ export const SKILLS = [
   {
     id: 'wugou',
     name: '无钩钓法',
-    icon: '🪝',
+    icon: 'hook',
     cost: 60,
     desc: '姜太公直钩钓天下，愿者上钩。钓道境界突破所需金币降低。',
     effect: '突破消耗降低',
@@ -124,7 +124,7 @@ export const SKILLS = [
   {
     id: 'diaodao',
     name: '钓道真解',
-    icon: '📜',
+    icon: 'scroll',
     cost: 120,
     desc: '钓形·钓气·钓心三合一，直指钓道本源。全属性提升（张力、收线、收益）。',
     effect: '全属性提升',

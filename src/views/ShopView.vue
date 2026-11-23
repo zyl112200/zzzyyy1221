@@ -3,6 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import OceanBackground from '../components/OceanBackground.vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi, shopItemsApi, buyApi } from '../api/game'
 import { rodSprite } from '../data/rodSprites'
@@ -13,6 +14,7 @@ const username = session ? session.username : ''
 const shells = ref(0)
 const goldStones = ref(0)
 const power = ref(100)
+const cultivation = ref(0)
 const items = ref([])
 const qty = reactive({})
 const buying = ref(null)
@@ -45,21 +47,22 @@ async function load() {
       shells.value = m.data.shells
       goldStones.value = m.data.goldStones
       power.value = m.data.power || 100
+      cultivation.value = m.data.cultivation || 0
     }
-  } catch (e) { showToast(e.message || '后端未启动 🌊') }
+  } catch (e) { showToast(e.message || '后端未启动') }
   try {
     const s = await shopItemsApi()
     if (s.code === 200) {
       items.value = s.data
       s.data.forEach((it) => { if (qty[it.id] == null) qty[it.id] = 1 })
     }
-  } catch (e) { showToast(e.message || '后端未启动 🌊') }
+  } catch (e) { showToast(e.message || '后端未启动') }
 }
 
 async function buy(item) {
   const n = Math.max(1, Math.floor(qty[item.id] || 1))
   if (shells.value < item.price * n) {
-    showToast('金币不够啦，先去钓鱼 🪙')
+    showToast('金币不够啦，先去钓鱼')
     return
   }
   buying.value = item.id
@@ -69,12 +72,13 @@ async function buy(item) {
       shells.value = res.data.shells
       goldStones.value = res.data.goldStones
       power.value = res.data.power || 100
-      showToast('购买成功 🎉')
+      cultivation.value = res.data.cultivation || 0
+      showToast('购买成功')
     } else {
       showToast(res.message || '购买失败')
     }
   } catch (e) {
-    showToast(e.message || '后端开小差了 🌊')
+    showToast(e.message || '后端开小差了')
   } finally {
     buying.value = null
   }
@@ -84,7 +88,7 @@ async function buy(item) {
 async function buyMax(item) {
   const maxN = Math.floor(shells.value / item.price)
   if (maxN < 1) {
-    showToast('金币不够啦，先去钓鱼 🪙')
+    showToast('金币不够啦，先去钓鱼')
     return
   }
   buying.value = item.id
@@ -94,13 +98,14 @@ async function buyMax(item) {
       shells.value = res.data.shells
       goldStones.value = res.data.goldStones
       power.value = res.data.power || 100
+      cultivation.value = res.data.cultivation || 0
       qty[item.id] = maxN
-      showToast('已尽数兑换，金币散尽 🎉')
+      showToast('已尽数兑换，金币散尽')
     } else {
       showToast(res.message || '购买失败')
     }
   } catch (e) {
-    showToast(e.message || '后端开小差了 🌊')
+    showToast(e.message || '后端开小差了')
   } finally {
     buying.value = null
   }
@@ -119,32 +124,32 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <TopBar :shells="shells" :gold-stones="goldStones" :power="power" />
+    <TopBar :shells="shells" :gold-stones="goldStones" :power="power" :cultivation="cultivation" />
     <OceanBackground />
 
     <main class="shop">
-      <h2 class="title">🛒 商店</h2>
+      <h2 class="title"><GameIcon name="cart" :size="24" /> 仙市</h2>
       <p class="sub">金币买装备、淬炼根骨 · 承重决定你能拉上多大的灵鱼</p>
 
       <div class="grid">
         <div class="card" v-for="item in items" :key="item.id" :class="'type-' + item.type.toLowerCase()">
           <div class="icon">
             <img v-if="rodSprite(item.id)" :src="rodSprite(item.id)" :alt="item.name" class="rod-img" />
-            <template v-else>{{ item.icon }}</template>
+            <GameIcon v-else :name="item.icon" :size="52" />
           </div>
           <div class="name">{{ item.name }}</div>
           <span class="tag">{{ typeLabel(item.type) }}</span>
           <p class="desc">{{ item.description }}</p>
 
           <div class="specs" v-if="item.lineStrength || item.maxCatchWeight">
-            <span v-if="item.lineStrength" class="spec">🧵 承重 {{ fmtWeight(item.lineStrength) }}</span>
-            <span v-if="item.maxCatchWeight" class="spec">🎯 可钓 {{ fmtWeight(item.maxCatchWeight) }}</span>
+            <span v-if="item.lineStrength" class="spec"><GameIcon name="line" :size="14" /> 承重 {{ fmtWeight(item.lineStrength) }}</span>
+            <span v-if="item.maxCatchWeight" class="spec"><GameIcon name="target" :size="14" /> 可钓 {{ fmtWeight(item.maxCatchWeight) }}</span>
           </div>
           <div class="specs" v-else-if="item.power">
-            <span class="spec">{{ item.type === 'LUCK' ? '🍀 幸运 +' : '💪 钓力 ' }}{{ item.type === 'LUCK' ? (item.power * 4) + '%' : item.power }}</span>
+            <span class="spec"><GameIcon :name="item.type === 'LUCK' ? 'clover' : 'power'" :size="14" /> {{ item.type === 'LUCK' ? '幸运 +' : '钓力 ' }}{{ item.type === 'LUCK' ? (item.power * 4) + '%' : item.power }}</span>
           </div>
 
-          <div class="price">🪙 {{ item.price }}</div>
+          <div class="price"><GameIcon name="coin" :size="16" /> {{ item.price }}</div>
 
           <div class="qty" v-if="canQty(item.type)">
             <button @click="dec(item)">−</button>
@@ -174,7 +179,7 @@ onMounted(load)
           >
             {{ buying === item.id ? '兑换中…' : '购买' }}
           </button>
-          <div class="lack" v-if="shells < item.price * (qty[item.id] || 1)">金币不足 🪙</div>
+          <div class="lack" v-if="shells < item.price * (qty[item.id] || 1)">金币不足</div>
         </div>
       </div>
     </main>

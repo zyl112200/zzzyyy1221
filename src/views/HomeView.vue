@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, baitsApi, mapsApi, setMapApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
@@ -17,7 +18,9 @@ const profile = reactive({
   username,
   shells: 0,
   goldStones: 0,
-  power: 100,
+  power: 100,          // 总力量（基础 × (1+修为%)）
+  basePower: 100,      // 基础力量
+  cultivation: 0,      // 修为百分比（无上限）
   currentMap: DEFAULT_MAP,
   equippedRodId: null,
   equippedRodName: '无',
@@ -160,7 +163,7 @@ function toggleVibrate() {
   localStorage.setItem('fish_vibrate', vibEnabled.value ? '1' : '0')
   if (vibEnabled.value) vibrate(60)
   else stopVibrate()
-  showToast(vibEnabled.value ? '📳 震动已开启' : '震动已关闭')
+  showToast(vibEnabled.value ? '震动已开启' : '震动已关闭')
 }
 
 /** 随机一条鱼的冲刺方向：8 方向（左右、上下、四个斜向） */
@@ -218,7 +221,7 @@ const burstSprite = computed(() => {
 /** 当前装备鱼竿的写实立绘（钓鱼场景与 HUD 共用） */
 const equippedRodSprite = computed(() => {
   const id = profile.equippedRodId
-  return id ? rodSprite(id) : null
+  return (id && rodSprite(id)) || rodSprite(1) // 未装备时回退到写实初级钓竿，避免卡通 SVG
 })
 /** 体型随重量对数增长：1 斤小鱼 ~0.8，百万斤巨物 ~2.6 */
 const fishScale = computed(() => {
@@ -310,7 +313,7 @@ async function loadProfile() {
       showToast(res.message || '加载失败')
     }
   } catch (e) {
-    showToast(e.message || '后端未启动，先启动后端 🌊')
+    showToast(e.message || '后端未启动，请先启动后端')
   }
 }
 
@@ -382,7 +385,7 @@ function clearTimers() {
 async function cast() {
   if (phase.value !== 'idle' && phase.value !== 'result') return
   if (!hasBait.value || profile.totalBait <= 0) {
-    showToast('鱼饵用完啦，去商店买点 🪱')
+    showToast('鱼饵用完啦，去仙市买点鱼饵')
     return
   }
   ensureAudio()
@@ -423,7 +426,7 @@ async function cast() {
       scheduleBite()
     }, 850)
   } catch (e) {
-    showToast(e.message || '后端开小差了 🌊')
+    showToast(e.message || '后端开小差了')
     phase.value = 'idle'
   }
 }
@@ -641,7 +644,9 @@ async function settleOutcome(landed, breakType) {
       result.value = res.data
       profile.shells = res.data.shells
       profile.goldStones = res.data.goldStones
-      profile.power = res.data.power
+      profile.power = res.data.power            // 总力量（含修为）
+      profile.basePower = res.data.basePower
+      profile.cultivation = res.data.cultivation
       recent.value.unshift({
         icon: res.data.fishIcon,
         name: res.data.fishName,
@@ -666,7 +671,7 @@ async function settleOutcome(landed, breakType) {
       showToast(res.message || '结算失败')
     }
   } catch (e) {
-    showToast(e.message || '结算失败 🌊')
+    showToast(e.message || '结算失败')
   }
   phase.value = 'result'
   loadProfile()
@@ -720,27 +725,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="fishing-page" :class="{ 'is-berserk': berserk && phase === 'fight' }" :style="pageStyle">
-    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" />
+    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" :cultivation="profile.cultivation" />
 
-    <!-- ================= 场景（仙侠：仙山 · 明月 · 祥云 · 灵湖） ================= -->
+    <!-- ================= 场景（写实：仙山 · 明月 · 灵湖） ================= -->
     <div class="scene">
-      <div class="sky">
-        <div class="moon"></div>
-        <div class="cloud c1"></div>
-        <div class="cloud c2"></div>
-        <div class="cloud c3"></div>
-        <div class="peak peak-far"></div>
-        <div class="peak peak-mid"></div>
-        <div class="peak peak-near"></div>
-        <div class="mist"></div>
-      </div>
-      <div class="lake">
-        <div class="horizon"></div>
-        <div class="wave w1"></div>
-        <div class="wave w2"></div>
-        <div class="wave w3"></div>
-        <div class="lake-glitter"></div>
-      </div>
+      <div class="scene-photo"></div>
+      <div class="scene-tint"></div>
 
       <!-- 水中的鱼：等待时巡游，咬钩时逼近浮漂，搏鱼时挣扎乱窜 -->
       <div
@@ -819,28 +809,33 @@ onBeforeUnmount(() => {
     <div class="hud">
       <div class="hud-card">
         <div class="row">
-          <span class="ico">🎣</span>
+          <GameIcon name="hook" :size="18" />
           <span class="nm">{{ profile.equippedRodName }}</span>
           <span class="badge">钓力 {{ profile.equippedRodPower }}</span>
         </div>
         <div class="row sub">
-          <span class="ico">🧵</span>
+          <GameIcon name="line" :size="18" />
           <span class="nm">{{ profile.equippedLineName }}</span>
           <span class="badge">承重 {{ fmtWeight(profile.lineStrength) }}</span>
         </div>
         <div class="row sub">
-          <span class="ico">🪱</span>
-          <span class="nm">{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '鱼饵' }} × {{ profile.totalBait }}</span>
+          <GameIcon :name="selectedBait ? selectedBait.icon : 'baitWorm'" :size="18" />
+          <span class="nm">{{ selectedBait ? selectedBait.name : '鱼饵' }} × {{ profile.totalBait }}</span>
           <span class="badge">可钓 {{ fmtWeight(profile.maxCatchWeight) }}</span>
         </div>
+        <div class="row sub cult" title="修为单独加成在基础力量上，基础力量提升后按同样百分比重算，无上限">
+          <GameIcon name="cultivation" :size="18" />
+          <span class="nm">修为 {{ profile.cultivation || 0 }}%</span>
+          <span class="badge">{{ profile.basePower }} → {{ profile.power }}</span>
+        </div>
         <button class="vib-toggle" :class="{ off: !vibEnabled }" @click="toggleVibrate" :title="canVibrate ? (vibEnabled ? '关闭震动' : '开启震动') : '当前设备不支持振动，仅屏幕抖动'">
-          {{ vibEnabled ? '📳 震动 开' : '🔕 震动 关' }}
+          <GameIcon name="vibrate" :size="14" /> 震动 {{ vibEnabled ? '开' : '关' }}
         </button>
       </div>
 
       <div class="recent" v-if="recent.length">
         <div class="recent-item" v-for="(r, i) in recent" :key="i" :class="tierClass(r.tier)">
-          <span class="ri">{{ r.icon }}</span>
+          <GameIcon class="ri" :name="r.name" :size="16" />
           <span class="rn">{{ r.name }}</span>
           <span class="rw">{{ fmtWeight(r.weight) }}</span>
           <span class="rs" :class="{ ok: r.landed, no: !r.landed }">{{ r.landed ? '入护' : '跑鱼' }}</span>
@@ -851,20 +846,20 @@ onBeforeUnmount(() => {
     <!-- 目标鱼信息 -->
     <div class="target" v-if="encounter && (phase === 'bite' || phase === 'fight')">
       <span class="tier" :class="tierClass(encounter.tier)">{{ tierLabel(encounter.tier) }}</span>
-      <span class="tname">{{ encounter.fishIcon }} {{ encounter.fishName }}</span>
+      <span class="tname"><GameIcon :name="encounter.fishName" :size="17" /> {{ encounter.fishName }}</span>
       <span class="tweight">{{ fmtWeight(encounter.weight) }}</span>
       <span class="trisk">断线风险 {{ Math.round(encounter.breakRisk * 100) }}%</span>
-      <span class="trealm" v-if="(encounter.realmBonusPct || 0) > 0">🌟 境界 +{{ encounter.realmBonusPct }}%</span>
+      <span class="trealm" v-if="(encounter.realmBonusPct || 0) > 0"><GameIcon name="star" :size="14" /> 境界 +{{ encounter.realmBonusPct }}%</span>
     </div>
 
     <!-- 暴走横幅 -->
-    <div class="berserk-banner" v-if="berserk && phase === 'fight'">🔥 灵兽暴走！稳住鱼竿！</div>
+    <div class="berserk-banner" v-if="berserk && phase === 'fight'">灵兽暴走！稳住鱼竿！</div>
 
     <!-- ================= 底部操作 ================= -->
     <div class="controls">
       <template v-if="phase === 'idle' || phase === 'result'">
         <div class="bait-bar" v-if="baits.length">
-          <span class="bait-label">🪱 鱼饵</span>
+          <span class="bait-label"><GameIcon name="baitWorm" :size="16" /> 鱼饵</span>
           <button
             v-for="b in baits"
             :key="b.itemId"
@@ -872,15 +867,15 @@ onBeforeUnmount(() => {
             :class="{ active: b.itemId === selectedBaitId, premium: b.power > 0 }"
             @click="selectedBaitId = b.itemId"
           >
-            <span class="bc-icon">{{ b.icon }}</span>
+            <GameIcon class="bc-icon" :name="b.icon" :size="20" />
             <span class="bc-name">{{ b.name }}</span>
             <span class="bc-qty">×{{ b.quantity }}</span>
           </button>
         </div>
         <button class="cast-btn" @click="cast" :disabled="profile.totalBait <= 0 || !selectedBaitId">
-          {{ profile.totalBait > 0 ? '凝神抛竿 🎣' : '鱼饵不足，去仙市 🪱' }}
+          {{ profile.totalBait > 0 ? '凝神抛竿' : '鱼饵不足，去仙市' }}
         </button>
-        <p class="tip">当前鱼饵：{{ selectedBait ? selectedBait.icon + ' ' + selectedBait.name : '无' }} · 每次抛竿消耗 1 个 · 按住收线，松开泄力</p>
+        <p class="tip">当前鱼饵：{{ selectedBait ? selectedBait.name : '无' }} · 每次抛竿消耗 1 个 · 按住收线，松开泄力</p>
       </template>
 
       <div v-else-if="phase === 'casting'" class="status">抛竿中…</div>
@@ -927,22 +922,22 @@ onBeforeUnmount(() => {
 
     <!-- 地图选择悬浮按钮 -->
     <button class="map-fab" @click="showMap = !showMap" title="选择钓点地图">
-      🗺️<span class="fab-label">地图</span>
+      <GameIcon name="map" :size="23" /><span class="fab-label">地图</span>
     </button>
 
     <!-- 钓鱼协会入口悬浮按钮 -->
     <router-link class="assoc-fab" to="/assoc" title="钓鱼协会（任务 / 比赛 / 认证徽章）">
-      🏆<span class="fab-label">协会</span>
+      <GameIcon name="trophy" :size="23" /><span class="fab-label">协会</span>
     </router-link>
 
     <!-- 钓况预估悬浮按钮 -->
     <button class="odds-fab" @click="showOdds = !showOdds; showMap = false" title="钓况预估（可钓重量 / 品质概率）">
-      📊<span class="fab-label">钓况</span>
+      <GameIcon name="chart" :size="23" /><span class="fab-label">钓况</span>
     </button>
 
     <!-- ================= 地图选择面板 ================= -->
     <div class="map-panel" v-if="showMap">
-      <h4>🗺️ 选择钓点</h4>
+      <h4><GameIcon name="map" :size="17" /> 选择钓点</h4>
       <p class="mp-tip">不同地图的专属鱼概率与建议力量不同。越深的钓点专属鱼越重，钓起后力量成长越夸张。</p>
       <div class="map-list">
         <button
@@ -952,7 +947,7 @@ onBeforeUnmount(() => {
           :class="{ active: m.id === selectedMapId, locked: m.recommendPower > profile.power }"
           @click="selectMap(m)"
         >
-          <span class="mc-name">{{ m.icon }} {{ m.name }}</span>
+          <span class="mc-name"><GameIcon :name="m.icon" :size="17" /> {{ m.name }}</span>
           <span class="mc-desc">{{ m.desc }}</span>
           <span class="mc-meta">专属鱼概率 {{ Math.round((m.exclusiveRate || 0) * 100) }}%</span>
           <span class="mc-meta" v-if="m.recommendPower">建议力量 ≥ {{ fmtWeight(m.recommendPower) }}</span>
@@ -963,11 +958,11 @@ onBeforeUnmount(() => {
 
     <!-- ================= 钓况预估面板 ================= -->
     <div class="odds-panel" v-if="showOdds">
-      <h4>📊 当前钓况预估</h4>
+      <h4><GameIcon name="chart" :size="17" /> 当前钓况预估</h4>
       <p class="op-tip">按当前钓场 / 装备 / 鱼饵实时计算，与实际抛竿算法一致</p>
 
       <!-- 能钓多重 -->
-      <div class="op-section-title">🎣 能钓多重</div>
+      <div class="op-section-title"><GameIcon name="hook" :size="16" /> 能钓多重</div>
       <div class="op-weight-grid">
         <div class="op-wcell">
           <span class="op-wk">装备可钓上限</span>
@@ -979,11 +974,11 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="op-exweight" v-if="odds.exRate > 0">
-        🐋 专属鱼重量区间 <b>{{ fmtWeight(odds.exclusiveWeight.min) }} ~ {{ fmtWeight(odds.exclusiveWeight.max) }}</b>
+        专属鱼重量区间 <b>{{ fmtWeight(odds.exclusiveWeight.min) }} ~ {{ fmtWeight(odds.exclusiveWeight.max) }}</b>
       </div>
 
       <!-- 品质概率 -->
-      <div class="op-section-title">🎯 各品质概率（综合）</div>
+      <div class="op-section-title"><GameIcon name="target" :size="16" /> 各品质概率（综合）</div>
       <div class="op-denom">专属鱼现身率 {{ (odds.exRate * 100).toFixed(0) }}% · 自动叠加高级饵 / 幸运物加成</div>
       <div class="op-tiers">
         <div class="op-tier" v-for="t in odds.tiers" :key="t.code">
@@ -1002,7 +997,7 @@ onBeforeUnmount(() => {
     <div class="overlay" v-if="phase === 'result' && result" @click="closeResult">
       <div class="result-card" :class="[tierClass(result.tier), { fail: !result.landed }]" @click.stop>
         <div class="r-badge">{{ result.landed ? '成功入护' : '搏鱼失败' }}</div>
-        <div class="r-fish" :class="{ sad: !result.landed }">{{ result.fishIcon }}</div>
+        <div class="r-fish" :class="{ sad: !result.landed }"><GameIcon :name="result.fishName" :size="56" /></div>
         <h3>{{ result.fishName }}</h3>
         <div class="r-tags">
           <span class="r-tier" :class="tierClass(result.tier)">{{ result.tierName }}</span>
@@ -1011,16 +1006,20 @@ onBeforeUnmount(() => {
 
         <template v-if="result.landed">
           <div class="r-rewards">
-            <span class="rw">🪙 +{{ result.rewardShells }}</span>
-            <span class="rg">🪙 +{{ result.rewardGold }}</span>
+            <span class="rw"><GameIcon name="coin" :size="15" /> +{{ result.rewardShells }}</span>
+            <span class="rg"><GameIcon name="gem" :size="15" /> +{{ result.rewardGold }}</span>
           </div>
-          <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0">🌟 钓道境界加成 +{{ result.realmBonusPct }}%</div>
+          <div class="r-realm" v-if="(result.realmBonusPct || 0) > 0"><GameIcon name="star" :size="14" /> 钓道境界加成 +{{ result.realmBonusPct }}%</div>
+          <div class="r-cult" v-if="result.powerKind === 'over-limit'">
+            <GameIcon name="cultivation" :size="16" />
+            突破极限 · 基础力量 +{{ result.powerGainPct }}% · 修为 +{{ result.cultivationGain }}% → {{ result.cultivation }}%
+          </div>
         </template>
-        <div class="r-broken" v-if="result.rodBroken">💥 鱼竿被拽断了！请去背包换一根</div>
+        <div class="r-broken" v-if="result.rodBroken">鱼竿被拽断了！请去背包换一根</div>
         <p class="r-msg">{{ result.message }}</p>
         <div class="r-actions">
-          <button class="again" @click="closeResult">继续钓鱼 🎣</button>
-          <router-link class="to-shop" to="/shop" @click="closeResult">去商店 🛒</router-link>
+          <button class="again" @click="closeResult">继续钓鱼</button>
+          <router-link class="to-shop" to="/shop" @click="closeResult">去仙市</router-link>
         </div>
       </div>
     </div>
@@ -1039,92 +1038,31 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-/* ---------- 场景（仙侠：仙山 · 明月 · 祥云 · 灵湖） ---------- */
-.scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
-.sky {
-  position: absolute; inset: 0 0 42% 0;
-  background: linear-gradient(180deg, #1b1740 0%, #2e2566 38%, #5a4a8c 70%, #c79a5a 100%);
-  transition: background .6s;
-}
-.is-berserk .sky { background: linear-gradient(180deg, #3a1226 0%, #6e1f33 55%, #b5562f 100%); }
-.moon {
-  position: absolute; right: 15%; top: 13%; width: 96px; height: 96px; border-radius: 50%;
-  background: radial-gradient(circle at 38% 38%, #ffffff 0%, #fff3d0 45%, rgba(255,243,208,0) 72%);
-  box-shadow: 0 0 70px 30px rgba(255, 240, 200, .4), 0 0 140px 60px rgba(180, 160, 255, .25);
-}
-.cloud {
-  position: absolute; height: 30px; border-radius: 40px;
-  background: linear-gradient(180deg, rgba(255,236,200,.92), rgba(220,200,255,.7));
-  filter: blur(.4px);
-  opacity: .8;
-}
-.cloud::before, .cloud::after {
-  content: ''; position: absolute; background: inherit; border-radius: 50%;
-}
-.cloud::before { width: 46px; height: 46px; top: -20px; left: 18px; }
-.cloud::after { width: 34px; height: 34px; top: -14px; right: 20px; }
-.c1 { width: 150px; top: 16%; left: 8%; animation: drift 34s linear infinite; }
-.c2 { width: 104px; top: 9%; left: 44%; animation: drift 46s linear infinite; opacity: .7; }
-.c3 { width: 180px; top: 24%; left: 68%; animation: drift 58s linear infinite; opacity: .55; }
-@keyframes drift { 0% { transform: translateX(-20px); } 50% { transform: translateX(30px); } 100% { transform: translateX(-20px); } }
-
-/* 仙山：三层剪影营造纵深 */
-.peak { position: absolute; bottom: 30%; transform-origin: bottom center; }
-.peak-far {
-  left: -4%; width: 46%; height: 30%;
-  background: linear-gradient(180deg, #6f5fa6 0%, #4a3d77 100%);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  opacity: .5; filter: blur(1px);
-}
-.peak-mid {
-  left: 30%; width: 50%; height: 38%;
-  background: linear-gradient(180deg, #5a4a8c 0%, #3a2f63 100%);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  opacity: .7;
-}
-.peak-near {
-  right: -6%; width: 52%; height: 30%;
-  background: linear-gradient(180deg, #443663 0%, #2a2150 100%);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  opacity: .85;
-}
-/* 云海雾气 */
-.mist {
-  position: absolute; left: 0; right: 0; bottom: 30%; height: 64px;
-  background: linear-gradient(180deg, rgba(230,220,255,0) 0%, rgba(230,220,255,.55) 50%, rgba(230,220,255,0) 100%);
-  filter: blur(6px);
-  animation: mistMove 12s ease-in-out infinite;
-}
-@keyframes mistMove { 0%,100% { transform: translateX(-10px); opacity: .6; } 50% { transform: translateX(10px); opacity: .85; } }
-
-.lake {
-  position: absolute; inset: 42% 0 0 0;
-  background: linear-gradient(180deg, #1f6f6b 0%, #0e5a5e 35%, #073f46 75%, #042b32 100%);
-}
-.horizon {
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: rgba(255,255,255,.5);
-  box-shadow: 0 0 16px rgba(180,255,240,.6);
-}
-.wave {
-  position: absolute; left: -10%; width: 120%; height: 62px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(220,255,245,.22) 0%, rgba(220,255,245,0) 70%);
-  border-radius: 50%;
-  animation: waveMove 7s ease-in-out infinite;
-}
-.w1 { top: 8%; animation-delay: 0s; }
-.w2 { top: 26%; animation-delay: -2.4s; opacity: .7; }
-.w3 { top: 52%; animation-delay: -4.1s; opacity: .5; }
-@keyframes waveMove {
-  0%,100% { transform: translateX(-3%) scaleY(1); }
-  50% { transform: translateX(3%) scaleY(1.15); }
-}
-.lake-glitter {
+/* ---------- 场景（写实仙山月夜湖面） ---------- */
+.scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: #06121c; }
+.scene-photo {
   position: absolute; inset: 0;
-  background: repeating-linear-gradient(180deg, rgba(200,255,245,.05) 0 2px, transparent 2px 90px);
-  animation: glitter 6s linear infinite;
+  background-image: url('../assets/scene_bg.png');
+  background-size: cover;
+  background-position: center 46%;
+  animation: sceneZoom 32s ease-in-out infinite alternate;
 }
-@keyframes glitter { 0% { background-position-y: 0; } 100% { background-position-y: 90px; } }
+@keyframes sceneZoom {
+  0%   { transform: scale(1); }
+  100% { transform: scale(1.07); }
+}
+/* 轻微压暗保证 HUD 与浮漂可读；暴走时转暖红 */
+.scene-tint {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(4, 18, 30, .28) 0%, rgba(4, 18, 30, 0) 30%, rgba(3, 14, 24, .34) 100%),
+    radial-gradient(ellipse 70% 70% at 50% 55%, rgba(0,0,0,0) 40%, rgba(0,0,0,.28) 100%);
+  transition: background .5s;
+}
+.is-berserk .scene-photo { filter: saturate(1.2) hue-rotate(-18deg); }
+.is-berserk .scene-tint {
+  background: linear-gradient(180deg, rgba(90, 10, 10, .42) 0%, rgba(60, 8, 8, .18) 45%, rgba(40, 4, 4, .45) 100%);
+}
 
 .rig {
   position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5;
@@ -1219,6 +1157,8 @@ onBeforeUnmount(() => {
 }
 .hud-card .row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .hud-card .row.sub { opacity: .92; font-size: 13px; }
+.hud-card .row.cult .nm { color: #b9fff0; }
+.hud-card .row.cult .badge { color: #d7fff4; }
 .hud-card .ico { font-size: 18px; }
 .hud-card .nm { font-weight: bold; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vib-toggle {
@@ -1386,7 +1326,7 @@ onBeforeUnmount(() => {
   position: absolute; z-index: 26; right: 20px; bottom: 22px;
   width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
   font-size: 24px; color: #fff;
-  background: linear-gradient(180deg, #4fc3f7, #0288d1);
+  background: linear-gradient(180deg, rgba(18,52,74,.92), rgba(6,28,44,.95));
   box-shadow: 0 8px 20px rgba(0,0,0,.4), inset 0 0 0 3px rgba(255,255,255,.25);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
@@ -1423,6 +1363,7 @@ onBeforeUnmount(() => {
 .mc-meta { font-size: 11px; color: #ffd54f; }
 .mc-current { font-size: 11px; color: #81c784; }
 .r-realm { margin: 6px 0 2px; font-size: 13px; font-weight: bold; color: #ffd54f; text-align: center; }
+.r-cult { margin: 6px 0 2px; padding: 5px 10px; border-radius: 10px; font-size: 13px; font-weight: bold; color: #b9fff0; background: rgba(0, 170, 140, .22); border: 1px solid rgba(120, 255, 220, .35); display: flex; align-items: center; justify-content: center; gap: 6px; }
 .trealm { color: #ffd54f; font-weight: bold; font-size: 12px; }
 
 /* ---------- 结算 ---------- */

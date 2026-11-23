@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from '../components/GameIcon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminLogin } from '../api/localEngine.js'
@@ -31,7 +32,7 @@ async function doLogin(cred) {
     }
     return {
       code: 200,
-      message: '管理员登录成功 🎉',
+      message: '管理员登录成功',
       data: { username: user.username, permission: user.permission, loginAt: Date.now() }
     }
   } catch (e) {
@@ -60,7 +61,7 @@ async function submit() {
 <template>
   <div class="admin-login">
     <div class="card">
-      <div class="badge">🛠</div>
+      <div class="badge"><GameIcon name="tools" :size="28" /></div>
       <h1>后台管理系统</h1>
       <p class="sub">仙钓大陆 · 仙盟数据管理后台</p>
 

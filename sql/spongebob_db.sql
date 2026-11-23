@@ -20,7 +20,8 @@ CREATE TABLE `user` (
   `email`       VARCHAR(100) NOT NULL                COMMENT '邮箱',
   `password`    VARCHAR(100) NOT NULL                COMMENT '密码（BCrypt 加密存储）',
   `shells`      INT          NOT NULL DEFAULT 50     COMMENT '金币余额（游戏货币）',
-  `strength`    INT          NOT NULL DEFAULT 10     COMMENT '根骨（影响收线与可抗衡鱼重）',
+  `strength`    INT          NOT NULL DEFAULT 10     COMMENT '基础力量（根骨，影响收线与可抗衡鱼重）',
+  `cultivation` INT          NOT NULL DEFAULT 0      COMMENT '修为%（无上限，单独作用于基础力量；总力量=strength×(1+cultivation/100)）',
   `gold_stones` INT          NOT NULL DEFAULT 0      COMMENT '金石（兼容字段，已并入金币）',
   `power_realm` INT          NOT NULL DEFAULT 1      COMMENT '钓道境界（修仙式层级，1-999，突破消耗金币按 2^(境界-1) 翻倍）',
   `permission`  INT          NOT NULL DEFAULT 1      COMMENT '权限：0=管理员（可进后台），1=普通玩家（默认）',
@@ -120,9 +121,9 @@ CREATE TABLE `catch_rate` (
 
 -- 示例数据（密码均为 BCrypt 加密后的 123456）
 -- spongebob 为体验号：20.02 万金币，可直接体验巨物玩法；patrick 为纯新号
-INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `gold_stones`) VALUES
-  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0),
-  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0);
+INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `cultivation`, `gold_stones`) VALUES
+  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0, 0),
+  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0, 0);
 
 -- 商店商品目录（id 固定，便于逻辑引用）
 INSERT INTO `item` (`id`, `name`, `type`, `price`, `power`, `icon`, `description`, `sort`, `line_strength`, `max_catch_weight`) VALUES

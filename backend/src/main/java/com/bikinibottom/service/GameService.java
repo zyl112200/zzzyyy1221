@@ -113,8 +113,23 @@ public class GameService {
         return userMapper.selectOne(Wrappers.<User>lambdaQuery().eq(User::getUsername, username));
     }
 
+    /** 基础力量（根骨，初始 10），不含修为加成 */
     private int strengthOf(User u) {
         return u.getStrength() == null ? 10 : u.getStrength();
+    }
+
+    /** 修为百分比（初始 0，无上限），单独计算在基础力量上 */
+    private int cultivationOf(User u) {
+        return u.getCultivation() == null ? 0 : u.getCultivation();
+    }
+
+    /**
+     * 总力量 = 基础力量 × (1 + 修为%)，无上限。
+     * 基础力量提升后按同百分比重算；所有钓鱼计算一律走这里。
+     */
+    private int totalPowerOf(User u) {
+        return (int) Math.min(Integer.MAX_VALUE,
+                Math.round(strengthOf(u) * (1 + cultivationOf(u) / 100.0)));
     }
 
     /** 兼容字段：货币已统一为金币，金石余额恒为 0（旧存档由数据库迁移脚本折算） */
@@ -219,9 +234,11 @@ public class GameService {
         GameProfile p = new GameProfile();
         p.setUsername(u.getUsername());
         p.setShells(u.getShells() == null ? 0 : u.getShells());
-        p.setStrength(strengthOf(u));
-        // 前端主页展示「力量」（power）：后端以根骨等价映射，保持同一接口契约
-        p.setPower(strengthOf(u));
+        p.setStrength(strengthOf(u));            // 基础力量（根骨）
+        // 总力量 = 基础力量 × (1 + 修为%)，参与全部计算；前端主页「力量」展示用
+        p.setPower(totalPowerOf(u));
+        p.setBasePower(strengthOf(u));
+        p.setCultivation(cultivationOf(u));
         p.setGoldStones(0); // 兼容字段
 
         int realm = realmOf(u);
@@ -488,7 +505,8 @@ public class GameService {
         boolean luck = Boolean.TRUE.equals(profile.getLuckOwned());
         int maxCatch = profile.getMaxCatchWeight() == null ? 800 : profile.getMaxCatchWeight();
         int lineStrength = profile.getLineStrength() == null ? 300 : profile.getLineStrength();
-        int strength = profile.getStrength() == null ? 10 : profile.getStrength();
+        // 总力量（基础 × (1+修为%)）参与全部计算：鱼重、品级、断线判定都以它为准
+        int strength = profile.getPower() == null ? 10 : profile.getPower();
         List<String> skills = userSkills(u);
 
         // 钓场地图：优先指定地图，其次玩家当前所在，最后回退灵湖
@@ -664,21 +682,31 @@ public class GameService {
             if (assocMsgs != null && !assocMsgs.isEmpty()) {
                 r.setAssocMessages(assocMsgs);
             }
-            // 力量成长（与本地引擎同一规则）：成功钓起「重量超过自身重量上限（当前力量）10%」的鱼，
-            // 力量按当前值 +10%（复合增长：100 → 110 → 121 ……）。未超过 10% 不成长。
-            int oldStrength = strengthOf(u);
-            if (pe.getWeight() > oldStrength * 1.1) {
-                int newStrength = (int) Math.min(Integer.MAX_VALUE, Math.round(oldStrength * 1.1));
-                int gained = newStrength - oldStrength;
-                if (gained > 0) {
-                    u.setStrength(newStrength);
-                    userMapper.updateById(u);
-                    r.setPowerGain(gained);
-                    r.setPowerGainPct(10);
-                    r.setPowerKind("over-limit");
-                    r.setMessage(r.getMessage() + " 💪突破极限！力量 +" + gained
-                            + "（当前力量 +10% → " + newStrength + "）");
-                }
+            // 修为系统成长（与本地引擎同一规则）：钓起「重量超过自身上限（当前总力量）10%」的鱼触发突破。
+            // 突破时：① 基础力量按 1%~50% 随机波动增长；② 修为百分比独立按 1~50 个百分点增长。
+            // 两者均无上限；修为单独存储，只作用于基础力量，基础力量提升后按同百分比重算总力量。
+            int oldTotal = totalPowerOf(u);
+            if (pe.getWeight() > oldTotal * 1.1) {
+                int baseGainPct = 1 + random.nextInt(50);   // 基础力量增长：1~50%
+                int cultGain = 1 + random.nextInt(50);      // 修为增长：1~50 个百分点（独立随机）
+                int oldBase = strengthOf(u);
+                int oldCult = cultivationOf(u);
+                int newBase = (int) Math.min(Integer.MAX_VALUE, Math.round(oldBase * (1 + baseGainPct / 100.0)));
+                int newCult = (int) Math.min(Integer.MAX_VALUE, (long) oldCult + cultGain);
+                int newTotal = (int) Math.min(Integer.MAX_VALUE,
+                        Math.round(newBase * (1 + newCult / 100.0)));
+                u.setStrength(newBase);
+                u.setCultivation(newCult);
+                userMapper.updateById(u);
+                r.setPowerGain(newBase - oldBase);          // 基础力量净增
+                r.setPowerGainBase(newBase - oldBase);
+                r.setPowerGainPct(baseGainPct);             // 基础力量增长百分比（1~50）
+                r.setCultivationGain(cultGain);             // 修为净增百分点
+                r.setPowerGainTotal(newTotal - oldTotal);   // 总力量净增（含修为放大）
+                r.setPowerKind("over-limit");
+                r.setMessage(r.getMessage() + " 突破极限！基础力量 +" + (newBase - oldBase)
+                        + "（+" + baseGainPct + "%），修为 +" + cultGain + "% → " + newCult
+                        + "%，总力量 " + newTotal);
             }
         } else {
             r.setLanded(false);
@@ -703,7 +731,10 @@ public class GameService {
 
         r.setShells(u.getShells() == null ? 0 : u.getShells());
         r.setGoldStones(0); // 兼容字段
-        r.setStrength(strengthOf(u));
+        r.setStrength(strengthOf(u));       // 基础力量
+        r.setBasePower(strengthOf(u));
+        r.setCultivation(cultivationOf(u));
+        r.setPower(totalPowerOf(u));        // 总力量（含修为）
         r.setRealmBonusPct((realmOf(u) - 1) * REALM_BONUS_PER_LEVEL);
         return Result.success(r);
     }

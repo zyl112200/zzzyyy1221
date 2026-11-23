@@ -5,9 +5,9 @@
 -- patrick  ：纯新号，金币 50，用于验证从零成长曲线
 -- ============================================================
 
-INSERT INTO user (username, email, password, shells, strength, gold_stones) VALUES
-  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0),
-  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0);
+INSERT INTO user (username, email, password, shells, strength, cultivation, gold_stones) VALUES
+  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0, 0),
+  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0, 0);
 
 -- 商店商品目录（id 固定，便于逻辑引用）
 -- line_strength = 鱼线承重(斤)：鱼超过该重量极易挣断鱼线

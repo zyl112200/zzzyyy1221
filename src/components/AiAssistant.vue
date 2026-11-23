@@ -2,7 +2,7 @@
   <div class="ai-assistant" :class="{ hidden }">
     <!-- 悬浮按钮 -->
     <button class="ai-fab" :class="{ active: aiState.open }" type="button" @click="toggle">
-      <span class="face">🪷</span>
+      <GameIcon class="face" name="lotus" :size="22" />
       <span v-if="aiState.unread" class="badge">{{ aiState.unread > 9 ? '9+' : aiState.unread }}</span>
     </button>
 
@@ -11,7 +11,7 @@
       <section v-if="aiState.open" class="ai-panel">
         <header>
           <div class="who">
-            <span class="avatar">🪷</span>
+            <GameIcon class="avatar" name="lotus" :size="20" />
             <div>
               <strong>仙钓小助手</strong>
               <small>离线可用 · 仙钓大陆本地知识</small>
@@ -27,7 +27,7 @@
           <div v-if="aiState.thinking" class="msg bot">
             <span class="bubble typing"><i></i><i></i><i></i></span>
           </div>
-          <p v-if="!aiState.messages.length" class="empty">问我点关于钓鱼的问题吧 🎣</p>
+          <p v-if="!aiState.messages.length" class="empty">问我点关于钓鱼的问题吧</p>
         </div>
 
         <div class="quick">
@@ -44,6 +44,7 @@
 </template>
 
 <script setup>
+import GameIcon from './GameIcon.vue'
 import { ref, watch, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { aiState, toggleAssistant, closeAssistant, greetOnce, pushBot, pushUser } from '../store/aiAssistant'
@@ -81,10 +82,10 @@ async function ask(text) {
     const reply =
       res && res.code === 200 && res.data && res.data.reply
         ? res.data.reply
-        : '唔…这个问题我还没学会，先专心钓鱼吧 🎣'
+        : '唔…这个问题我还没学会，先专心钓鱼吧'
     pushBot(reply)
   } catch {
-    pushBot('唔…我没听清，再说一遍好吗 🐙')
+    pushBot('唔…我没听清，再说一遍好吗')
   } finally {
     aiState.thinking = false
   }

@@ -15,7 +15,7 @@ export const MAPS = [
   {
     id: 'linghu',
     name: '灵湖',
-    icon: '🌊',
+    icon: 'map_linghu',
     desc: '仙门脚下的一汪灵泉，鱼群寻常，适合初窥门径。',
     exclusiveRate: 0,
     recommendPower: 0,
@@ -25,7 +25,7 @@ export const MAPS = [
   {
     id: 'beiyuan',
     name: '北原',
-    icon: '🏔️',
+    icon: 'map_beiyuan',
     desc: '北境荒原的寒潭，灵气稀薄却时有异鱼出没，专属鱼现身概率大增。',
     exclusiveRate: 0.30,
     recommendPower: 300,
@@ -35,7 +35,7 @@ export const MAPS = [
   {
     id: 'jibei',
     name: '极北之地',
-    icon: '❄️',
+    icon: 'map_jibei',
     desc: '天地尽头的不冻冰海，传说深处的专属鱼重逾万斤。',
     exclusiveRate: 0.55,
     recommendPower: 2000,
@@ -45,7 +45,7 @@ export const MAPS = [
   {
     id: 'shenyuan',
     name: '深渊',
-    icon: '🕳️',
+    icon: 'map_shenyuan',
     desc: '海沟最深处，光无法抵达，巨物横行，专属鱼成群。',
     exclusiveRate: 0.75,
     recommendPower: 20000,
@@ -55,7 +55,7 @@ export const MAPS = [
   {
     id: 'penglai',
     name: '蓬莱',
-    icon: '🏝️',
+    icon: 'map_penglai',
     desc: '海外仙岛，灵气氤氲，专属鱼遍池，凡钓皆珍。',
     exclusiveRate: 0.85,
     recommendPower: 100000,
@@ -70,14 +70,14 @@ export const DEFAULT_MAP = 'linghu'
 
 /** 专属鱼池：不同地图都会从中抽取，重量由该地图的 exMin~exMax 决定 */
 export const EXCLUSIVE_FISH = [
-  { name: '冰原王鲑', icon: '🐟', lore: '北原寒潭的霸主，鳞片如霜。' },
-  { name: '玄冰巨鲲', icon: '🐋', lore: '极北冰海下的庞然阴影。' },
-  { name: '雪峰飞鲤', icon: '🐠', lore: '跃过极北冰瀑的灵鲤。' },
-  { name: '幽冥龙王', icon: '🐉', lore: '统御一方寒域的龙王。' },
-  { name: '九幽冥鲛', icon: '🦈', lore: '深渊血海中的猎手。' },
-  { name: '蓬莱金鳌', icon: '🐢', lore: '仙岛神龟，背负星辰。' },
-  { name: '寒渊烛龙', icon: '🐲', lore: '海沟尽头一点幽光，传说是龙的幼崽。' },
-  { name: '冰魄银鳗', icon: '🪱', lore: '通体剔透，似一条冻住的闪电。' },
-  { name: '霜甲巨蟹', icon: '🦀', lore: '甲壳凝结万年寒霜，钳力惊人。' },
-  { name: '极光锦鲤', icon: '🎏', lore: '只在极光最盛时现身的祥瑞。' }
+  { name: '冰原王鲑', icon: '冰原王鲑', lore: '北原寒潭的霸主，鳞片如霜。' },
+  { name: '玄冰巨鲲', icon: '玄冰巨鲲', lore: '极北冰海下的庞然阴影。' },
+  { name: '雪峰飞鲤', icon: '雪峰飞鲤', lore: '跃过极北冰瀑的灵鲤。' },
+  { name: '幽冥龙王', icon: '幽冥龙王', lore: '统御一方寒域的龙王。' },
+  { name: '九幽冥鲛', icon: '九幽冥鲛', lore: '深渊血海中的猎手。' },
+  { name: '蓬莱金鳌', icon: '蓬莱金鳌', lore: '仙岛神龟，背负星辰。' },
+  { name: '寒渊烛龙', icon: '寒渊烛龙', lore: '海沟尽头一点幽光，传说是龙的幼崽。' },
+  { name: '冰魄银鳗', icon: '冰魄银鳗', lore: '通体剔透，似一条冻住的闪电。' },
+  { name: '霜甲巨蟹', icon: '霜甲巨蟹', lore: '甲壳凝结万年寒霜，钳力惊人。' },
+  { name: '极光锦鲤', icon: '极光锦鲤', lore: '只在极光最盛时现身的祥瑞。' }
 ]

@@ -38,8 +38,17 @@ public class SettleResult {
     /** 钓后金币余额（兼容字段，恒为 0） */
     private Integer goldStones;
 
-    /** 钓后根骨 */
+    /** 钓后根骨（基础力量） */
     private Integer strength;
+
+    /** 钓后总力量 = 基础力量 × (1 + 修为%) */
+    private Integer power;
+
+    /** 钓后基础力量 */
+    private Integer basePower;
+
+    /** 钓后修为百分比 */
+    private Integer cultivation;
 
     /** 本次钓鱼收益中，钓道境界提供的加成百分比（1 重天为 0%） */
     private Integer realmBonusPct;
@@ -47,8 +56,17 @@ public class SettleResult {
     /** 本次力量成长数值（未成长为 0） */
     private Integer powerGain;
 
-    /** 本次力量成长百分比（固定 10，未成长为 0） */
+    /** 本次基础力量成长百分比（1~50 随机，未成长为 0） */
     private Integer powerGainPct;
+
+    /** 本次基础力量净增数值 */
+    private Integer powerGainBase;
+
+    /** 本次修为成长百分点（1~50 随机，未成长为 0） */
+    private Integer cultivationGain;
+
+    /** 本次总力量净增（含修为放大） */
+    private Integer powerGainTotal;
 
     /** 力量成长类型：over-limit = 钓起超过自身上限 10% 的鱼 */
     private String powerKind;

@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from '../components/GameIcon.vue'
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -98,20 +99,20 @@ function pct(k) {
 <template>
   <div class="admin">
     <header class="topbar">
-      <div class="brand">🛠️ 后台管理系统</div>
+      <div class="brand"><GameIcon name="tools" :size="19" /> 后台管理系统</div>
       <nav class="nav">
         <router-link to="/admin/home" class="active">控制台</router-link>
         <router-link to="/admin/users">用户管理</router-link>
       </nav>
       <div class="right">
-        <span class="who">👤 {{ adminName }}</span>
+        <span class="who"><GameIcon name="user" :size="16" /> {{ adminName }}</span>
         <button class="logout" @click="logout">退出登录</button>
       </div>
     </header>
 
     <main class="content">
       <section class="panel">
-        <h2>🎯 爆率管理</h2>
+        <h2><GameIcon name="target" :size="19" /> 爆率管理</h2>
         <p class="desc">设置各品级鱼类的<b>相对权重</b>，数值越大越容易钓到。改动保存后，首页游戏的出货概率立即生效。</p>
         <div class="rate-list">
           <div class="rate-item" v-for="k in TIER_ORDER_LIST" :key="k">
@@ -125,7 +126,7 @@ function pct(k) {
       </section>
 
       <section class="panel">
-        <h2>💰 货币数量管理</h2>
+        <h2><GameIcon name="coin" :size="19" /> 货币数量管理</h2>
         <p class="desc">调整钓鱼产出的<b>金币倍率</b>，以及<b>新玩家初始金币</b>。保存后即时生效。</p>
         <div class="cur-grid">
           <div class="cur-item">
@@ -134,14 +135,14 @@ function pct(k) {
             <span class="unit">×</span>
           </div>
           <div class="cur-item">
-            <label>新玩家初始金币 🪙</label>
+            <label>新玩家初始金币 <GameIcon name="coin" :size="15" /></label>
             <input type="number" min="0" step="1" v-model.number="form.currency.starterShells" />
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <h2>🔐 管理员密码</h2>
+        <h2><GameIcon name="lock" :size="19" /> 管理员密码</h2>
         <p class="desc">修改当前管理员账号（用户表）的登录密码，明文存储，至少 6 位。修改后需重新登录。</p>
         <div class="pwd-row">
           <input type="password" v-model="pwdOld" placeholder="原密码" />
@@ -152,7 +153,7 @@ function pct(k) {
       </section>
 
       <div class="actions">
-        <button class="save" @click="save">💾 保存配置</button>
+        <button class="save" @click="save"><GameIcon name="save" :size="16" /> 保存配置</button>
         <button class="reset" @click="reset">↺ 恢复默认</button>
         <router-link class="tohome" to="/home">前往首页查看效果 →</router-link>
       </div>

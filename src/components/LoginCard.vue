@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from './GameIcon.vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { loginApi } from '../api/auth'
@@ -14,11 +15,11 @@ const loading = ref(false)
 
 async function onSubmit() {
   if (!username.value.trim()) {
-    emit('toast', '请先报上道号 🍃')
+    emit('toast', '请先报上道号')
     return
   }
   if (!password.value.trim()) {
-    emit('toast', '护道法印不可为空，仙尊会失望的 🌫️')
+    emit('toast', '护道法印不可为空，仙尊会失望的️')
     return
   }
   loading.value = true
@@ -26,31 +27,31 @@ async function onSubmit() {
     const res = await loginApi({ username: username.value.trim(), password: password.value })
     if (res.code === 200) {
       setSession(res.data)
-      emit('toast', res.message || ('欢迎回到仙钓大陆，' + username.value.trim() + '！✨'))
+      emit('toast', res.message || ('欢迎回到仙钓大陆，' + username.value.trim() + '！'))
       setTimeout(() => router.push('/home'), 700)
     } else {
       emit('toast', res.message || '登录失败')
     }
   } catch (e) {
-    emit('toast', e.message || '连不上仙门中枢，请确认后端已开启 🌫️')
+    emit('toast', e.message || '连不上仙门中枢，请确认后端已开启️')
   } finally {
     loading.value = false
   }
 }
 
 function forgot() {
-  emit('toast', '忘却法印？速去寻仙盟执事重铸 🗝️')
+  emit('toast', '忘却法印？速去寻仙盟执事重铸')
 }
 </script>
 
 <template>
   <div class="card">
     <h1>仙门登录</h1>
-    <p class="subtitle">道友请留步，入我仙钓大陆 ⛰️</p>
+    <p class="subtitle">道友请留步，入我仙钓大陆</p>
 
     <form @submit.prevent="onSubmit">
       <div class="field">
-        <span class="icon">☯</span>
+        <GameIcon class="icon" name="taiji" :size="20" />
         <input
           v-model="username"
           type="text"
@@ -59,7 +60,7 @@ function forgot() {
         >
       </div>
       <div class="field">
-        <span class="icon">🗝️</span>
+        <GameIcon class="icon" name="key" :size="20" />
         <input
           v-model="password"
           type="password"

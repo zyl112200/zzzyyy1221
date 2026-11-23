@@ -2,7 +2,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Comic Sans MS", "Chalkboard SE", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Songti SC", "STSong", "SimSun", "PingFang SC", "Microsoft YaHei", serif;
 }
 
 html, body, #app {
@@ -12,5 +12,5 @@ html, body, #app {
 body {
   overflow-x: hidden;
   overflow-y: auto;
-  background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 45%, #01579b 100%);
+  background: linear-gradient(180deg, #0c1a2b 0%, #081726 55%, #050f1a 100%);
 }

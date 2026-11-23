@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from './GameIcon.vue'
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { registerApi } from '../api/auth'
@@ -16,10 +17,10 @@ const form = reactive({
 })
 
 async function onSubmit() {
-  if (!form.username.trim()) return emit('toast', '给自己起个道号吧 🍃')
-  if (form.password.length < 6) return emit('toast', '护道法印至少 6 位，莫让邪修轻易破译 🗝️')
-  if (form.password !== form.confirm) return emit('toast', '两次法印不一，道童都替你记下了 ⛰️')
-  if (!form.agree) return emit('toast', '需先立誓遵《仙门弟子戒律》🌿')
+  if (!form.username.trim()) return emit('toast', '给自己起个道号吧')
+  if (form.password.length < 6) return emit('toast', '护道法印至少 6 位，莫让邪修轻易破译')
+  if (form.password !== form.confirm) return emit('toast', '两次法印不一，道童都替你记下了')
+  if (!form.agree) return emit('toast', '需先立誓遵《仙门弟子戒律》')
 
   loading.value = true
   try {
@@ -29,13 +30,13 @@ async function onSubmit() {
     })
     if (res.code === 200) {
       setSession(res.data)
-      emit('toast', res.message || '入道成功！道童引你踏仙途 ✨')
+      emit('toast', res.message || '入道成功！道童引你踏仙途 ')
       setTimeout(() => router.push('/home'), 1200)
     } else {
       emit('toast', res.message || '入道失败')
     }
   } catch (e) {
-    emit('toast', e.message || '连不上仙门中枢，请确认后端已开启 🌫️')
+    emit('toast', e.message || '连不上仙门中枢，请确认后端已开启️')
   } finally {
     loading.value = false
   }
@@ -45,19 +46,19 @@ async function onSubmit() {
 <template>
   <div class="card">
     <h1>叩仙门</h1>
-    <p class="subtitle">道童引路：入道很简单，本座都会 ⛰️</p>
+    <p class="subtitle">道童引路：入道很简单，本座都会</p>
 
     <form @submit.prevent="onSubmit">
       <div class="field">
-        <span class="icon">☯</span>
+        <GameIcon class="icon" name="taiji" :size="20" />
         <input v-model="form.username" type="text" placeholder="道号（比如：凌霄子）" autocomplete="username">
       </div>
       <div class="field">
-        <span class="icon">🗝️</span>
+        <GameIcon class="icon" name="key" :size="20" />
         <input v-model="form.password" type="password" placeholder="护道法印（至少 6 位）" autocomplete="new-password">
       </div>
       <div class="field">
-        <span class="icon">🪷</span>
+        <span class="icon"></span>
         <input v-model="form.confirm" type="password" placeholder="再塑一次法印" autocomplete="new-password">
       </div>
 

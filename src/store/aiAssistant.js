@@ -52,6 +52,6 @@ export function clearAssistant() {
 // 首次打开时的欢迎语
 export function greetOnce() {
   if (aiState.messages.length) return
-  pushBot('嗨～我是仙钓小助手 🪷 张力别拉满、暴走要松手，剩下的问我！')
+  pushBot('嗨～我是仙钓小助手 张力别拉满、暴走要松手，剩下的问我！')
   aiState.unread = 0
 }

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import OceanBackground from '../components/OceanBackground.vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi } from '../api/game'
 import { CODEX_GROUPS, CODEX_ALL, CODEX_TOTAL } from '../data/fishCodex'
@@ -11,6 +12,7 @@ const session = getSession()
 const username = session ? session.username : ''
 const shells = ref(0)
 const power = ref(100)
+const cultivation = ref(0)
 const unlocked = ref([]) // 已解锁鱼名列表
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -42,9 +44,10 @@ async function load() {
     if (res.code === 200) {
       shells.value = res.data.shells || 0
       power.value = res.data.power || 100
+      cultivation.value = res.data.cultivation || 0
       unlocked.value = Array.isArray(res.data.codex) ? res.data.codex : []
     } else showToast(res.message || '加载失败')
-  } catch (e) { showToast(e.message || '后端未启动 🌊') }
+  } catch (e) { showToast(e.message || '后端未启动') }
 }
 
 onMounted(load)
@@ -53,11 +56,11 @@ onMounted(load)
 <template>
   <div class="codex-page">
     <OceanBackground />
-    <TopBar :shells="shells" :power="power" />
+    <TopBar :shells="shells" :power="power" :cultivation="cultivation" />
 
     <main class="wrap">
       <div class="head">
-        <h2>📖 灵鱼图鉴</h2>
+        <h2><GameIcon name="book" :size="24" /> 灵鱼图鉴</h2>
         <span class="sub">钓起灵鱼，解锁它的故事</span>
       </div>
 
@@ -92,7 +95,7 @@ onMounted(load)
             <template v-if="isUnlocked(fish)">
               <div class="fish-img">
                 <img :src="fish.sprite" :alt="fish.name" v-if="fish.sprite">
-                <span v-else class="big-emoji">🐟</span>
+
               </div>
               <div class="fish-name">{{ fish.name }}</div>
               <div class="fish-lore">{{ fish.lore }}</div>
@@ -112,7 +115,7 @@ onMounted(load)
     <!-- 详情弹层 -->
     <div v-if="selected" class="modal-mask" @click.self="selected = null">
       <div class="modal">
-        <button class="close" @click="selected = null">✕</button>
+        <button class="close" @click="selected = null">×</button>
         <div class="modal-art">
           <img :src="selected.sprite" :alt="selected.name" v-if="selected.sprite">
         </div>

@@ -72,7 +72,7 @@ export function saveAdminConfig(cfg) {
   clean.currency.starterShells = clampNum(cfg?.currency?.starterShells, 0, 1e12, 50)
   clean.currency.starterGold = clampNum(cfg?.currency?.starterGold, 0, 1e12, 0)
   writeJson(CONFIG_KEY, clean)
-  return { code: 200, message: '配置已保存，首页数据已更新 ✅', data: clean }
+  return { code: 200, message: '配置已保存，首页数据已更新', data: clean }
 }
 
 export function resetAdminConfig() {

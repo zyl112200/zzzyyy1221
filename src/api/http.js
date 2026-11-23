@@ -142,7 +142,7 @@ function callServer(method, url, body) {
   }
   return fetch(base + url, init)
     .then((res) => {
-      if (!res.ok) throw new Error(`后端返回 ${res.status}，请查看后端日志 🌫️`)
+      if (!res.ok) throw new Error(`后端返回 ${res.status}，请查看后端日志️`)
       return res.json()
     })
     .catch((err) => {

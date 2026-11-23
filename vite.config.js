@@ -38,7 +38,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         format: 'iife',
-        name: 'SpongeBobApp',
+        name: 'XianDiaoApp',
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]'

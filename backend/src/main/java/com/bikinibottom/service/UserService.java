@@ -134,7 +134,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
 
     /** 编辑用户：仅更新传入的非空字段；不允许降级/删除最后一名管理员 */
     public Result<User> adminUpdateUser(Long id, String email, Integer shells, Integer strength,
-                                        Integer goldStones, Integer powerRealm, Integer permission) {
+                                        Integer cultivation, Integer goldStones, Integer powerRealm, Integer permission) {
         User u = getById(id);
         if (u == null) return Result.error("用户不存在");
         if (email != null) {
@@ -145,7 +145,8 @@ public class UserService extends ServiceImpl<UserMapper, User> {
             u.setEmail(mail);
         }
         if (shells != null) u.setShells(clampInt(shells, 0, 1_000_000_000));
-        if (strength != null) u.setStrength(clampInt(strength, 0, 1_000_000_000));
+        if (strength != null) u.setStrength(clampInt(strength, 0, Integer.MAX_VALUE)); // 基础力量，无实际上限
+        if (cultivation != null) u.setCultivation(clampInt(cultivation, 0, Integer.MAX_VALUE)); // 修为%，无上限
         if (goldStones != null) u.setGoldStones(clampInt(goldStones, 0, 1_000_000_000));
         if (powerRealm != null) u.setPowerRealm(clampInt(powerRealm, 1, 999));
         if (permission != null) {
@@ -174,7 +175,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
 
     /** 新建用户：用户名/邮箱唯一校验，密码 BCrypt 加密入库 */
     public Result<User> adminCreateUser(String username, String email, String password,
-                                        Integer shells, Integer strength, Integer goldStones,
+                                        Integer shells, Integer strength, Integer cultivation, Integer goldStones,
                                         Integer powerRealm, Integer permission) {
         if (username == null || username.trim().isEmpty()) return Result.error("用户名不能为空");
         if (email == null || email.trim().isEmpty()) return Result.error("邮箱不能为空");
@@ -188,7 +189,8 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         u.setEmail(mail);
         u.setPassword(passwordEncoder.encode(password));
         u.setShells(shells == null ? 50 : clampInt(shells, 0, 1_000_000_000));
-        u.setStrength(strength == null ? 10 : clampInt(strength, 0, 1_000_000_000));
+        u.setStrength(strength == null ? 10 : clampInt(strength, 0, Integer.MAX_VALUE));
+        u.setCultivation(cultivation == null ? 0 : clampInt(cultivation, 0, Integer.MAX_VALUE));
         u.setGoldStones(goldStones == null ? 0 : clampInt(goldStones, 0, 1_000_000_000));
         u.setPowerRealm(powerRealm == null ? 1 : clampInt(powerRealm, 1, 999));
         u.setPermission(permission == null ? 1 : ((permission == 0) ? 0 : 1));

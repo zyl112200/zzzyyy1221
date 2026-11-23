@@ -67,9 +67,11 @@ function readDb() {
  *   v3 → v4：strength（根骨）→ power（力量），移除 powerRealm / skills（已取消功法）；
  *   v4 → v5：货币统一为金币——旧「金石」余额一次性折算进金币（shells），
  *            之后不再产出金石；goldStones 仅作为兼容字段保留，恒为 0。
+ *   v5 → v6：新增「修为」系统——cultivation（修为百分比，初始 0），
+ *            独立于基础力量 power；总力量 = power × (1 + cultivation/100)。
  */
 function migrateDb(db) {
-  if (!db || db.version >= 5) return false
+  if (!db || db.version >= 6) return false
   if (db.version < 4) {
     db.version = 4
     for (const u of db.users || []) {
@@ -87,7 +89,12 @@ function migrateDb(db) {
       u.goldStones = 0
     }
   }
-  db.version = 5
+  if (db.version < 6) {
+    for (const u of db.users || []) {
+      if (u.cultivation == null) u.cultivation = 0
+    }
+    db.version = 6
+  }
   return true
 }
 
@@ -103,14 +110,14 @@ function persist() {
 
 function seedDb() {
   const db = {
-    version: 5,
+    version: 6,
     nextUserId: 4,
     nextUserItemId: 7,
     // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
-      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-01T08:00:00.000Z' },
-      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200200, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
-      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, goldStones:0, currentMap:'linghu', createTime:'2024-06-03T10:15:00.000Z' }
+      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-01T08:00:00.000Z' },
+      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200200, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
+      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-03T10:15:00.000Z' }
     ],
     userItems: [
       { id: 1, userId: 1, itemId: 1, quantity: 1, equipped: 1 },
@@ -147,9 +154,23 @@ function userByName(name) {
   return db.users.find((u) => u.username === name) || null
 }
 
-/** 玩家当前力量（力量 = 极限重量，初始 100；正常钓到的鱼约 = 力量 斤） */
-function powerOf(u) {
+/** 基础力量（根骨，初始 100；正常钓到的鱼约 = 力量 斤），不含修为加成 */
+function basePowerOf(u) {
   return u && u.power != null ? u.power : 100
+}
+
+/** 修为百分比（初始 0，无上限）；单独计算在基础力量上，不并入基础力量本身 */
+function cultivationOf(u) {
+  return u && u.cultivation != null ? Number(u.cultivation) || 0 : 0
+}
+
+/**
+ * 总力量 = 基础力量 × (1 + 修为%)，无上限。
+ * 基础力量每次提升后，修为按「提升后的基础力量 × 同样百分比」自动重算——
+ * 因此 login / profile / 战斗计算一律走这里，修为加成始终作用于最新基础力量。
+ */
+function powerOf(u) {
+  return Math.round(basePowerOf(u) * (1 + cultivationOf(u) / 100))
 }
 
 /** 根据重量 / 力量 的倍数决定鱼品级（仅用于外观与奖励倍率） */
@@ -195,45 +216,45 @@ const TIER_ORDER = ['COMMON', 'RARE', 'LEGENDARY', 'MYTHIC', 'SHANHAI']
 
 const POOLS = {
   COMMON: [
-    { name: '小丑鱼', icon: '🐠', lore: '灵湖最常见的灵鱼，颜色鲜艳。' },
-    { name: '热带鱼', icon: '🐟', lore: '礁石间穿梭的小精灵。' },
-    { name: '河豚', icon: '🐡', lore: '一生气就鼓成一颗刺球。' },
-    { name: '沙丁鱼', icon: '🐟', lore: '成群结队地游过码头。' },
-    { name: '鲭鱼', icon: '🐟', lore: '速度极快的洄游鱼。' }
+    { name: '小丑鱼', icon: '小丑鱼', lore: '灵湖最常见的灵鱼，颜色鲜艳。' },
+    { name: '热带鱼', icon: '热带鱼', lore: '礁石间穿梭的小精灵。' },
+    { name: '河豚', icon: '河豚', lore: '一生气就鼓成一颗刺球。' },
+    { name: '沙丁鱼', icon: '沙丁鱼', lore: '成群结队地游过码头。' },
+    { name: '鲭鱼', icon: '鲭鱼', lore: '速度极快的洄游鱼。' }
   ],
   RARE: [
-    { name: '章鱼', icon: '🐙', lore: '八条腕足力大无穷，吸盘能拽住礁石。' },
-    { name: '鱿鱼', icon: '🦑', lore: '深海中的敏捷猎手，喷墨而逃。' },
-    { name: '帝王蟹', icon: '🦀', lore: '甲壳厚如铠甲，钳力惊人。' },
-    { name: '巨型石斑', icon: '🐟', lore: '礁石缝里的伏击者，体重惊人。' },
-    { name: '电鳗', icon: '⚡', lore: '一尾十万伏特，靠近就发麻。' }
+    { name: '章鱼', icon: '章鱼', lore: '八条腕足力大无穷，吸盘能拽住礁石。' },
+    { name: '鱿鱼', icon: '鱿鱼', lore: '深海中的敏捷猎手，喷墨而逃。' },
+    { name: '帝王蟹', icon: '帝王蟹', lore: '甲壳厚如铠甲，钳力惊人。' },
+    { name: '巨型石斑', icon: '巨型石斑', lore: '礁石缝里的伏击者，体重惊人。' },
+    { name: '电鳗', icon: '电鳗', lore: '一尾十万伏特，靠近就发麻。' }
   ],
   LEGENDARY: [
-    { name: '深海龙鱼', icon: '🐉', lore: '深渊尽头的一点幽光，传说是龙的幼崽。' },
-    { name: '独角鲸', icon: '🐋', lore: '额前长角，传说能破开冰层。' },
-    { name: '黄金海马', icon: '👑', lore: '传闻渊主做梦都想收藏的稀世珍宝。' },
-    { name: '大王乌贼', icon: '🦑', lore: '能与巨鲸搏斗的深海巨兽。' },
-    { name: '幽灵鲨', icon: '🦈', lore: '只在月圆之夜浮出水面。' }
+    { name: '深海龙鱼', icon: '深海龙鱼', lore: '深渊尽头的一点幽光，传说是龙的幼崽。' },
+    { name: '独角鲸', icon: '独角鲸', lore: '额前长角，传说能破开冰层。' },
+    { name: '黄金海马', icon: '黄金海马', lore: '传闻渊主做梦都想收藏的稀世珍宝。' },
+    { name: '大王乌贼', icon: '大王乌贼', lore: '能与巨鲸搏斗的深海巨兽。' },
+    { name: '幽灵鲨', icon: '幽灵鲨', lore: '只在月圆之夜浮出水面。' }
   ],
   MYTHIC: [
-    { name: '鲲', icon: '🐋', lore: '《庄子·逍遥游》：北冥有鱼，其名为鲲，鲲之大，不知其几千里也。' },
-    { name: '烛龙', icon: '🐲', lore: '《山海经》：钟山之神，视为昼，瞑为夜，吹为冬，呼为夏。' },
-    { name: '九尾狐', icon: '🦊', lore: '《山海经》：青丘之山，有兽焉，其状如狐而九尾。' },
-    { name: '白泽', icon: '🦄', lore: '通晓万物之情的神兽，知天下鬼神之名。' },
-    { name: '凤凰', icon: '🔥', lore: '浴火重生的百鸟之王，见则天下安宁。' },
-    { name: '麒麟', icon: '🦌', lore: '祥瑞之兽，踏云而行，不履生虫。' }
+    { name: '鲲', icon: '鲲', lore: '《庄子·逍遥游》：北冥有鱼，其名为鲲，鲲之大，不知其几千里也。' },
+    { name: '烛龙', icon: '烛龙', lore: '《山海经》：钟山之神，视为昼，瞑为夜，吹为冬，呼为夏。' },
+    { name: '九尾狐', icon: '九尾狐', lore: '《山海经》：青丘之山，有兽焉，其状如狐而九尾。' },
+    { name: '白泽', icon: '白泽', lore: '通晓万物之情的神兽，知天下鬼神之名。' },
+    { name: '凤凰', icon: '凤凰', lore: '浴火重生的百鸟之王，见则天下安宁。' },
+    { name: '麒麟', icon: '麒麟', lore: '祥瑞之兽，踏云而行，不履生虫。' }
   ],
   SHANHAI: [
-    { name: '鲲鹏', icon: '🦅', lore: '《逍遥游》：化而为鸟，其名为鹏，其翼若垂天之云。' },
-    { name: '饕餮', icon: '👹', lore: '《山海经》：羊身人面，虎齿人爪，贪食无厌。' },
-    { name: '穷奇', icon: '🐯', lore: '《山海经》：状如虎而有翼，音如嗥狗。' },
-    { name: '相柳', icon: '🐍', lore: '《山海经》：九首蛇身，所到之处化为沼泽。' },
-    { name: '玄武', icon: '🐢', lore: '龟蛇合体，镇守北方之神。' },
-    { name: '应龙', icon: '🐉', lore: '有翼之龙，助黄帝斩蚩尤，蓄水为雨。' },
-    { name: '巴蛇', icon: '🐍', lore: '《山海经》：巴蛇食象，三年而出其骨。' },
-    { name: '陵鱼', icon: '🧜', lore: '《山海经》：人面鱼身，居于海中。' },
-    { name: '帝江', icon: '🦋', lore: '《山海经》：状如黄囊，赤如丹火，六足四翼。' },
-    { name: '狰', icon: '🐆', lore: '《山海经》：五尾一角，音如击石。' }
+    { name: '鲲鹏', icon: '鲲鹏', lore: '《逍遥游》：化而为鸟，其名为鹏，其翼若垂天之云。' },
+    { name: '饕餮', icon: '饕餮', lore: '《山海经》：羊身人面，虎齿人爪，贪食无厌。' },
+    { name: '穷奇', icon: '穷奇', lore: '《山海经》：状如虎而有翼，音如嗥狗。' },
+    { name: '相柳', icon: '相柳', lore: '《山海经》：九首蛇身，所到之处化为沼泽。' },
+    { name: '玄武', icon: '玄武', lore: '龟蛇合体，镇守北方之神。' },
+    { name: '应龙', icon: '应龙', lore: '有翼之龙，助黄帝斩蚩尤，蓄水为雨。' },
+    { name: '巴蛇', icon: '巴蛇', lore: '《山海经》：巴蛇食象，三年而出其骨。' },
+    { name: '陵鱼', icon: '陵鱼', lore: '《山海经》：人面鱼身，居于海中。' },
+    { name: '帝江', icon: '帝江', lore: '《山海经》：状如黄囊，赤如丹火，六足四翼。' },
+    { name: '狰', icon: '狰', lore: '《山海经》：五尾一角，音如击石。' }
   ]
 }
 
@@ -324,7 +345,9 @@ function buildProfile(u) {
     username: u.username,
     shells: u.shells == null ? 0 : u.shells,
     goldStones: 0, // 兼容字段：货币统一为金币后恒为 0
-    power: powerOf(u),
+    power: powerOf(u),            // 总力量（基础 × (1+修为%)），参与全部计算
+    basePower: basePowerOf(u),    // 基础力量
+    cultivation: cultivationOf(u),// 修为百分比（无上限，单独作用于基础力量）
     assocBadge: u.assocBadge || 0,
     maxCaughtWeight: u.maxCaughtWeight || 0,
     currentMap: u.currentMap || DEFAULT_MAP,
@@ -380,34 +403,34 @@ function consumeBait(userId, baitId) {
   bait.quantity = (bait.quantity || 0) - 1
   persist()
   const it = ITEM_MAP.get(bait.itemId)
-  return { itemId: bait.itemId, name: it ? it.name : '鱼饵', icon: it ? it.icon : '🪱', power: it ? it.power || 0 : 0 }
+  return { itemId: bait.itemId, name: it ? it.name : '鱼饵', icon: it ? it.icon : '', power: it ? it.power || 0 : 0 }
 }
 
 const RARE_CHEERS = [
-  '🎉 哇哦！你竟把「{fish}」这等灵物钓了上来，整个仙钓界都要为你轰动啦！',
-  '🌟 不得了！「{fish}」成功上岸，这可是能写进钓道传奇的鱼！',
-  '🐠 稀世珍宝「{fish}」被你收入囊中，仙人见了都惊叹！',
-  '👑 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
+  ' 哇哦！你竟把「{fish}」这等灵物钓了上来，整个仙钓界都要为你轰动啦！',
+  ' 不得了！「{fish}」成功上岸，这可是能写进钓道传奇的鱼！',
+  ' 稀世珍宝「{fish}」被你收入囊中，仙人见了都惊叹！',
+  ' 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
 ]
 
 function cast(username, baitId, mapId) {
   const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   ensureStarterRod(u.id)
 
   let profile = buildProfile(u)
-  if (!profile.equippedRodPower) return err('你还没有钓竿，先去商店看看 🎣')
+  if (!profile.equippedRodPower) return err('你还没有钓竿，先去商店看看')
   if (profile.totalBait <= 0) {
     const shells = u.shells == null ? 0 : u.shells
     if (shells < 10) {
       claimReliefBait(u.id)
       profile = buildProfile(u)
     }
-    if (profile.totalBait <= 0) return err('没有鱼饵了，去商店买点 🪱')
+    if (profile.totalBait <= 0) return err('没有鱼饵了，去商店买点')
   }
 
   const bait = consumeBait(u.id, baitId)
-  if (!bait) return err('该鱼饵不足或不存在，换一种或去商店买 🪱')
+  if (!bait) return err('该鱼饵不足或不存在，换一种或去商店买')
   const premiumBait = bait.power > 0
   const rodPower = profile.equippedRodPower
   const luck = !!profile.luckOwned
@@ -538,9 +561,9 @@ function breakEquippedRod(u) {
 function settle({ username, encounterId, landed, breakType }) {
   if (!username || !encounterId) return err('结算参数不完整')
   const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const pe = pending.get(encounterId)
-  if (!pe || pe.username !== username) return err('这次咬钩已经跑掉了 🐟')
+  if (!pe || pe.username !== username) return err('这次咬钩已经跑掉了')
   if (pe.settled) return err('这条鱼已经结算过了')
   pe.settled = true
   pending.delete(encounterId)
@@ -570,35 +593,44 @@ function settle({ username, encounterId, landed, breakType }) {
     r.landed = true
     r.rewardShells = pe.rewardShells
     r.rewardGold = pe.rewardGold
-    r.message = `钓起来了！${pe.fishName} ${pe.weight} 斤，获得 ${pe.rewardShells} 金币 🪙`
+    r.message = `钓起来了！${pe.fishName} ${pe.weight} 斤，获得 ${pe.rewardShells} 金币`
     if (pe.tier === 'MYTHIC' || pe.tier === 'SHANHAI') {
       r.celebrateMessage = RARE_CHEERS[rand(RARE_CHEERS.length)].replace('{fish}', pe.fishName)
     }
     // 钓鱼协会挂钩：协会任务进度 / 100 人钓鱼比赛 / 认证徽章
     const assocMsgs = assocOnCatch(u, pe.fishName, pe.weight)
     if (assocMsgs.length) r.assocMessages = assocMsgs
-    // 力量成长（唯一规则）：成功钓起「重量超过自身上限（当前力量）10%」的鱼，
-    // 力量按当前值 +10%（复合增长：100 → 110 → 121 ……）。未超过 10% 不成长。
-    const pw = powerOf(u)
-    const gainPct = pe.weight > pw * 1.1 ? 10 : 0
-    if (gainPct > 0) {
-      const newPower = Math.round(pw * (1 + gainPct / 100))
-      const gained = newPower - pw
-      u.power = newPower
-      r.powerGain = gained
-      r.powerGainPct = gainPct
+    // 修为系统成长（唯一规则）：成功钓起「重量超过自身上限（当前总力量）10%」的鱼触发突破。
+    // 突破时：① 基础力量按 1%~50% 随机波动增长；② 修为百分比独立按 1~50 个百分点增长。
+    // 两者均无上限；修为单独存储，只作用于基础力量，基础力量提升后按同百分比重算总力量。
+    const pw = powerOf(u) // 当前总力量（基础 × (1+修为%)），作为「自身上限」判定基准
+    if (pe.weight > pw * 1.1) {
+      const baseGainPct = 1 + rand(50)   // 基础力量增长：1~50%
+      const cultGain = 1 + rand(50)      // 修为增长：1~50 个百分点（独立随机）
+      const oldBase = basePowerOf(u)
+      const oldCult = cultivationOf(u)
+      const newBase = Math.round(oldBase * (1 + baseGainPct / 100))
+      const newCult = oldCult + cultGain
+      const newTotal = Math.round(newBase * (1 + newCult / 100))
+      u.power = newBase
+      u.cultivation = newCult
+      r.powerGain = newBase - oldBase        // 基础力量净增
+      r.powerGainPct = baseGainPct           // 基础力量增长百分比（1~50）
+      r.cultivationGain = cultGain           // 修为净增百分点
+      r.cultivation = newCult                // 最新修为百分比
+      r.powerGainTotal = newTotal - pw       // 总力量净增（含修为放大）
       r.powerKind = 'over-limit'
-      r.message += ` 💪突破极限！力量 +${gained}（当前力量 +${gainPct}% → ${newPower}）`
+      r.message += ` 突破极限！基础力量 +${r.powerGain}（+${baseGainPct}%），修为 +${cultGain}% → ${newCult}%，总力量 ${newTotal}`
     }
   } else {
     if (bt === 'ROD') {
       breakEquippedRod(u)
       r.rodBroken = true
-      r.message = '啪！鱼竿被暴走的巨物生生拽断，鱼跑了…快去背包换一根 🎣'
+      r.message = '啪！鱼竿被暴走的巨物生生拽断，鱼跑了…快去背包换一根'
     } else if (bt === 'LINE') {
-      r.message = `啪！鱼线被 ${pe.weight} 斤的力道挣断，鱼跑了…换更结实的线吧 🧵`
+      r.message = `啪！鱼线被 ${pe.weight} 斤的力道挣断，鱼跑了…换更结实的线吧`
     } else if (bt === 'ESCAPE') {
-      r.message = '提竿太慢，鱼儿脱钩溜走了 🐟'
+      r.message = '提竿太慢，鱼儿脱钩溜走了'
     } else if (bt === 'TIMEOUT') {
       r.message = '收线太久，鱼儿沉底逃走了…'
     } else {
@@ -609,7 +641,9 @@ function settle({ username, encounterId, landed, breakType }) {
 
   r.shells = u.shells == null ? 0 : u.shells
   r.goldStones = 0 // 兼容字段
-  r.power = u.power == null ? 100 : u.power
+  r.power = powerOf(u)          // 总力量（供前端展示与结算回写）
+  r.basePower = basePowerOf(u)  // 基础力量
+  r.cultivation = cultivationOf(u) // 修为百分比
   return ok(r)
 }
 
@@ -624,12 +658,12 @@ function buy(username, itemId, quantity) {
   let qty = Number(quantity)
   if (!qty || qty < 1) qty = 1
   const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const item = ITEM_MAP.get(Number(itemId))
   if (!item) return err('商店里没有这件商品')
   const cost = item.price * qty
   const shells = u.shells == null ? 0 : u.shells
-  if (shells < cost) return err('金币不够啦，先去钓鱼赚点 🪙')
+  if (shells < cost) return err('金币不够啦，先去钓鱼赚点')
 
   u.shells = shells - cost
   const db = readDb()
@@ -649,12 +683,12 @@ function buy(username, itemId, quantity) {
     })
   }
   persist()
-  return ok(buildProfile(u), '购买成功 🎉')
+  return ok(buildProfile(u), '购买成功')
 }
 
 function equip(username, userItemId) {
   const u = userByName(username)
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const db = readDb()
   const target = db.userItems.find((ui) => ui.id === Number(userItemId))
   if (!target || target.userId !== u.id) return err('背包里没有这件道具')
@@ -678,10 +712,10 @@ function register({ username, email, password }) {
   const name = String(username || '').trim()
   // 注册界面已取消邮箱：未填写时按道号自动生成占位邮箱，保持数据模型不变
   const mail = String(email || '').trim() || (name ? name + '@xiandao.world' : '')
-  if (!name || !password) return err('注册信息填写不完整哦 🪙')
+  if (!name || !password) return err('注册信息填写不完整哦')
   const db = readDb()
-  if (db.users.some((u) => u.username === name)) return err('此道号已被先人占用，另择一名号吧 🍃')
-  if (email && email.trim() && db.users.some((u) => u.email === mail)) return err('该仙讯邮箱已注册过，直接回山门登录吧 🕊️')
+  if (db.users.some((u) => u.username === name)) return err('此道号已被先人占用，另择一名号吧')
+  if (email && email.trim() && db.users.some((u) => u.email === mail)) return err('该仙讯邮箱已注册过，直接回山门登录吧️')
 
   const id = db.nextUserId++
   // 新玩家初始金币：后台可配置；旧「初始金石」配置一并折算进来，默认 50
@@ -698,7 +732,8 @@ function register({ username, email, password }) {
     permission: 1, // 注册用户默认权限：1 = 默认权限（普通玩家）
     shells: starterCoins,
     goldStones: 0,
-    power: 100, // 初始力量 = 100
+    power: 100, // 初始基础力量 = 100
+    cultivation: 0, // 初始修为 = 0%
     currentMap: DEFAULT_MAP, // 初始所在地图：灵湖
     createTime: new Date().toISOString()
   })
@@ -708,18 +743,18 @@ function register({ username, email, password }) {
   persist()
   const u = userByName(name)
   return ok(
-    { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), currentMap: u.currentMap || DEFAULT_MAP },
-    '入道成功，欢迎踏入仙钓大陆 🎉'
+    { id: u.id, username: u.username, email: u.email, permission: 1, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), basePower: basePowerOf(u), cultivation: cultivationOf(u), currentMap: u.currentMap || DEFAULT_MAP },
+    '入道成功，欢迎踏入仙钓大陆'
   )
 }
 
 function login({ username, password }) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('查无此道号，仙门名录上没有此人 🌫️')
-  if (u.password !== password) return err('护道法印不对，心魔可趁机而入 🗝️')
+  if (!u) return err('查无此道号，仙门名录上没有此人️')
+  if (u.password !== password) return err('护道法印不对，心魔可趁机而入️')
   return ok(
-    { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), currentMap: u.currentMap || DEFAULT_MAP },
-    `登仙成功，欢迎回到仙钓大陆 🎉`
+    { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), basePower: basePowerOf(u), cultivation: cultivationOf(u), currentMap: u.currentMap || DEFAULT_MAP },
+    `登仙成功，欢迎回到仙钓大陆`
   )
 }
 
@@ -730,14 +765,14 @@ function login({ username, password }) {
 export function adminLogin({ username, password }) {
   const u = userByName(String(username || '').trim())
   if (!u || u.password !== password) {
-    return { code: 400, message: '账号或密码错误 🦀', data: null }
+    return { code: 400, message: '账号或密码错误', data: null }
   }
   if (u.permission !== 0) {
     return { code: 403, message: '无权限访问后台系统（当前账号不是管理员）', data: null }
   }
   return {
     code: 200,
-    message: '管理员登录成功 🎉',
+    message: '管理员登录成功',
     data: { username: u.username, permission: u.permission, loginAt: Date.now() }
   }
 }
@@ -766,6 +801,8 @@ function sanitizeUser(u) {
     shells: u.shells == null ? 0 : u.shells,
     goldStones: 0, // 兼容字段：货币统一为金币后恒为 0
     power: powerOf(u),
+    basePower: basePowerOf(u),
+    cultivation: cultivationOf(u),
     currentMap: u.currentMap || DEFAULT_MAP,
     createTime: u.createTime || null
   }
@@ -819,7 +856,8 @@ function updateUser(b = {}) {
     u.email = mail
   }
   if (b.shells != null) u.shells = clamp(Number(b.shells) || 0, 0, 1e12)
-  if (b.power != null) u.power = clamp(Math.round(Number(b.power) || 0), 0, 1e12)
+  if (b.power != null) u.power = clamp(Math.round(Number(b.power) || 0), 0, 1e12) // 基础力量，无实际上限
+  if (b.cultivation != null) u.cultivation = clamp(Math.round(Number(b.cultivation) || 0), 0, 1e12) // 修为%，无上限
   if (b.currentMap != null) {
     if (MAP_MAP.get(String(b.currentMap))) u.currentMap = String(b.currentMap)
     else return err('未知地图：' + b.currentMap)
@@ -874,6 +912,7 @@ function createUser(b = {}) {
     shells: b.shells != null ? clamp(Number(b.shells), 0, 1e12) : 50,
     goldStones: 0,
     power: b.power != null ? clamp(Math.round(Number(b.power)), 0, 1e12) : 100,
+    cultivation: b.cultivation != null ? clamp(Math.round(Number(b.cultivation)), 0, 1e12) : 0,
     currentMap: MAP_MAP.get(String(b.currentMap)) ? String(b.currentMap) : DEFAULT_MAP,
     createTime: new Date().toISOString()
   }
@@ -1106,7 +1145,7 @@ function assocOnCatch(u, fishName, weight) {
     if (weight > best) {
       const firstDone = !(u.username in t.progress)
       t.progress[u.username] = weight
-      if (firstDone) msgs.push(`📋 协会任务达成：「钓起一条${t.fishIcon}${t.fishName}」完成！记得去协会领奖`)
+      if (firstDone) msgs.push(` 协会任务达成：「钓起一条${t.fishIcon}${t.fishName}」完成！记得去协会领奖`)
     }
   }
 
@@ -1117,7 +1156,7 @@ function assocOnCatch(u, fishName, weight) {
     const me = c.entries.find((e) => e.isPlayer && e.name === u.username)
     if (me) {
       me.total = round1((me.total || 0) + weight)
-      msgs.push(`⚔️ 比赛中！你已累计 ${fmtW(me.total)} 斤`)
+      msgs.push(`️ 比赛中！你已累计 ${fmtW(me.total)} 斤`)
     }
   }
 
@@ -1127,7 +1166,7 @@ function assocOnCatch(u, fishName, weight) {
   for (let i = 0; i < BADGE_THRESHOLDS.length; i++) if (weight >= BADGE_THRESHOLDS[i]) star = i + 1
   if (star > (u.assocBadge || 0)) {
     u.assocBadge = star
-    msgs.push(`🏆 钓鱼协会认证：单尾 ${fmtW(weight)} 斤，授予 ${star} 星专属徽章！`)
+    msgs.push(` 钓鱼协会认证：单尾 ${fmtW(weight)} 斤，授予 ${star} 星专属徽章！`)
   }
   persist()
   return msgs
@@ -1140,7 +1179,7 @@ function fmtW(n) {
 /** 协会主页数据 */
 function assocInfo(username) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const db = readDb()
   const now = Date.now()
   const a = ensureAssoc(db)
@@ -1227,28 +1266,28 @@ function assocInfo(username) {
 /** 领取协会任务奖励 */
 function assocTaskClaim(username, taskId) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const db = readDb()
   const a = ensureAssoc(db)
   const t = a.tasks.find((x) => x.id === Number(taskId))
-  if (!t) return err('任务不存在或已下架 📋')
+  if (!t) return err('任务不存在或已下架')
   if (Date.now() >= t.expiresAt) return err('任务已过期，奖励无法领取')
-  if (!(u.username in (t.progress || {}))) return err(`还没钓起「${t.fishName}」，先去灵湖完成它吧 🎣`)
-  if (u.username in (t.claimedBy || {})) return err('奖励已经领过啦，下一次任务加油 🍃')
+  if (!(u.username in (t.progress || {}))) return err(`还没钓起「${t.fishName}」，先去灵湖完成它吧`)
+  if (u.username in (t.claimedBy || {})) return err('奖励已经领过啦，下一次任务加油')
   t.claimedBy = t.claimedBy || {}
   t.claimedBy[u.username] = true
   u.shells = (u.shells == null ? 0 : u.shells) + t.rewardShells
   persist()
   return ok(
     { shells: u.shells, goldStones: 0, taskId: t.id },
-    `任务奖励到账：${t.rewardShells} 金币 🪙`
+    `任务奖励到账：${t.rewardShells} 金币`
   )
 }
 
 /** 报名钓鱼比赛：匹配中加入本场；比赛进行中登记下一场；空闲则开启一场新匹配 */
 function assocCompStart(username) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const db = readDb()
   const now = Date.now()
   const a = ensureAssoc(db)
@@ -1266,7 +1305,7 @@ function assocCompStart(username) {
     persist()
     return ok(
       { phase: 'MATCHING', matchEndsAt: c.matchEndsAt, signupCount: c.signups.length, duration: COMP_MATCH_DURATION },
-      `⚔️ 报名成功！匹配中…已有 ${c.signups.length} 名真人在线报名，1 分钟后开赛（不足 100 人由人机补齐）`
+      `️ 报名成功！匹配中…已有 ${c.signups.length} 名真人在线报名，1 分钟后开赛（不足 100 人由人机补齐）`
     )
   }
   if (c && c.phase === 'RUNNING') {
@@ -1274,7 +1313,7 @@ function assocCompStart(username) {
     persist()
     return ok(
       { phase: 'RUNNING', endsAt: c.endsAt, remaining: Math.max(0, c.endsAt - now) },
-      '比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配 🐟'
+      '比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配'
     )
   }
   // 空闲 / 上一场已结束：开新匹配
@@ -1282,14 +1321,14 @@ function assocCompStart(username) {
   persist()
   return ok(
     { phase: 'MATCHING', matchEndsAt: a.competition.matchEndsAt, signupCount: signups, duration: COMP_MATCH_DURATION },
-    `⚔️ 报名成功！1 分钟匹配中，已有 ${signups} 名真人在线报名；不足 100 人由人机补齐`
+    `️ 报名成功！1 分钟匹配中，已有 ${signups} 名真人在线报名；不足 100 人由人机补齐`
   )
 }
 
 /** 查询比赛实时战况（推进状态：匹配到期自动开赛、比赛到期自动结算） */
 function assocCompState(username) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('仙门名录上没有此人 🌫️')
+  if (!u) return err('仙门名录上没有此人️')
   const db = readDb()
   const now = Date.now()
   const a = ensureAssoc(db)
@@ -1302,15 +1341,15 @@ function assocCompState(username) {
 //  AI 助手：内置预设问答（完全离线）
 // ============================================================
 const AI_DIALOGS = [
-  { id: 1, scene: '你好', reply: '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍃' },
-  { id: 2, scene: '怎么玩', reply: '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦 🎣' },
-  { id: 3, scene: '断线', reply: '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断 🧵' },
-  { id: 4, scene: '根骨', reply: '根骨越高，收线越稳、能抗衡的灵鱼越重。用金币淬炼，每次 +5；金币还能买装备、突破钓道境界 💪' },
-  { id: 5, scene: '金币', reply: '金币是仙钓大陆唯一的货币：钓稀有鱼和巨物给得最多，买装备、淬炼根骨、突破境界全靠它 🪙' },
-  { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊' },
-  { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱' },
-  { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦 💾' },
-  { id: 9, scene: '协会', reply: '钓鱼协会每波一次发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛要先在线报名，1 分钟匹配后跟 100 名玩家比 1 小时总重，真人不足由人机补齐。凡参赛保底 100 万金币，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章 🏆' }
+  { id: 1, scene: '你好', reply: '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦' },
+  { id: 2, scene: '怎么玩', reply: '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦' },
+  { id: 3, scene: '断线', reply: '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断' },
+  { id: 4, scene: '根骨', reply: '根骨越高，收线越稳、能抗衡的灵鱼越重。用金币淬炼，每次 +5；金币还能买装备、突破钓道境界' },
+  { id: 5, scene: '金币', reply: '金币是仙钓大陆唯一的货币：钓稀有鱼和巨物给得最多，买装备、淬炼根骨、突破境界全靠它' },
+  { id: 6, scene: '巨物', reply: '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重' },
+  { id: 7, scene: '鱼饵', reply: '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香' },
+  { id: 8, scene: '存档', reply: '现在是离线模式，存档就在你自己的浏览器里（localStorage），换浏览器或清缓存会丢，注意备份账号密码哦' },
+  { id: 9, scene: '协会', reply: '钓鱼协会每波一次发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛要先在线报名，1 分钟匹配后跟 100 名玩家比 1 小时总重，真人不足由人机补齐。凡参赛保底 100 万金币，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章' }
 ]
 
 function aiDialogs() {
@@ -1322,9 +1361,9 @@ function aiChat(message) {
   const hit = AI_DIALOGS.find((d) => msg.includes(d.scene))
   if (hit) return { reply: hit.reply, scene: hit.scene }
   const tips = [
-    '唔…这个我还在学。不过我知道：张力别拉满，暴走要松手！🎣',
+    '唔…这个我还在学。不过我知道：张力别拉满，暴走要松手！',
     '试试问我「怎么玩」「根骨」「金币」「巨物」「存档」这些关键词吧～',
-    '老钓仙说：钓大鱼最重要的是耐心…还有别忘了买鱼饵 🪱'
+    '老钓仙说：钓大鱼最重要的是耐心…还有别忘了买鱼饵'
   ]
   return { reply: tips[rand(tips.length)], scene: '其他' }
 }
@@ -1357,7 +1396,7 @@ export function localCall(method, url, body) {
       return login(b)
     case '/api/game/me': {
       const u = userByName(params.username)
-      if (!u) return err('仙门名录上没有此人 🌫️')
+      if (!u) return err('仙门名录上没有此人️')
       ensureStarterRod(u.id)
       return ok(buildProfile(u))
     }
@@ -1371,7 +1410,7 @@ export function localCall(method, url, body) {
       return ok(MAPS)
     case '/api/game/set-map': {
       const u = userByName(b.username)
-      if (!u) return err('仙门名录上没有此人 🌫️')
+      if (!u) return err('仙门名录上没有此人️')
       if (!MAP_MAP.get(String(b.mapId))) return err('未知地图：' + b.mapId)
       u.currentMap = String(b.mapId)
       persist()
@@ -1421,7 +1460,7 @@ export function localCall(method, url, body) {
 /** 列出当前玩家拥有的鱼饵（仅返回库存 > 0 的），供「切换鱼饵」功能使用 */
 export function listBaits(username) {
   const u = userByName(String(username || '').trim())
-  if (!u) return { code: 400, message: '仙门名录上没有此人 🌫️', data: [] }
+  if (!u) return { code: 400, message: '仙门名录上没有此人️', data: [] }
   const db = readDb()
   const owned = db.userItems.filter((ui) => ui.userId === u.id)
   const rows = []

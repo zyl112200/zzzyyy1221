@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import OceanBackground from '../components/OceanBackground.vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi, equipApi } from '../api/game'
 import { rodSprite } from '../data/rodSprites'
@@ -11,7 +12,7 @@ const session = getSession()
 const username = session ? session.username : ''
 
 const profile = ref({
-  username, shells: 0, goldStones: 0, power: 100,
+  username, shells: 0, goldStones: 0, power: 100, basePower: 100, cultivation: 0,
   equippedRodName: '无', equippedLineName: '无', lineStrength: 0, maxCatchWeight: 0,
   totalBait: 0, inventory: []
 })
@@ -42,7 +43,7 @@ async function load() {
     const res = await meApi(username)
     if (res.code === 200) profile.value = res.data
     else showToast(res.message || '加载失败')
-  } catch (e) { showToast(e.message || '后端未启动 🌊') }
+  } catch (e) { showToast(e.message || '后端未启动') }
 }
 
 async function equip(item) {
@@ -52,9 +53,9 @@ async function equip(item) {
     const res = await equipApi(username, item.userItemId)
     if (res.code === 200) {
       profile.value = res.data
-      showToast('已装备 ' + item.name + ' 🎣')
+      showToast('已装备 ' + item.name)
     } else showToast(res.message || '装备失败')
-  } catch (e) { showToast(e.message || '后端开小差了 🌊') }
+  } catch (e) { showToast(e.message || '后端开小差了') }
   finally { equipping.value = null }
 }
 
@@ -63,32 +64,33 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" />
+    <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" :cultivation="profile.cultivation" />
     <OceanBackground />
 
     <main class="inv">
-      <h2 class="title">🎒 我的背包</h2>
+      <h2 class="title"><GameIcon name="backpack" :size="24" /> 我的行囊</h2>
       <p class="sub">装备更强的钓竿与鱼线，去征服百万斤的巨物</p>
 
       <div class="summary">
-        <div class="sm"><span class="sm-ico">💪</span><b>{{ profile.power }}</b><small>力量</small></div>
-        <div class="sm"><span class="sm-ico">🧵</span><b>{{ fmtWeight(profile.lineStrength) }}</b><small>鱼线承重</small></div>
-        <div class="sm"><span class="sm-ico">🎯</span><b>{{ fmtWeight(profile.maxCatchWeight) }}</b><small>最大可钓</small></div>
+        <div class="sm"><GameIcon class="sm-ico" name="power" :size="22" /><b>{{ profile.power }}</b><small>总力量</small></div>
+        <div class="sm" title="基础力量 × (1 + 修为%)，修为无上限"><GameIcon class="sm-ico" name="cultivation" :size="22" /><b>{{ profile.basePower }} × {{ (100 + (profile.cultivation || 0)) }}%</b><small>基础 × 修为 {{ profile.cultivation || 0 }}%</small></div>
+        <div class="sm"><GameIcon class="sm-ico" name="line" :size="22" /><b>{{ fmtWeight(profile.lineStrength) }}</b><small>鱼线承重</small></div>
+        <div class="sm"><GameIcon class="sm-ico" name="target" :size="22" /><b>{{ fmtWeight(profile.maxCatchWeight) }}</b><small>最大可钓</small></div>
       </div>
 
       <section>
-        <h3>🎣 钓竿</h3>
+        <h3><GameIcon name="hook" :size="19" /> 钓竿</h3>
         <div class="row" v-if="rods.length">
           <div class="item" v-for="rod in rods" :key="rod.userItemId" :class="{ on: rod.equipped }">
             <div class="ico">
               <img v-if="rodSprite(rod.itemId)" :src="rodSprite(rod.itemId)" :alt="rod.name" class="rod-img" />
-              <template v-else>{{ rod.icon }}</template>
+              <GameIcon v-else :name="rod.icon" :size="52" />
             </div>
             <div class="meta">
               <div class="nm">{{ rod.name }} <span class="lvl">钓力 {{ rod.power }}</span></div>
               <div class="specs">
-                <span v-if="rod.lineStrength">🧵 承重 {{ fmtWeight(rod.lineStrength) }}</span>
-                <span v-if="rod.maxCatchWeight">🎯 可钓 {{ fmtWeight(rod.maxCatchWeight) }}</span>
+                <span v-if="rod.lineStrength"><GameIcon name="line" :size="13" /> 承重 {{ fmtWeight(rod.lineStrength) }}</span>
+                <span v-if="rod.maxCatchWeight"><GameIcon name="target" :size="13" /> 可钓 {{ fmtWeight(rod.maxCatchWeight) }}</span>
               </div>
               <div class="q">×{{ rod.quantity }}</div>
             </div>
@@ -97,19 +99,19 @@ onMounted(load)
             </button>
           </div>
         </div>
-        <p class="empty" v-else>还没有钓竿，去商店看看吧 🛒</p>
+        <p class="empty" v-else>还没有钓竿，去仙市看看吧</p>
       </section>
 
       <section v-if="lines.length">
-        <h3>🧵 鱼线工具</h3>
+        <h3><GameIcon name="line" :size="19" /> 鱼线工具</h3>
         <div class="row">
           <div class="item line" v-for="l in lines" :key="l.userItemId" :class="{ on: l.equipped }">
-            <div class="ico">{{ l.icon }}</div>
+            <div class="ico"><GameIcon :name="l.icon" :size="52" /></div>
             <div class="meta">
               <div class="nm">{{ l.name }}</div>
               <div class="specs">
-                <span v-if="l.lineStrength">🧵 承重 {{ fmtWeight(l.lineStrength) }}</span>
-                <span v-if="l.maxCatchWeight">🎯 可钓 {{ fmtWeight(l.maxCatchWeight) }}</span>
+                <span v-if="l.lineStrength"><GameIcon name="line" :size="13" /> 承重 {{ fmtWeight(l.lineStrength) }}</span>
+                <span v-if="l.maxCatchWeight"><GameIcon name="target" :size="13" /> 可钓 {{ fmtWeight(l.maxCatchWeight) }}</span>
               </div>
               <div class="q">×{{ l.quantity }}</div>
             </div>
@@ -121,10 +123,10 @@ onMounted(load)
       </section>
 
       <section>
-        <h3>🪱 鱼饵（共 {{ profile.totalBait }} 个）</h3>
+        <h3><GameIcon name="baitWorm" :size="19" /> 鱼饵（共 {{ profile.totalBait }} 个）</h3>
         <div class="row" v-if="baits.length">
           <div class="item" v-for="b in baits" :key="b.userItemId">
-            <div class="ico">{{ b.icon }}</div>
+            <div class="ico"><GameIcon :name="b.icon" :size="52" /></div>
             <div class="meta">
               <div class="nm">{{ b.name }}</div>
               <div class="q">×{{ b.quantity }}</div>
@@ -132,14 +134,14 @@ onMounted(load)
             <span class="tag">{{ b.power > 0 ? '高级' : '普通' }}</span>
           </div>
         </div>
-        <p class="empty" v-else>没有鱼饵了，抛竿需要鱼饵哦 🪱</p>
+        <p class="empty" v-else>没有鱼饵了，抛竿需要鱼饵</p>
       </section>
 
       <section v-if="luck.length">
-        <h3>🍀 幸运物</h3>
+        <h3><GameIcon name="clover" :size="19" /> 幸运物</h3>
         <div class="row">
           <div class="item" v-for="l in luck" :key="l.userItemId">
-            <div class="ico">{{ l.icon }}</div>
+            <div class="ico"><GameIcon :name="l.icon" :size="52" /></div>
             <div class="meta">
               <div class="nm">{{ l.name }}</div>
               <div class="q">×{{ l.quantity }}（已生效）</div>

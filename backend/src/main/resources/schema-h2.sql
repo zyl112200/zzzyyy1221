@@ -12,6 +12,7 @@ CREATE TABLE user (
   password    VARCHAR(100) NOT NULL,
   shells      INT          NOT NULL DEFAULT 50,
   strength    INT          NOT NULL DEFAULT 10,
+  cultivation INT          NOT NULL DEFAULT 0,  -- 修为%（无上限，单独作用于基础力量；总力量=strength×(1+cultivation/100)）
   gold_stones INT          NOT NULL DEFAULT 0,
   power_realm INT          NOT NULL DEFAULT 1,
   permission  INT          NOT NULL DEFAULT 1,

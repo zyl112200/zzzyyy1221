@@ -33,8 +33,11 @@ public class User {
     /** 金币余额（游戏货币，注册时默认 50） */
     private Integer shells;
 
-    /** 根骨：决定收线稳定性与可抗衡的鱼重，注册默认 10（对应前端「力量」展示） */
+    /** 基础力量（根骨）：决定收线稳定性与可抗衡的鱼重，注册默认 10 */
     private Integer strength = 10;
+
+    /** 修为百分比（初始 0，无上限）：单独计算在基础力量上；总力量 = strength × (1 + cultivation/100) */
+    private Integer cultivation = 0;
 
     /** 金石：兼容字段，货币已统一为金币（恒为 0） */
     private Integer goldStones;
