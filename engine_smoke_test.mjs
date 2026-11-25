@@ -49,11 +49,11 @@ const enc3 = r.data
 r = call('POST', '/api/game/settle', { username: 'tester1', encounterId: enc3.encounterId, landed: false, breakType: 'ROD' })
 ok('断竿结算成功', r.code === 200, r.data.rodBroken === true ? '鱼竿损毁' : '鱼竿保留')
 
-console.log('\n=== 5) 力量成长（钓到超过自身上限 10% 的鱼 → 力量 +10%）===')
+console.log('\n=== 5) 力量成长（钓到超过自身上限 10% 的鱼 → 基础力量随机 +1~50%，修为独立 +1~50 个百分点）===')
 r = call('GET', '/api/game/me?username=spongebob')
 ok('spongebob 初始力量=100', r.data.power === 100, `power=${r.data.power}`)
 
-// 连钓直到出现力量成长：只有重量 > 力量×1.1 才成长，且固定 +10%
+// 连钓直到出现力量成长：只有重量 > 力量×1.1 才成长，基础力量按 1~50% 随机增长
 let grown = null
 for (let i = 0; i < 80 && !grown; i++) {
   let c = call('POST', '/api/game/cast', { username: 'spongebob' })
@@ -73,9 +73,12 @@ for (let i = 0; i < 80 && !grown; i++) {
 ok('钓到超上限 10% 的鱼后力量成长', !!grown,
   grown ? `+${grown.powerGain}（${grown.powerGainPct}% / ${grown.powerKind}）→ ${grown.power}` : '80 竿内未触发')
 if (grown) {
-  ok('成长后力量更高', grown.power > 100, `power=${grown.power}`)
-  ok('成长比例固定 10%', grown.powerGainPct === 10, `${grown.powerGainPct}%`)
-  ok('力量按当前值增长（100→110）', grown.power === 110, `power=${grown.power}`)
+  ok('成长后基础力量更高', grown.basePower > 100, `basePower=${grown.basePower}`)
+  ok('基础力量成长比例落在 1~50%', grown.powerGainPct >= 1 && grown.powerGainPct <= 50, `${grown.powerGainPct}%`)
+  ok('基础力量按当前值增长（100→100×(1+pct%)）', grown.basePower === Math.round(100 * (1 + grown.powerGainPct / 100)), `basePower=${grown.basePower}, pct=${grown.powerGainPct}`)
+  ok('修为独立增长 1~50 个百分点', grown.cultivationGain >= 1 && grown.cultivationGain <= 50, `cultivationGain=${grown.cultivationGain}`)
+  ok('总力量净增为正', grown.powerGainTotal > 0, `powerGainTotal=${grown.powerGainTotal}`)
+  ok('结算返回总力量=基础×(1+修为%)', grown.power === Math.round(grown.basePower * (1 + grown.cultivation / 100)), `power=${grown.power}, base=${grown.basePower}, cult=${grown.cultivation}`)
   r = call('GET', '/api/game/me?username=spongebob')
   ok('档案力量已落盘', r.data.power === grown.power, `me.power=${r.data.power}`)
 }

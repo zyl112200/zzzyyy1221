@@ -10,7 +10,10 @@ import java.util.List;
 @Data
 public class CultivateResult {
 
-    /** 修炼后的金币余额（兼容字段，恒为 0） */
+    /** 修炼后的金币余额（扣费后，供前端直接刷新 HUD） */
+    private Integer shells;
+
+    /** 兼容字段，恒为 0 */
     private Integer goldStones;
 
     /** 已修炼的钓鱼功法 id 列表（如 ["jingxin","xieli"]） */

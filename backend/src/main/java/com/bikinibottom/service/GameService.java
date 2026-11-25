@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +58,8 @@ public class GameService {
     private static final double WUGOU_DISCOUNT = 0.85;
     /** 前端技能「巨型数值」安全上限（与本地引擎一致，超过则视为不可企及） */
     private static final long SAFE_MAX = 9007199254740991L;
+    /** 根骨上限：避免 20+strength*2 整数溢出与一键修炼死循环 */
+    private static final int STRENGTH_MAX = 100_000_000;
 
     /** 钓到神话 / 山海级稀有鱼时，AI 助手的随机祝贺台词（{fish} 占位鱼名，仙侠风） */
     private static final String[] RARE_CHEERS = {
@@ -91,8 +94,8 @@ public class GameService {
         SKILL_MAP = Collections.unmodifiableMap(m);
     }
 
-    /** 待结算的咬钩遭遇（encounterId -> encounter） */
-    private final Map<String, PendingEncounter> pending = new LinkedHashMap<>();
+    /** 待结算的咬钩遭遇（encounterId -> encounter），并发安全以支持多请求同时结算 */
+    private final Map<String, PendingEncounter> pending = new ConcurrentHashMap<>();
 
     private static final long ENCOUNTER_TTL_MS = 10 * 60 * 1000L;
 
@@ -319,7 +322,8 @@ public class GameService {
         int rodMax = equippedRod == null || equippedRod.getMaxCatchWeight() == null ? 0 : equippedRod.getMaxCatchWeight();
         int lineMax = equippedLine == null || equippedLine.getMaxCatchWeight() == null ? 0 : equippedLine.getMaxCatchWeight();
 
-        p.setEquippedRodId(equippedRod != null ? equippedRod.getId() : null);
+        p.setEquippedRodId(equippedRod != null && equippedRod.getId() != null
+                ? equippedRod.getId().intValue() : null);
         p.setEquippedRodName(equippedRod != null ? equippedRod.getName() : "无");
         p.setEquippedRodPower(equippedRod != null && equippedRod.getPower() != null ? equippedRod.getPower() : 0);
         p.setEquippedLineName(equippedLine != null ? equippedLine.getName() : "无");
@@ -405,6 +409,10 @@ public class GameService {
         if (quantity == null || quantity < 1) {
             quantity = 1;
         }
+        // 限制单次购买数量，避免 price × quantity 整数溢出绕过金币校验（P0）
+        if (quantity > 10000) {
+            return Result.error("单次最多购买 10000 件，请分批购买");
+        }
         User u = getUser(username);
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
@@ -413,7 +421,11 @@ public class GameService {
         if (item == null) {
             return Result.error("商店里没有这件商品");
         }
-        int cost = item.getPrice() * quantity;
+        long costL = (long) item.getPrice() * quantity;
+        if (costL > Integer.MAX_VALUE) {
+            return Result.error("购买数量过大，请分批购买");
+        }
+        int cost = (int) costL;
         if ((u.getShells() == null ? 0 : u.getShells()) < cost) {
             return Result.error("金币不够啦，先去钓鱼赚点 🪙");
         }
@@ -475,8 +487,13 @@ public class GameService {
     //  抛竿：生成咬钩遭遇
     // ==========================================================
 
-    /** 抛竿钓鱼：消耗 1 鱼饵，生成一条咬钩的鱼交给前端搏斗 */
+    /** 抛竿钓鱼：使用默认鱼饵（保留旧调用兼容） */
     public Result<CastResult> cast(String username, String mapId) {
+        return cast(username, mapId, null);
+    }
+
+    /** 抛竿钓鱼：消耗 1 鱼饵，生成一条咬钩的鱼交给前端搏斗（baitId 可选，指定则优先使用） */
+    public Result<CastResult> cast(String username, String mapId, Long baitId) {
         User u = getUser(username);
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
@@ -500,7 +517,8 @@ public class GameService {
             }
         }
 
-        boolean premiumBait = consumeBait(u.getId());
+        Item usedBait = consumeBait(u.getId(), baitId);
+        boolean premiumBait = usedBait != null && usedBait.getPower() != null && usedBait.getPower() > 0;
         int rodPower = profile.getEquippedRodPower();
         boolean luck = Boolean.TRUE.equals(profile.getLuckOwned());
         int maxCatch = profile.getMaxCatchWeight() == null ? 800 : profile.getMaxCatchWeight();
@@ -621,6 +639,11 @@ public class GameService {
         r.setRealmBonusPct((realmLvl - 1) * REALM_BONUS_PER_LEVEL);
         r.setMapId(String.valueOf(map.get("id")));
         r.setMapName(String.valueOf(map.get("name")));
+        if (usedBait != null) {
+            r.setBaitId(usedBait.getId());
+            r.setBaitName(usedBait.getName());
+            r.setBaitIcon(usedBait.getIcon());
+        }
         r.setMessage("有东西咬钩了！这是" + map.get("name") + "的" + def.name() + "，握紧鱼竿，开始收线！");
         return Result.success(r);
     }
@@ -637,15 +660,21 @@ public class GameService {
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
         }
-        PendingEncounter pe = pending.get(req.getEncounterId());
-        if (pe == null || !pe.getUsername().equals(req.getUsername())) {
-            return Result.error("这次咬钩已经跑掉了 🐟");
+        // 原子抢占结算权：computeIfPresent 保证并发请求下只有一个线程拿到遭遇，
+        // 其余线程得到 null，从根本上杜绝同一条鱼被重复入账（P0）
+        final PendingEncounter[] claimed = new PendingEncounter[1];
+        pending.computeIfPresent(req.getEncounterId(), (id, encounter) -> {
+            if (encounter.isSettled() || !encounter.getUsername().equals(req.getUsername())) {
+                return encounter;
+            }
+            encounter.setSettled(true);
+            claimed[0] = encounter;
+            return null; // 移除，后续并发请求拿不到
+        });
+        PendingEncounter pe = claimed[0];
+        if (pe == null) {
+            return Result.error("这条鱼已经结算过了，或这次咬钩不属于你 🐟");
         }
-        if (pe.isSettled()) {
-            return Result.error("这条鱼已经结算过了");
-        }
-        pe.setSettled(true);
-        pending.remove(pe.getEncounterId());
 
         boolean landed = Boolean.TRUE.equals(req.getLanded());
         String breakType = req.getBreakType() == null ? "NONE" : req.getBreakType();
@@ -774,6 +803,9 @@ public class GameService {
             return Result.error("仙门名录上没有此人 🌫️");
         }
         int strength = strengthOf(u);
+        if (strength >= STRENGTH_MAX) {
+            return Result.error("根骨已臻至上限，无法再淬炼 💪");
+        }
         int coins = u.getShells() == null ? 0 : u.getShells();
         int cost = 20 + strength * 2;
         if (coins < cost) {
@@ -848,12 +880,13 @@ public class GameService {
         int strength = strengthOf(u);
         int coins = u.getShells() == null ? 0 : u.getShells();
         int times = 0;
-        int totalCost = 0;
-        while (true) {
-            int cost = 20 + strength * 2;
-            if (coins < cost) {
+        long totalCost = 0;
+        while (strength < STRENGTH_MAX) {
+            long costL = 20L + (long) strength * 2;
+            if (costL > Integer.MAX_VALUE || coins < costL) {
                 break;
             }
+            int cost = (int) costL;
             coins -= cost;
             strength += 5;
             totalCost += cost;
@@ -868,7 +901,7 @@ public class GameService {
 
         TrainResult r = new TrainResult();
         r.setStrength(u.getStrength());
-        r.setCost(totalCost);
+        r.setCost((int) Math.min(Integer.MAX_VALUE, totalCost));
         r.setGoldStones(0); // 兼容字段
         r.setGained(times * 5);
         r.setMessage("💪 连修 " + times + " 次！根骨 +" + (times * 5) + "，金币耗尽");
@@ -966,6 +999,7 @@ public class GameService {
         userMapper.updateById(u);
 
         CultivateResult r = new CultivateResult();
+        r.setShells(u.getShells());
         r.setGoldStones(0); // 兼容字段
         r.setSkills(skills);
         return Result.success("📜 成功修炼《" + def.name() + "》！", r);
@@ -975,27 +1009,37 @@ public class GameService {
     //  鱼饵
     // ==========================================================
 
-    /** 消耗 1 个鱼饵（优先普通鱼饵，其次任意鱼饵），返回是否使用了高级饵 */
-    private boolean consumeBait(Long userId) {
-        UserItem bait = findFirst(userId, 5L);
-        boolean premium = false;
-        if (bait == null || bait.getQuantity() <= 0) {
-            List<UserItem> baits = userItemMapper.selectList(
-                    Wrappers.<UserItem>lambdaQuery().eq(UserItem::getUserId, userId));
-            for (UserItem ui : baits) {
-                Item it = itemMapper.selectById(ui.getItemId());
-                if (it != null && "BAIT".equals(it.getType()) && ui.getQuantity() > 0) {
-                    bait = ui;
-                    premium = it.getPower() != null && it.getPower() > 0;
-                    break;
+    /**
+     * 消耗 1 个鱼饵：指定 baitId 且库存充足时优先用它，否则退回「普通饵优先、其次任意饵」，
+     * 与离线引擎 localEngine.js 的 consumeBait 同构。返回实际消耗的商品（供前端展示与判定高级饵）。
+     */
+    private Item consumeBait(Long userId, Long baitId) {
+        UserItem bait = null;
+        if (baitId != null) {
+            UserItem target = findFirst(userId, baitId);
+            if (target != null && target.getQuantity() != null && target.getQuantity() > 0) {
+                bait = target;
+            }
+        }
+        if (bait == null) {
+            bait = findFirst(userId, 5L);
+            if (bait == null || bait.getQuantity() == null || bait.getQuantity() <= 0) {
+                List<UserItem> baits = userItemMapper.selectList(
+                        Wrappers.<UserItem>lambdaQuery().eq(UserItem::getUserId, userId));
+                for (UserItem ui : baits) {
+                    Item it = itemMapper.selectById(ui.getItemId());
+                    if (it != null && "BAIT".equals(it.getType()) && ui.getQuantity() != null && ui.getQuantity() > 0) {
+                        bait = ui;
+                        break;
+                    }
                 }
             }
         }
-        if (bait != null) {
-            bait.setQuantity(bait.getQuantity() - 1);
-            userItemMapper.updateById(bait);
-        }
-        return premium;
+        if (bait == null) return null;
+        Item it = itemMapper.selectById(bait.getItemId());
+        bait.setQuantity(bait.getQuantity() - 1);
+        userItemMapper.updateById(bait);
+        return it;
     }
 
     // ==========================================================

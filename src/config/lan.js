@@ -6,7 +6,7 @@
  *
  * 改动后需要：1) 重启 vite dev / 重新 build  2) 重启后端  3) 静态服务器重启
  */
-export const LAN_IP = '192.168.68.9'
+export const LAN_IP = '192.168.68.68'
 
 /** 后端（Spring Boot）端口 */
 export const BACKEND_PORT = 8080

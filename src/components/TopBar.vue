@@ -5,6 +5,8 @@ import GameIcon from './GameIcon.vue'
 
 const props = defineProps({
   shells: { type: Number, default: 0 },
+  // 金石为兼容字段（货币已统一为金币，恒为 0），保留 prop 以免父组件传参被丢弃
+  goldStones: { type: Number, default: 0 },
   power: { type: Number, default: 100 },
   cultivation: { type: Number, default: 0 }
 })
@@ -28,6 +30,11 @@ function logout() {
       <router-link to="/home"><GameIcon name="hook" :size="17" /> 灵湖</router-link>
       <router-link to="/assoc"><GameIcon name="trophy" :size="17" /> 协会</router-link>
       <router-link to="/codex"><GameIcon name="book" :size="17" /> 图鉴</router-link>
+      <router-link to="/skills"><GameIcon name="taiji" :size="17" /> 功法</router-link>
+      <router-link to="/achievements"><GameIcon name="medals" :size="17" /> 成就</router-link>
+      <router-link to="/pond"><GameIcon name="lotus" :size="17" /> 洞天</router-link>
+      <router-link to="/quests"><GameIcon name="scroll" :size="17" /> 悬赏</router-link>
+      <router-link to="/leaderboard"><GameIcon name="chart" :size="17" /> 天榜</router-link>
       <router-link to="/shop"><GameIcon name="cart" :size="17" /> 仙市</router-link>
       <router-link to="/inventory"><GameIcon name="backpack" :size="17" /> 行囊</router-link>
       <router-link v-if="isAdmin" to="/admin" class="admin-link"><GameIcon name="tools" :size="17" /> 后台</router-link>
@@ -122,4 +129,23 @@ function logout() {
   font-weight: bold;
 }
 .logout:hover { background: #ff5252; }
+
+/* 移动端：导航改为横向滚动，避免 8 个入口挤爆一行；状态条自动换行居中 */
+@media (max-width: 900px) {
+  .topbar { gap: 8px; padding: 8px 12px; }
+  .brand { font-size: 16px; }
+  .nav {
+    order: 3; width: 100%; overflow-x: auto; gap: 6px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { white-space: nowrap; padding: 6px 10px; font-size: 13px; }
+  .right { gap: 6px; }
+  .chip { padding: 4px 9px; font-size: 12px; }
+  .user { font-size: 12px; }
+  .logout { padding: 5px 10px; font-size: 12px; }
+}
+@media (max-width: 480px) {
+  .chip.cul { display: none; } /* 窄屏隐藏修为 chip，力量/金币仍可见 */
+}
 </style>

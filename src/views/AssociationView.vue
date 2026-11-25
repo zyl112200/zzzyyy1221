@@ -504,4 +504,14 @@ onBeforeUnmount(() => {
 .badge-table tr.achieved td { color: #a5d6a7; }
 .ok { color: #a5d6a7; font-weight: bold; }
 .lack { color: #9fc3e8; font-size: 12px; }
+
+@media (max-width: 560px) {
+  .wrap { padding: 14px 10px 50px; }
+  .head h2 { font-size: 22px; }
+  .tabs { gap: 5px; }
+  .tabs button { flex: 1 1 auto; font-size: 13px; padding: 7px 8px; }
+  .t-fish { width: 42px; height: 42px; flex-basis: 42px; font-size: 24px; }
+  .my-badge { gap: 10px; }
+  .badge-table { font-size: 12px; }
+}
 </style>

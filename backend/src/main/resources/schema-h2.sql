@@ -20,6 +20,10 @@ CREATE TABLE user (
   max_caught_weight INT    NOT NULL DEFAULT 0,   -- 历史最重单尾钓获（斤），协会徽章依据
   assoc_badge INT          NOT NULL DEFAULT 0,   -- 钓鱼协会认证徽章星级（0~9）
   current_map VARCHAR(30)  NOT NULL DEFAULT 'linghu', -- 当前所在钓场地图 id（对应前端 maps.js）
+  codex        CLOB,                                    -- 已解锁图鉴鱼名，逗号分隔
+  last_sign_date VARCHAR(10),                           -- 最近签到日期 yyyy-MM-dd
+  sign_streak  INT          NOT NULL DEFAULT 0,         -- 连续签到天数
+  sign_total   INT          NOT NULL DEFAULT 0,         -- 累计签到天数
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);

@@ -30,6 +30,9 @@ CREATE TABLE `user` (
   `assoc_badge` INT          NOT NULL DEFAULT 0        COMMENT '钓鱼协会认证徽章星级（0=未认证，1~9）',
   `current_map` VARCHAR(30)  NOT NULL DEFAULT 'linghu' COMMENT '当前所在钓场地图 id（对应前端 maps.js）',
   `codex`       TEXT                                    COMMENT '已解锁图鉴的鱼名列表，逗号分隔',
+  `last_sign_date` VARCHAR(10) DEFAULT NULL              COMMENT '最近一次签到日期 yyyy-MM-dd',
+  `sign_streak` INT          NOT NULL DEFAULT 0         COMMENT '当前连续签到天数',
+  `sign_total`  INT          NOT NULL DEFAULT 0         COMMENT '累计签到天数',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
@@ -143,3 +146,21 @@ INSERT INTO `item` (`id`, `name`, `type`, `price`, `power`, `icon`, `description
 INSERT INTO `user_item` (`user_id`, `item_id`, `quantity`, `equipped`) VALUES
   (1, 1, 1, 1), (1, 5, 5, 0),
   (2, 1, 1, 1), (2, 5, 5, 0);
+
+-- 钓鱼爆率配置（各品级相对权重；与 GameService 内置默认值一致，后台可改）
+INSERT INTO `catch_rate` (`tier_code`, `tier_name`, `base_weight`, `enabled`) VALUES
+  ('COMMON',    '普通', 60, 1),
+  ('RARE',      '稀有', 24, 1),
+  ('LEGENDARY', '传说', 10, 1),
+  ('MYTHIC',    '神话',  4, 1),
+  ('SHANHAI',   '山海',  1, 1);
+
+-- AI 助手预设问答（触发词 -> 回复，玩家消息包含触发词即命中）
+INSERT INTO `ai_dialog` (`scene`, `reply`, `enabled`, `sort_order`) VALUES
+  ('你好', '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍃', 1, 1),
+  ('怎么玩', '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦 🎣', 1, 2),
+  ('断线', '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断 🧵', 1, 3),
+  ('根骨', '根骨越高，收线越稳、能抗衡的灵鱼越重。用金石淬炼，每次 +5；金币可突破钓道境界，每重天永久 +5% 钓鱼收益 💪', 1, 4),
+  ('金石', '金石靠钓稀有 / 巨物获得，越稀有越重给得越多。钓到 1000 斤以上基本能攒出一大把 🪙', 1, 5),
+  ('巨物', '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊', 1, 6),
+  ('鱼饵', '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱', 1, 7);

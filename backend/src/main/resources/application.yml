@@ -8,8 +8,8 @@ spring:
     name: spongebob-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 数据库同样指向本机局域网 IP，局域网内其它机器起后端也能共用同一份数据
-    url: ${MYSQL_URL:jdbc:mysql://192.168.68.9:3306/spongebob_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    # 本机 MySQL 走回环地址最稳；局域网其它机器起后端时用 MYSQL_URL 覆盖为本机地址即可共用同一份数据
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/spongebob_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:123456}
 

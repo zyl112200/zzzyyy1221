@@ -4,9 +4,9 @@ import { BACKEND_ORIGIN, DEV_PORT } from './src/config/lan.js'
 
 // 说明：
 // - 本项目已改为「在线浏览」形态：由 HTTP 服务（dev / 静态站点）提供页面，
-//   局域网内任意设备可通过 http://192.168.68.9:<端口> 访问。
+//   局域网内任意设备可通过 http://192.168.68.68:<端口> 访问。
 // - server.host / preview.host = 0.0.0.0：监听所有网卡，手机、其他电脑都能连。
-// - proxy 把前端的 /api 转发到局域网后端 http://192.168.68.9:8080，
+// - proxy 把前端的 /api 转发到局域网后端（地址取自 src/config/lan.js）。
 //   浏览器侧始终同源请求，天然没有跨域问题。
 const proxy = {
   '/api': {
@@ -34,6 +34,8 @@ export default defineConfig({
     proxy
   },
   build: {
+    // 不自动清空 dist：避免部分环境对批量删除的拦截；同名产物会被直接覆盖
+    emptyOutDir: false,
     modulePreload: false,
     rollupOptions: {
       output: {

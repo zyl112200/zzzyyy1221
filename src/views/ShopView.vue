@@ -86,6 +86,11 @@ async function buy(item) {
 
 /** 一键买满：把背包里所有金币都花在这件东西上（能买几件买几件） */
 async function buyMax(item) {
+  // 免费道具（如初级钓竿 price=0）不能用「花光金币」的语义计算，否则 shells/0 = Infinity
+  if (!item.price || item.price <= 0) {
+    showToast('这件宝物本就无需金币，直接购买即可')
+    return
+  }
   const maxN = Math.floor(shells.value / item.price)
   if (maxN < 1) {
     showToast('金币不够啦，先去钓鱼')
@@ -322,4 +327,10 @@ onMounted(load)
 .buy:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #c17900; }
 .buy:disabled { opacity: .55; cursor: not-allowed; }
 .lack { font-size: 12px; color: #e53935; margin-top: 2px; }
+
+@media (max-width: 560px) {
+  .grid { grid-template-columns: 1fr; }
+  .shop { padding: 14px 10px; }
+  .icon { font-size: 38px; min-height: 44px; }
+}
 </style>

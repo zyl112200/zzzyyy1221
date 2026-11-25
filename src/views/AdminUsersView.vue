@@ -103,7 +103,7 @@ function openEdit(u) {
   editForm.username = u.username
   editForm.email = u.email
   editForm.shells = u.shells
-  editForm.power = u.power || 100
+  editForm.power = (u.strength != null ? u.strength : u.power) || 100
   editForm.cultivation = u.cultivation || 0
   editForm.permission = u.permission
   editMsg.value = ''
@@ -298,7 +298,7 @@ function formatTime(t) {
                   </span>
                 </td>
                 <td>{{ u.shells }}</td>
-                <td>{{ u.power || 100 }}</td>
+                <td>{{ (u.strength != null ? u.strength : u.power) || 100 }}</td>
                 <td>{{ u.cultivation || 0 }}%</td>
                 <td class="time">{{ formatTime(u.createTime) }}</td>
                 <td class="op">

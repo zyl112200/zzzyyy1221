@@ -14,6 +14,13 @@
 - **根骨系统**：根骨越高，收线越稳、能抗衡的鱼越重；根骨用 **金币** 升级，钓到越稀有越重的灵鱼，金币给得越多。
 - **力量成长**：力量即自身重量上限；每次**成功**钓起重量**超过当前上限 10%** 的鱼，力量按当前值 **+10%**（100 → 110 → 121……，复合增长）。
 - **顶级渔具**：**螺纹钢航母阻拦索**（十万斤内绝不挣断，可钓百万斤巨物）、深渊海神竿等。
+- **五大写实钓场**：灵湖 / 北原 / 极北之地 / 深渊 / 蓬莱，切换钓场整页画面随之变化，各有专属鱼与现身概率。
+- **钓鱼功法阁**：顶栏「功法」进入，用金币修炼静心诀 / 观水诀 / 引灵诀等 8 部功法，被动加成真实作用于搏鱼手感与收益（在线 / 离线均生效）。
+- **每日签到**：主页右下角礼物按钮，连签奖励递增，第 7 天额外 +500 金币，断签重置。
+- **水族箱湖景**：钓到过的灵鱼会游进灵湖，收集越多湖里越热闹；图鉴收录 40 种（含 10 种地图专属鱼）。
+- **钓道成就**：顶栏「成就」进入，14 条里程碑（图鉴 / 重量 / 功法 / 修为 / 签到 / 财富 / 徽章 / 游历），进度实时派生、荣誉值自动累计，无需领取。
+- **钓鱼协会**：任务 / 100 人比赛 / 1~9 星认证徽章；**AI 仙童** 游戏内答疑。
+- **移动端适配**：顶栏导航横向滚动，主界面 / 商店 / 协会 / 成就 / 签到面板均适配窄屏，手机可一起玩。
 
 ## 技术栈
 
@@ -34,12 +41,12 @@
 
 | 项 | 当前值 |
 | --- | --- |
-| 局域网 IP | `192.168.68.9` |
-| 前端在线站点 | `http://192.168.68.9:8081` |
-| 前端开发服务器 | `http://192.168.68.9:5173` |
-| 后端 API | `http://192.168.68.9:8080` |
-| 后端健康检查 | `http://192.168.68.9:8080/api/health` |
-| H2 控制台（h2 profile） | `http://192.168.68.9:8080/h2-console` |
+| 局域网 IP | `192.168.68.68` |
+| 前端在线站点 | `http://192.168.68.68:8081` |
+| 前端开发服务器 | `http://192.168.68.68:5173` |
+| 后端 API | `http://192.168.68.68:8080` |
+| 后端健康检查 | `http://192.168.68.68:8080/api/health` |
+| H2 控制台（h2 profile） | `http://192.168.68.68:8080/h2-console` |
 
 ## 一键启动（在线浏览，局域网可访问）
 
@@ -54,8 +61,8 @@
 
 启动后：
 
-- 本机访问 `http://localhost:8081`，局域网访问 `http://192.168.68.9:8081`
-- 前端的 `/api` 请求由网页服务反向代理到 `http://192.168.68.9:8080`，浏览器侧同源，**不涉及跨域**
+- 本机访问 `http://localhost:8081`，局域网访问 `http://192.168.68.68:8081`
+- 前端的 `/api` 请求由网页服务反向代理到 `http://192.168.68.68:8080`，浏览器侧同源，**不涉及跨域**
 - **后端没启动也不影响打开**：页面会先探测 `/api/health`，探测不到就自动降级到浏览器内本地引擎（`localStorage` 存档）
 - 默认账号：`spongebob` / `123456`（后端 H2 与本地引擎都预置；本地引擎另有 20.02 万金币）
 
@@ -67,10 +74,10 @@
 
 ```bash
 npm install      # 仅首次需要网络
-npm run dev      # 本机 http://localhost:5173 ／ 局域网 http://192.168.68.9:5173
+npm run dev      # 本机 http://localhost:5173 ／ 局域网 http://192.168.68.68:5173
 ```
 
-开发服务器已绑定 `0.0.0.0` 并把 `/api` 代理到 `http://192.168.68.9:8080`，所以：
+开发服务器已绑定 `0.0.0.0` 并把 `/api` 代理到 `http://192.168.68.68:8080`，所以：
 
 - 后端在跑 → 页面走真实后端（在线）
 - 后端没跑 → 自动降级到本地引擎，照样能调试
@@ -83,8 +90,8 @@ npm run online    # 等价于 npm run build + node serve-lan.mjs
 npm run serve     # 用已有 dist 直接起服务
 ```
 
-- 服务监听 `0.0.0.0:8081`，局域网访问 `http://192.168.68.9:8081`
-- `/api` 由该服务反向代理到 `http://192.168.68.9:8080`（同源，无需 CORS）
+- 服务监听 `0.0.0.0:8081`，局域网访问 `http://192.168.68.68:8081`
+- `/api` 由该服务反向代理到 `http://192.168.68.68:8080`（同源，无需 CORS）
 - 换端口：`node serve-lan.mjs --port 8082`
 - 也支持 `npm run preview`（Vite 预览，`0.0.0.0:4173`，同样带 `/api` 代理）
 
@@ -101,13 +108,23 @@ unset SERVER__PORT              # Windows: set SERVER__PORT=
 mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 ```
 
-- 后端地址 `http://192.168.68.9:8080`，已绑定 `0.0.0.0`，局域网可达
-- 连通性自检：浏览器打开 `http://192.168.68.9:8080/api/health`，返回 `code: 200` 即正常
-- H2 控制台：`http://192.168.68.9:8080/h2-console`（已开启 `web-allow-others`，局域网可访问）
+- 后端地址 `http://192.168.68.68:8080`，已绑定 `0.0.0.0`，局域网可达
+- 连通性自检：浏览器打开 `http://192.168.68.68:8080/api/health`，返回 `code: 200` 即正常
+- H2 控制台：`http://192.168.68.68:8080/h2-console`（已开启 `web-allow-others`，局域网可访问）
 - 跨域：`CorsConfig` 用 `allowedOriginPatterns` 放行 `192.168.*.*` / `10.*.*.*` / `172.*.*.*` / `localhost` 的任意端口
-- 前端连后端无需配置：开发服务器与在线站点都自带 `/api` 代理；直连后端时前端会自己拼 `http://192.168.68.9:8080`
-- MySQL 模式：改 `backend/src/main/resources/application.yml` 里的数据源（默认已指向 `192.168.68.9:3306/spongebob_db`）
-- 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）都已写入 H2 初始化脚本
+- 前端连后端无需配置：开发服务器与在线站点都自带 `/api` 代理；直连后端时前端会自己拼 `http://192.168.68.68:8080`
+- **MySQL 持久化模式（推荐，数据落库、多设备共享）**：
+  ```bash
+  # 1) 初始化一次（root/123456，只建 spongebob_db，不影响其它库）
+  mysql -uroot -p123456 < sql/spongebob_db.sql
+  # 2) Windows 双击 start-backend-mysql.bat；或命令行：
+  cd backend && java -jar target/spongebob-backend-1.0.0.jar --server.port=8080
+  ```
+  默认数据源 `127.0.0.1:3306/spongebob_db`（root/123456）。若后端跑在别的机器上连本机 MySQL，
+  用环境变量 `MYSQL_URL` 覆盖即可，例如 `MYSQL_URL=jdbc:mysql://192.168.68.68:3306/spongebob_db`，
+  并需在 MySQL 里给 root 授权该来源 IP。
+- H2 内存库模式：`start-backend.bat`（无 MySQL 时兜底，重启数据清空）
+- 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）在 H2 与 MySQL 两套初始化脚本里都已写入
 - 后端没启动时前端自动降级到本地引擎，两套模式的接口契约一致
 
 
@@ -167,8 +184,9 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 ## 钓鱼功法（功法阁）
 
-主页右下角「功法」按钮打开 **功法阁**，可用 **金币** 修炼 8 种钓鱼功法（取材自真实钓鱼口诀与「钓道修仙」类设定），
-修炼后获得被动加成（内容定义在 `src/data/skills.js`，离线引擎 `localEngine.js` 与后端 `GameService` 同构生效）：
+顶栏「功法」入口（`/skills`）打开 **功法阁**，可用 **金币** 修炼 8 种钓鱼功法（取材自真实钓鱼口诀与「钓道修仙」类设定），
+修炼后获得被动加成，真实作用于搏鱼手感与金币收益（目录定义在 `src/api/game.js` 对接的 `/api/game/skills`，
+离线引擎 `localEngine.js` 与后端 `GameService` 同构生效）：
 
 | 功法 | 消耗(金币) | 效果 |
 | --- | --- | --- |
@@ -180,6 +198,16 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | 潮汐真诀 | 45 | 提竿命中窗口 +0.6 秒 |
 | 无钩钓法 | 60 | 境界突破消耗 -15% |
 | 钓道真解 | 120 | 全能小幅提升（张力 -8% / 收线 +8% / 收益 +8%） |
+
+## 每日签到
+
+主页右下角礼物按钮打开签到面板，每天可签一次：
+
+- 奖励递增：第 n 天 = `100 + (n-1)×50` 金币，**第 7 天**额外 +500（里程碑）；
+- 连续签到中途断签则连签天数重置为 1，累计签到天数只增不减；
+- 面板展示固定 7 日奖励预览，红点提示今日未签；签到金币实时入账并刷新顶栏余额。
+- 接口：`GET /api/signin/info?username=`、`POST /api/signin/do { username }`（在线 / 离线同构）。
+- 回归测试：`node feature_smoke_test.mjs`（覆盖功法与签到，24 项）。
 
 ## 商店目录
 
@@ -209,6 +237,9 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `/register` | 叩仙门注册页（修仙主题，无需邮箱） | 已登录则跳 `/home` |
 | `/home` | 第一人称灵湖钓场 | 需登录 |
 | `/assoc` | 钓鱼协会（任务 / 比赛 / 认证徽章） | 需登录 |
+| `/codex` | 灵鱼图鉴（40 种，含地图专属） | 需登录 |
+| `/skills` | 钓道功法阁（修炼 8 部功法） | 需登录 |
+| `/achievements` | 钓道成就（14 条里程碑 / 荣誉值） | 需登录 |
 | `/shop` | 渔具商店 | 需登录 |
 | `/inventory` | 我的背包 | 需登录 |
 | `/admin` | 后台登录页 | — |
@@ -219,7 +250,7 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 前端所有 `/api/*` 请求由 `src/api/http.js` 分发：
 
-- **在线后端**（默认）：页面经 HTTP 打开 → 先探测 `/api/health` → 通则全部请求打到后端（`http://192.168.68.9:8080`），数据落库、多设备共享
+- **在线后端**（默认）：页面经 HTTP 打开 → 先探测 `/api/health` → 通则全部请求打到后端（`http://192.168.68.68:8080`），数据落库、多设备共享
 - **本地引擎**（降级）：后端探测失败，或显式 `?api=local` → 由 `src/api/localEngine.js` 在浏览器内处理，存档在 `localStorage`
 
 两种通道的请求 / 返回结构与下表完全一致，所以页面代码在两者之间可以无缝切换。
@@ -234,8 +265,10 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `POST /api/game/settle` | 搏鱼结算（成功入账 / 断线断竿） | `{ "username", "encounterId", "landed", "breakType" }` |
 | `POST /api/game/train` | 金币淬炼根骨（+5） | `{ "username" }` |
 | `POST /api/game/realm-up` | 金币突破钓道境界 | `{ "username" }` |
-| `GET  /api/game/skills` | 钓鱼功法目录（8 种） | — |
+| `GET/POST /api/game/skills` | 钓鱼功法目录（8 种，两种方法一并支持） | — |
 | `POST /api/game/cultivate` | 修炼钓鱼功法（消耗金币解锁被动） | `{ "username", "skillId" }` |
+| `GET  /api/signin/info` | 每日签到状态（连签 / 累计 / 7 日预览） | query: username |
+| `POST /api/signin/do` | 执行每日签到（发金币，重复签到拦截） | `{ "username" }` |
 | `GET  /api/shop/items` | 商店目录 | — |
 | `POST /api/shop/buy` | 购买道具 | `{ "username", "itemId", "quantity" }` |
 | `POST /api/game/equip` | 装备钓竿 / 鱼线 | `{ "username", "userItemId" }` |
@@ -266,16 +299,24 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 > 钓鱼协会再新增两列（历史最重单尾 / 认证徽章星级）：
 > `ALTER TABLE user ADD COLUMN max_caught_weight INT NOT NULL DEFAULT 0;`
 > `ALTER TABLE user ADD COLUMN assoc_badge INT NOT NULL DEFAULT 0;`
-> H2 内存库（`schema-h2.sql`）已同步加列，无需手动迁移。
+> 每日签到新增三列：`ALTER TABLE user ADD COLUMN last_sign_date VARCHAR(10);`、
+> `ALTER TABLE user ADD COLUMN sign_streak INT NOT NULL DEFAULT 0;`、
+> `ALTER TABLE user ADD COLUMN sign_total INT NOT NULL DEFAULT 0;`。
+> H2 内存库（`schema-h2.sql`）已同步加列，无需手动迁移；上述 MySQL 列已在本机库中执行完毕。
 
 ### 在线模式与本地引擎的已知差异
 
 | 项 | 在线（后端） | 本地引擎 |
 | --- | --- | --- |
-| 数据存储 | H2 / MySQL，多设备共享 | 各浏览器自己的 `localStorage` |
-| 数值体系 | 根骨 + 钓道境界 + 功法（`/api/game/me` 里 `power` 与 `strength` 同值），成功钓起超过自身上限 10% 的鱼时力量 +10% | 力量即重量上限，成功钓起超过上限 10% 的鱼时力量按当前值 +10%（复合增长） |
-| 地图目录 | 完整：后端 `/api/game/maps` 提供 5 张钓场，选图持久化到 `current_map`，专属鱼概率与重量系数两端一致 | 完整：行为与后端一致 |
+| 数据存储 | MySQL（默认）/ H2（兜底），多设备共享 | 各浏览器自己的 `localStorage` |
+| 力量与修为 | 基础力量 `strength` + 修为% ，总力量 = `strength × (1+修为%)`；钓起超上限 10% 的鱼时基础力量与修为各随机 +1~50 | 同构：基础力量 `power` + 修为%，总力量 = `power × (1+修为%)`，成长规则一致 |
+| 功法 / 签到 / 选图 / 鱼饵 | 功法被动、每日签到、选图持久化、指定鱼饵（`baitId`）全部生效 | 同构：功法 / 签到 / 选图 / 指定鱼饵行为与后端一致 |
+| 普通鱼抽取算法 | 先按品级权重抽品级，再按品级区间定重量（观水诀提权） | 重量围绕力量倍数分布，再由重量定品级（观水诀上浮倍数）——最终品级分布接近，但单尾结果会有差异 |
+| 钓道境界 | 后端保留 999 重天境界系统（每重 +5% 收益，无钩诀 -15% 消耗） | 离线引擎无境界（成长走力量 + 修为），档案无该字段 |
 | 钓鱼比赛 | 真人在线报名进入同一场匹配池，不足 100 人由人机补齐；比赛状态在后端内存中，重启重置 | 同一局里模拟报名与匹配，可完整跑完 1 分钟匹配 + 1 小时比赛（测试脚本会快进时间） |
+
+> 说明：普通鱼抽取算法两端模型不同（品级优先 vs 重量优先），因此同一账号在线 / 离线的单尾结果不会完全一致，
+> 但装备、鱼饵、地图、功法、修为等各项加成均已对齐，正常游玩体验无差异。
 
 
 ---
@@ -308,7 +349,9 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 >
 > 协会功能回归测试：`node assoc_smoke_test.mjs`（Node 直跑本地引擎，覆盖 10 任务发布、1 分钟匹配 → 100 人 → 1 小时结算保底、徽章全流程）。
 > 引擎全链路回归测试：`node engine_smoke_test.mjs`（注册登录、抛竿结算、力量成长、地图、商店背包、后台用户管理、AI 助手）。
-> 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.9:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
+> 经济回归测试：`node coin_smoke_test.mjs`（单一货币 / 旧存档迁移）；爆率回归：`node odds_smoke_test.mjs`。
+> 新系统回归测试：`node feature_smoke_test.mjs`（功法阁 + 每日签到，24 项）、`node achievement_smoke_test.mjs`（成就，18 项）。
+> 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.68:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
 
 ---
 
@@ -331,8 +374,8 @@ npm run online             # 构建 + 起局域网服务（推荐）
 
 | 现象 | 处理 |
 | --- | --- |
-| 其它设备打不开 `http://192.168.68.9:8081` | Windows 防火墙放行 Node / 8081、8080 端口（首次运行会弹窗，选「允许专用网络」） |
-| 页面能开但一直提示连不上后端 | 确认后端在跑：浏览器打开 `http://192.168.68.9:8080/api/health` 应返回 200 |
+| 其它设备打不开 `http://192.168.68.68:8081` | Windows 防火墙放行 Node / 8081、8080 端口（首次运行会弹窗，选「允许专用网络」） |
+| 页面能开但一直提示连不上后端 | 确认后端在跑：浏览器打开 `http://192.168.68.68:8080/api/health` 应返回 200 |
 | 后端在跑，前端却进了本地存档 | 浏览器里可能留了 `bikini_api_mode=local`，执行 `localStorage.removeItem('bikini_api_mode')` 后刷新 |
 | 端口被占用 | 网页服务：`node serve-lan.mjs --port 8082`；后端：`application.yml` 里改 `server.port` |
 | 本机 IP 变了（换 WiFi / DHCP） | 只改 `src/config/lan.js` 的 `LAN_IP`，然后重启服务与后端、重新 `npm run build` |
@@ -348,6 +391,8 @@ npm run online             # 构建 + 起局域网服务（推荐）
 ├── serve-lan.mjs             # ★ 在线浏览：零依赖静态服务 + /api 反向代理（0.0.0.0:8081）
 ├── check-lan.mjs             # ★ 局域网连通性自检（npm run check）
 ├── verify-features.mjs       # ★ 新功能端到端验证（地图 / 10 任务 / 100 人比赛报名）
+├── feature_smoke_test.mjs    # ★ 新系统回归（功法阁 + 每日签到）
+├── achievement_smoke_test.mjs # ★ 成就系统回归
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
 ├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）

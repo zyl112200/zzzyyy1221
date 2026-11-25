@@ -2,6 +2,7 @@
 // 立绘复用 fishSprites.js（半写实 CG），lore 与后端 GameService.POOLS、localEngine.POOLS 一致。
 // 钓到对应鱼后由后端/本地引擎写入用户 codex（鱼名列表），图鉴按此解锁。
 import { FISH_SPRITES } from './fishSprites'
+import { EXCLUSIVE_FISH } from './maps'
 
 export const CODEX_TIERS = [
   { code: 'COMMON', label: '普通', color: '#b0bec5' },
@@ -67,6 +68,36 @@ export const CODEX_GROUPS = CODEX_TIERS.map((tier) => ({
   }))
 }))
 
-/** 全部鱼条目（扁平） */
-export const CODEX_ALL = CODEX_GROUPS.flatMap((g) => g.fish)
+// 地图专属鱼：只在特定钓场现身，钓起后同样写入 codex。
+// 此前图鉴只渲染 30 种常规鱼，导致这 10 种专属鱼解锁后无法显示、进度统计也缺失。
+const EXCLUSIVE_LORE = {
+  '冰原王鲑': '北原 · 寒潭霸主',
+  '玄冰巨鲲': '极北 · 冰海巨影',
+  '雪峰飞鲤': '极北 · 跃瀑灵鲤',
+  '幽冥龙王': '北原 · 寒域龙君',
+  '九幽冥鲛': '深渊 · 血海猎手',
+  '蓬莱金鳌': '蓬莱 · 负星神龟',
+  '寒渊烛龙': '深渊 · 幽光龙种',
+  '冰魄银鳗': '极北 · 冻电之鳗',
+  '霜甲巨蟹': '北原 · 万年寒甲',
+  '极光锦鲤': '极北 · 极光祥瑞'
+}
+const EXCLUSIVE_GROUP = {
+  code: 'EXCLUSIVE',
+  label: '地图专属',
+  color: '#ff7043',
+  fish: EXCLUSIVE_FISH.map((f) => ({
+    name: f.name,
+    lore: EXCLUSIVE_LORE[f.name] || f.lore,
+    story: f.lore,
+    tier: 'EXCLUSIVE',
+    tierName: '专属',
+    sprite: FISH_SPRITES[f.name] || null
+  }))
+}
+
+/** 图鉴分组：5 个常规品级 + 地图专属 */
+export const ALL_CODEX_GROUPS = [...CODEX_GROUPS, EXCLUSIVE_GROUP]
+/** 全部鱼条目（扁平，含专属鱼），共 40 种 */
+export const CODEX_ALL = ALL_CODEX_GROUPS.flatMap((g) => g.fish)
 export const CODEX_TOTAL = CODEX_ALL.length

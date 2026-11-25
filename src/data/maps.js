@@ -1,3 +1,4 @@
+// 用 URL 而不是 import 引用图片：Vite 会打包资源，Node 冒烟测试也能直接加载本文件
 /**
  * 地图（钓场）配置
  * ---------------------------------------------------------------
@@ -16,6 +17,8 @@ export const MAPS = [
     id: 'linghu',
     name: '灵湖',
     icon: 'map_linghu',
+    scene: new URL('../assets/scene_bg.png', import.meta.url).href,
+    theme: 'linghu',
     desc: '仙门脚下的一汪灵泉，鱼群寻常，适合初窥门径。',
     exclusiveRate: 0,
     recommendPower: 0,
@@ -26,6 +29,8 @@ export const MAPS = [
     id: 'beiyuan',
     name: '北原',
     icon: 'map_beiyuan',
+    scene: new URL('../assets/maps/scenes/scene_beiyuan.png', import.meta.url).href,
+    theme: 'beiyuan',
     desc: '北境荒原的寒潭，灵气稀薄却时有异鱼出没，专属鱼现身概率大增。',
     exclusiveRate: 0.30,
     recommendPower: 300,
@@ -36,6 +41,8 @@ export const MAPS = [
     id: 'jibei',
     name: '极北之地',
     icon: 'map_jibei',
+    scene: new URL('../assets/maps/scenes/scene_jibei.png', import.meta.url).href,
+    theme: 'jibei',
     desc: '天地尽头的不冻冰海，传说深处的专属鱼重逾万斤。',
     exclusiveRate: 0.55,
     recommendPower: 2000,
@@ -46,6 +53,8 @@ export const MAPS = [
     id: 'shenyuan',
     name: '深渊',
     icon: 'map_shenyuan',
+    scene: new URL('../assets/maps/scenes/scene_shenyuan.png', import.meta.url).href,
+    theme: 'shenyuan',
     desc: '海沟最深处，光无法抵达，巨物横行，专属鱼成群。',
     exclusiveRate: 0.75,
     recommendPower: 20000,
@@ -56,6 +65,8 @@ export const MAPS = [
     id: 'penglai',
     name: '蓬莱',
     icon: 'map_penglai',
+    scene: new URL('../assets/maps/scenes/scene_penglai.png', import.meta.url).href,
+    theme: 'penglai',
     desc: '海外仙岛，灵气氤氲，专属鱼遍池，凡钓皆珍。',
     exclusiveRate: 0.85,
     recommendPower: 100000,

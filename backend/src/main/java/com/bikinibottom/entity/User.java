@@ -63,6 +63,15 @@ public class User {
     /** 当前所在钓场地图 id（对应前端 maps.js，默认灵湖） */
     private String currentMap = "linghu";
 
+    /** 最近一次每日签到的日期（yyyy-MM-dd，服务器时区） */
+    private String lastSignDate;
+
+    /** 当前连续签到天数（断签则重置为 1） */
+    private Integer signStreak = 0;
+
+    /** 累计签到天数 */
+    private Integer signTotal = 0;
+
     /** 已解锁图鉴的鱼名列表（逗号分隔，钓起对应鱼后写入） */
     private String codex = "";
 

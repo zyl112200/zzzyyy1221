@@ -49,14 +49,14 @@ public class AdminUserController {
     @PostMapping("/users")
     public Result<User> create(@RequestBody AdminUserDto dto) {
         return userService.adminCreateUser(dto.getUsername(), dto.getEmail(), dto.getPassword(),
-                dto.getShells(), dto.getStrength(), dto.getCultivation(), dto.getGoldStones(), dto.getPowerRealm(), dto.getPermission());
+                dto.getShells(), dto.effectiveStrength(), dto.getCultivation(), dto.getGoldStones(), dto.getPowerRealm(), dto.getPermission());
     }
 
     /** 编辑用户：POST /api/admin/users/update */
     @PostMapping("/users/update")
     public Result<User> update(@RequestBody AdminUserDto dto) {
         if (dto.getId() == null) return Result.error("缺少用户 ID");
-        return userService.adminUpdateUser(dto.getId(), dto.getEmail(), dto.getShells(), dto.getStrength(),
+        return userService.adminUpdateUser(dto.getId(), dto.getEmail(), dto.getShells(), dto.effectiveStrength(),
                 dto.getCultivation(), dto.getGoldStones(), dto.getPowerRealm(), dto.getPermission());
     }
 

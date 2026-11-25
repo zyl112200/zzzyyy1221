@@ -56,7 +56,7 @@ r = legacyEngine.localCall('GET', '/api/game/me?username=legacy')
 ok('旧号金币 = 原金币 + 原金石', r.code === 200 && r.data.shells === 150, `shells=${r.data?.shells}`)
 ok('旧号金石归零', r.data.goldStones === 0)
 const saved = JSON.parse(store[DB_KEY])
-ok('迁移结果已写回存档', saved.version === 5 && saved.users[0].shells === 150, `version=${saved.version}`)
+ok('迁移结果已写回存档', saved.version === 7 && saved.users[0].shells === 150, `version=${saved.version}`)
 // 模拟重新打开页面：再读一次不应重复折算
 r = legacyEngine.localCall('GET', '/api/game/me?username=legacy')
 ok('重新读取不会重复折算', r.data.shells === 150, `shells=${r.data.shells}`)

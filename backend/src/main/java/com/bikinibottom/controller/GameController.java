@@ -45,10 +45,16 @@ public class GameController {
         return gameService.me(username);
     }
 
-    /** 抛竿（生成咬钩遭遇）：POST /api/game/cast  { "username": "xxx", "mapId": "linghu" } */
+    /** 抛竿（生成咬钩遭遇）：POST /api/game/cast  { "username", "mapId", "baitId" } */
     @PostMapping("/cast")
-    public Result<CastResult> cast(@RequestBody Map<String, String> body) {
-        return gameService.cast(body.get("username"), body.get("mapId"));
+    public Result<CastResult> cast(@RequestBody Map<String, Object> body) {
+        String username = body.get("username") == null ? null : String.valueOf(body.get("username"));
+        String mapId = body.get("mapId") == null ? null : String.valueOf(body.get("mapId"));
+        Long baitId = null;
+        try {
+            if (body.get("baitId") != null) baitId = Long.valueOf(String.valueOf(body.get("baitId")));
+        } catch (NumberFormatException ignored) { /* 非法 baitId 视为未指定，回退默认饵 */ }
+        return gameService.cast(username, mapId, baitId);
     }
 
     /** 地图目录：GET /api/game/maps —— 返回全部钓场配置（含专属鱼概率与建议力量） */

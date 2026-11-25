@@ -33,6 +33,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
      * 注册：用户名唯一校验，密码 BCrypt 加密入库；
      * 邮箱已改为可选，留空时按用户名生成占位邮箱以保持数据模型不变
      */
+    @Transactional
     public Result<User> register(RegisterRequest req) {
         boolean usernameExists = lambdaQuery().eq(User::getUsername, req.getUsername()).exists();
         if (usernameExists) {
@@ -64,7 +65,6 @@ public class UserService extends ServiceImpl<UserMapper, User> {
      * 新注册用户初始背包：1 把初级钓竿（item_id=1，已装备）+ 5 个普通鱼饵（item_id=5）。
      * 直接插库，保证新道号注册后即可抛竿，无需先去商店买饵。
      */
-    @Transactional
     private void grantStarterPack(Long userId) {
         UserItem rod = new UserItem();
         rod.setUserId(userId);

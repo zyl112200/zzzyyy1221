@@ -18,6 +18,9 @@
 import { SHOP_ITEMS, ITEM_MAP } from '../data/items.js'
 import { getAdminConfig } from '../admin/store.js'
 import { MAPS, MAP_MAP, DEFAULT_MAP, EXCLUSIVE_FISH } from '../data/maps.js'
+import { skyAt, skyEffects } from '../data/sky.js'
+import { rollFortune, fortuneBonusShells } from '../data/fortune.js'
+import { forgeBonus, normalizeFeature } from '../data/feature.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -69,9 +72,10 @@ function readDb() {
  *            之后不再产出金石；goldStones 仅作为兼容字段保留，恒为 0。
  *   v5 → v6：新增「修为」系统——cultivation（修为百分比，初始 0），
  *            独立于基础力量 power；总力量 = power × (1 + cultivation/100)。
+ *   v6 → v7：新增「每日签到」——lastSignDate / signStreak / signTotal。
  */
 function migrateDb(db) {
-  if (!db || db.version >= 6) return false
+  if (!db || db.version >= 7) return false
   if (db.version < 4) {
     db.version = 4
     for (const u of db.users || []) {
@@ -95,6 +99,14 @@ function migrateDb(db) {
     }
     db.version = 6
   }
+  if (db.version < 7) {
+    for (const u of db.users || []) {
+      if (u.lastSignDate == null) u.lastSignDate = null
+      if (u.signStreak == null) u.signStreak = 0
+      if (u.signTotal == null) u.signTotal = 0
+    }
+    db.version = 7
+  }
   return true
 }
 
@@ -110,14 +122,14 @@ function persist() {
 
 function seedDb() {
   const db = {
-    version: 6,
+    version: 7,
     nextUserId: 4,
     nextUserItemId: 7,
     // permission: 0 = 管理员权限（可进后台）；1 = 默认权限（普通玩家，无后台权限）
     users: [
-      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-01T08:00:00.000Z' },
-      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200200, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-02T09:30:00.000Z' },
-      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, cultivation:0, goldStones:0, currentMap:'linghu', createTime:'2024-06-03T10:15:00.000Z' }
+      { id:1, username:'admin', email:'admin@bikini.bottom', password:'admin123', permission:0, shells:0, power:100, cultivation:0, goldStones:0, currentMap:'linghu', lastSignDate:null, signStreak:0, signTotal:0, createTime:'2024-06-01T08:00:00.000Z' },
+      { id:2, username:'spongebob', email:'spongebob@bikini.bottom', password:'123456', permission:1, shells:200200, power:100, cultivation:0, goldStones:0, currentMap:'linghu', lastSignDate:null, signStreak:0, signTotal:0, createTime:'2024-06-02T09:30:00.000Z' },
+      { id:3, username:'patrick', email:'patrick@bikini.bottom', password:'123456', permission:1, shells:50, power:100, cultivation:0, goldStones:0, currentMap:'linghu', lastSignDate:null, signStreak:0, signTotal:0, createTime:'2024-06-03T10:15:00.000Z' }
     ],
     userItems: [
       { id: 1, userId: 1, itemId: 1, quantity: 1, equipped: 1 },
@@ -259,6 +271,32 @@ const POOLS = {
 }
 
 // ============================================================
+//  钓鱼功法（与后端 GameService.SKILLS 一一对应）
+//  后端用「是否已修炼」的布尔模型并已把加成接入战斗；本地引擎同构实现，
+//  保证离线模式修炼功法后，稀有率 / 收益 / 突破折扣等加成立即生效。
+// ============================================================
+const SKILL_CATALOG = [
+  { id: 'jingxin', name: '静心诀', icon: 'lotus', cost: 30, desc: '心如止水，搏鱼时鱼线张力上升减缓 15%，更易稳在安全区。', effect: '张力上升 -15%' },
+  { id: 'xieli', name: '卸力诀', icon: 'shell', cost: 50, desc: '借力打力，收线速度提升 18%，巨物也拉得动。', effect: '收线速度 +18%' },
+  { id: 'guanshui', name: '观水诀', icon: 'search', cost: 40, desc: '察水色、辨鱼踪，稀有及以上灵鱼现身概率提升 60%。', effect: '稀有概率 +60%' },
+  { id: 'siji', name: '四季钓经', icon: 'leaf', cost: 35, desc: '顺应天时，咬钩等待时间缩短 25%。', effect: '等待时间 -25%' },
+  { id: 'yinling', name: '引灵诀', icon: 'star', cost: 80, desc: '引天地灵气入竿，钓鱼金币收益提升 20%。', effect: '钓鱼收益 +20%' },
+  { id: 'chaoxi', name: '潮汐真诀', icon: 'moon', cost: 45, desc: '浮漂信号更清晰，提竿命中窗口延长 0.6 秒。', effect: '命中窗口 +0.6s' },
+  { id: 'wugou', name: '无钩钓法', icon: 'hook', cost: 60, desc: '姜太公直钩钓天下，钓道突破消耗降低 15%。', effect: '突破消耗 -15%' },
+  { id: 'diaodao', name: '钓道真解', icon: 'scroll', cost: 120, desc: '钓形·钓气·钓心三合一，钓鱼收益额外提升 8%。', effect: '钓鱼收益 +8%' }
+]
+const SKILL_MAP_LOCAL = new Map(SKILL_CATALOG.map((s) => [s.id, s]))
+
+/** 用户已修炼功法 id 列表（兼容数组 / 逗号分隔字符串） */
+function skillsOf(u) {
+  if (Array.isArray(u.skills)) return u.skills
+  if (typeof u.skills === 'string' && u.skills.trim()) {
+    return u.skills.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
+// ============================================================
 //  档案构建
 // ============================================================
 function ensureStarterRod(userId) {
@@ -365,6 +403,7 @@ function buildProfile(u) {
       : (typeof u.codex === 'string' && u.codex.trim()
           ? u.codex.split(',').map((s) => s.trim()).filter(Boolean)
           : []),
+    skills: skillsOf(u), // 已修炼功法 id 列表（功法阁用）
     inventory
   }
 }
@@ -413,7 +452,7 @@ const RARE_CHEERS = [
   ' 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
 ]
 
-function cast(username, baitId, mapId) {
+function cast(username, baitId, mapId, blessing) {
   const u = userByName(username)
   if (!u) return err('仙门名录上没有此人️')
   ensureStarterRod(u.id)
@@ -445,21 +484,41 @@ function cast(username, baitId, mapId) {
     persist()
   }
 
-  // 后台金币奖励倍率（默认 1）
+  // 后台金币奖励倍率 × 功法收益加成（引灵诀 +20%、钓道真解 +8%）
   const admin = safeAdminConfig()
-  const coinMulAdj = admin && admin.currency ? admin.currency.shellMultiplier : 1
+  const adminCoinMul = admin && admin.currency ? admin.currency.shellMultiplier : 1
+  const mySkills = skillsOf(u)
+  const skillYield = (mySkills.includes('yinling') ? 1.2 : 1) * (mySkills.includes('diaodao') ? 1.08 : 1)
+  const coinMulAdj = adminCoinMul * skillYield
+  // 观水诀：稀有及以上更易现身——小幅上浮普通鱼重量倍数，使品级更易跨入 RARE+
+  const guanshui = mySkills.includes('guanshui')
 
-  // 鱼饵 / 幸运草小幅提升专属鱼概率
+  // ===== 新玩法：天时灵汐 / 仙缘奇遇 / 本命法宝，在抛竿瞬间合成三组倍率 =====
+  // 天时按本地时间确定性计算（与后端 SkyUtil 同构）；奇遇约 22% 触发；
+  // blessing 为洞天「本命法宝」淬炼等级 0~10，由前端传入、此处 clamp。
+  const sky = skyAt(new Date())
+  const skyFx = skyEffects(sky.weatherKey, sky.shichenIndex)
+  const fortune = rollFortune()
+  const fx = fortune || {}
+  const lv = Math.max(0, Math.min(10, Number(blessing) || 0))
+  const forgeFx = forgeBonus(lv)
+  const rareAdd = skyFx.rareBoost + (fx.rareBoost || 0) + forgeFx.rareBoost
+  const weightMul = skyFx.weightMul * (fx.weightMul || 1) * forgeFx.weightMul
+  const yieldMul = skyFx.coinMul * (fx.coinMul || 1) * forgeFx.coinMul
+  const extraShells = fortuneBonusShells(fortune ? fortune.id : null)
+
+  // 鱼饵 / 幸运草小幅提升专属鱼概率；天时 / 奇遇 / 法宝叠加后封顶 98%
   let exRate = map.exclusiveRate || 0
   if (premiumBait) exRate = Math.min(1, exRate + 0.05)
   if (luck) exRate = Math.min(1, exRate + 0.05)
+  exRate = Math.min(0.98, exRate + rareAdd)
 
   let fish, weight, tier
   if (Math.random() < exRate) {
     // 专属鱼：重量 = 力量 × 地图系数（受钓竿承重上限限制）
     fish = EXCLUSIVE_FISH[rand(EXCLUSIVE_FISH.length)]
     const m = map.exMin + Math.random() * (map.exMax - map.exMin)
-    weight = round1(power * m)
+    weight = round1(power * m * weightMul)
     if (weight > maxCatch) weight = maxCatch
     tier = tierByMul(weight / power)
   } else {
@@ -469,7 +528,9 @@ function cast(username, baitId, mapId) {
     if (r < 0.55) m = 0.4 + Math.random() * 0.6 // 0.4 ~ 1.0
     else if (r < 0.85) m = 1.0 + Math.random() * 0.5 // 1.0 ~ 1.5（自身极限）
     else m = 1.5 + Math.random() * 2.5 // 1.5 ~ 4.0（超极限）
-    weight = round1(power * m)
+    // 观水诀：把低倍数区间的鱼向上提，让稀有品级更易出现（与后端提权逻辑等效）
+    if (guanshui && m < 1.5) m = Math.min(1.5, m * 1.35)
+    weight = round1(power * m * weightMul)
     if (weight > maxCatch) weight = maxCatch
     tier = tierByMul(weight / power)
     const pool = POOLS[tier]
@@ -480,8 +541,8 @@ function cast(username, baitId, mapId) {
   // 货币统一为金币：原「贝壳口径奖励」与原「金石口径奖励」合并成一份金币
   const rewardShells = Math.round(
     (td.shellMul * (10 + 3 * Math.pow(weight, 0.75)) + td.goldMul * Math.pow(weight, 0.45))
-    * (coinMulAdj || 1)
-  )
+    * (coinMulAdj || 1) * yieldMul
+  ) + extraShells
   const rewardGold = 0 // 兼容字段：金石已取消，恒为 0
 
   const m = weight / power
@@ -508,6 +569,9 @@ function cast(username, baitId, mapId) {
     baitId: bait.itemId,
     baitName: bait.name,
     baitIcon: bait.icon,
+    fortuneId: fortune ? fortune.id : null,
+    skyKey: sky.weatherKey,
+    shichenIndex: sky.shichenIndex,
     createdAt: now,
     settled: false
   })
@@ -537,7 +601,11 @@ function cast(username, baitId, mapId) {
     totalBait: profile.totalBait - 1,
     shells: profile.shells,
     goldStones: profile.goldStones,
-    message: `有东西咬钩了！这是${map.name}的${fish.name}，握紧鱼竿，开始收线！`
+    skyKey: sky.weatherKey,
+    shichenIndex: sky.shichenIndex,
+    fortuneId: fortune ? fortune.id : null,
+    blessing: lv,
+    message: `${fortune ? `【仙缘·${fortune.name}】` : ''}有东西咬钩了！这是${map.name}的${fish.name}，握紧鱼竿，开始收线！`
   })
 }
 
@@ -556,6 +624,136 @@ function breakEquippedRod(u) {
     rod.equipped = 0
   }
   persist()
+}
+
+// ============================================================
+//  每日签到（与后端 SignInService 同构）
+// ============================================================
+function todayStr(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function signRewardForDay(day) {
+  const base = 100 + Math.max(0, day - 1) * 50
+  return day % 7 === 0 ? base + 500 : base
+}
+function signStateOf(u, signed, reward, message) {
+  const streak = u.signStreak || 0
+  // 固定第 1~7 天奖励预览（第 7 天里程碑），与面板「第 N 天」标签一致
+  const weekRewards = []
+  for (let day = 1; day <= 7; day++) weekRewards.push(signRewardForDay(day))
+  return ok({
+    signed,
+    rewardShells: reward,
+    message,
+    streak,
+    total: u.signTotal || 0,
+    todaySigned: u.lastSignDate === todayStr(),
+    weekRewards,
+    shells: u.shells == null ? 0 : u.shells
+  })
+}
+function signInInfo(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人️')
+  return signStateOf(u, false, 0, '')
+}
+function signIn(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人️')
+  const today = todayStr()
+  if (u.lastSignDate === today) {
+    return ok(signStateOf(u, false, 0, '今日已签到，明日再来领奖吧～').data)
+  }
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yStr = todayStr(yesterday)
+  let streak = u.signStreak || 0
+  if (!u.lastSignDate || u.lastSignDate !== yStr) streak = 0
+  streak += 1
+  const reward = signRewardForDay(streak)
+  u.signStreak = streak
+  u.signTotal = (u.signTotal || 0) + 1
+  u.lastSignDate = today
+  u.shells = (u.shells == null ? 0 : u.shells) + reward
+  persist()
+  const milestone = streak % 7 === 0 ? ' 🎉 连签 7 日里程碑！额外奖励已发放' : ''
+  const msg = `签到成功！连签 ${streak} 天，获得 ${reward} 金币${milestone}`
+  return ok(signStateOf(u, true, reward, msg).data)
+}
+
+// ============================================================
+//  仙钓天榜（跨玩家排行榜，与后端 LeaderboardService 同构）
+// ============================================================
+function countOfStr(s) {
+  if (typeof s !== 'string' || !s.trim()) return 0
+  return s.split(',').filter((x) => x.trim()).length
+}
+function scoreOfUser(u) {
+  const shells = Math.max(0, u.shells || 0)
+  const weight = Math.max(0, u.maxCaughtWeight || 0)
+  const codex = Array.isArray(u.codex) ? u.codex.length : countOfStr(u.codex)
+  const skills = Array.isArray(u.skills) ? u.skills.length : countOfStr(u.skills)
+  const cult = Math.max(0, u.cultivation || 0)
+  const sign = Math.max(0, u.signTotal || 0)
+  const badge = Math.max(0, u.assocBadge || 0)
+  return Math.floor(shells / 1000) + Math.floor(weight / 100) + codex * 20 + skills * 30 + cult + sign * 5 + badge * 50
+}
+function leaderboardBoard(type, limit) {
+  const db = readDb()
+  const users = (db.users || []).filter((u) => u.username !== 'admin')
+  let metric, label
+  switch (type) {
+    case 'wealth': metric = (u) => Math.max(0, u.shells || 0); label = '财富榜'; break
+    case 'weight': metric = (u) => Math.max(0, u.maxCaughtWeight || 0); label = '巨物榜'; break
+    case 'codex': metric = (u) => (Array.isArray(u.codex) ? u.codex.length : countOfStr(u.codex)); label = '图鉴榜'; break
+    case 'signin': metric = (u) => Math.max(0, u.signTotal || 0); label = '勤修榜'; break
+    case 'achievement':
+    default: metric = scoreOfUser; label = type && type !== 'overall' ? '综合榜' : '综合榜'; break
+  }
+  const cap = Math.max(1, Math.min(100, Number(limit) || 20))
+  const sorted = users.slice().sort((a, b) => metric(b) - metric(a) || String(a.username).localeCompare(String(b.username)))
+  const rows = sorted.slice(0, cap).map((u, i) => ({ rank: i + 1, username: u.username, value: metric(u) }))
+  return ok({ type: type || 'overall', label, rows, totalUsers: users.length })
+}
+function leaderboardOverview(username) {
+  const data = {}
+  for (const t of ['wealth', 'weight', 'codex', 'achievement', 'signin']) {
+    data[t] = leaderboardBoard(t, 3).data
+  }
+  const overall = leaderboardBoard('achievement', 100).data
+  let myRank = null, myScore = 0
+  for (const r of overall.rows) {
+    if (username && r.username === username) { myRank = r.rank; myScore = r.value; break }
+  }
+  if (myRank == null && username) {
+    const u = userByName(String(username))
+    if (u && u.username !== 'admin') { myRank = overall.totalUsers; myScore = scoreOfUser(u) }
+  }
+  data.myRank = myRank
+  data.myScore = myScore
+  return ok(data)
+}
+
+/** 功法目录（功法阁渲染用，无需登录） */
+function skillCatalog() {
+  return ok(SKILL_CATALOG)
+}
+
+/** 修炼功法：消耗金币解锁被动加成，与后端 cultivate 同构 */
+function cultivate(username, skillId) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人️')
+  const def = SKILL_MAP_LOCAL.get(String(skillId || ''))
+  if (!def) return err('功法不存在，无此传承')
+  const skills = skillsOf(u)
+  if (skills.includes(def.id)) return err('该功法已修炼，无需重复')
+  const shells = u.shells == null ? 0 : u.shells
+  if (shells < def.cost) return err(`金币不足，修炼《${def.name}》需要 ${def.cost} 金币`)
+  u.shells = shells - def.cost
+  u.skills = [...skills, def.id]
+  persist()
+  return ok({ shells: u.shells, goldStones: 0, skills: u.skills }, `📜 成功修炼《${def.name}》！`)
 }
 
 function settle({ username, encounterId, landed, breakType }) {
@@ -645,6 +843,36 @@ function settle({ username, encounterId, landed, breakType }) {
   r.basePower = basePowerOf(u)  // 基础力量
   r.cultivation = cultivationOf(u) // 修为百分比
   return ok(r)
+}
+
+// ============================================================
+//  洞天福地：灵池 / 悬赏令 / 本命法宝（统一状态存档）
+// ------------------------------------------------------------
+// 状态惰性挂在 user.feature 上，不提升存档版本号，避免影响旧存档迁移用例。
+// 金币发放按 earnedTotal 差额结算，与后端 FeatureService 同构：
+// 重复提交同一状态不会重复入账，负数差额即扣费（扩建 / 淬炼）。
+// ============================================================
+function featureState(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人')
+  return ok({ state: u.feature || null, shells: u.shells == null ? 0 : u.shells })
+}
+
+function featureSave(username, state, earnedTotal) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('仙门名录上没有此人')
+  if (!state || typeof state !== 'object' || !('earnedTotal' in state)) return err('洞天存档格式不正确')
+  const st = normalizeFeature(state)
+  const next = Number(earnedTotal) || 0
+  const prev = Number(u.feature && u.feature.earnedTotal) || 0
+  const delta = Math.max(-200000, Math.min(200000, next - prev))
+  const balance = (u.shells == null ? 0 : u.shells) + delta
+  if (balance < 0) return err('金币不足，无法完成本次洞天操作')
+  st.earnedTotal = next
+  u.shells = balance
+  u.feature = st
+  persist()
+  return ok({ state: st, shells: u.shells, delta })
 }
 
 // ============================================================
@@ -1401,7 +1629,7 @@ export function localCall(method, url, body) {
       return ok(buildProfile(u))
     }
     case '/api/game/cast':
-      return cast(b.username, b.baitId, b.mapId)
+      return cast(b.username, b.baitId, b.mapId, b.blessing)
     case '/api/game/baits':
       return listBaits(b.username)
     case '/api/game/settle':
@@ -1422,6 +1650,23 @@ export function localCall(method, url, body) {
       return shopItems()
     case '/api/shop/buy':
       return buy(b.username, b.itemId, b.quantity)
+    case '/api/leaderboard/overview':
+      return leaderboardOverview(params.username)
+    case '/api/leaderboard/board':
+      return leaderboardBoard(params.type, params.limit)
+    case '/api/signin/info':
+      return signInInfo(params.username)
+    case '/api/signin/do':
+      return signIn(b.username)
+    case '/api/game/skills':
+      return skillCatalog()
+    case '/api/game/cultivate':
+      return cultivate(b.username, b.skillId)
+    // ---- 洞天福地（灵池 / 悬赏 / 本命法宝）----
+    case '/api/feature/state':
+      return featureState(params.username)
+    case '/api/feature/save':
+      return featureSave(b.username, b.state, b.earnedTotal)
     case '/api/game/ai-dialogs':
       return aiDialogs()
     case '/api/game/ai-chat':

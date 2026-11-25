@@ -2,14 +2,20 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
+import SignInDialog from '../components/SignInDialog.vue'
 import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi, castApi, settleApi, baitsApi, mapsApi, setMapApi } from '../api/game'
 import { aiCelebrate } from '../store/aiAssistant'
 import { FISH_SPRITES } from '../data/fishSprites'
 import { rodSprite } from '../data/rodSprites'
-import { MAPS, DEFAULT_MAP } from '../data/maps'
+import { MAPS, MAP_MAP, DEFAULT_MAP } from '../data/maps'
+import { icon } from '../data/icons'
 import { calcFishingOdds } from '../data/fishingOdds'
+import { skyAt, skyFromParts, skyEffectText } from '../data/sky.js'
+import { FORTUNE_MAP } from '../data/fortune.js'
+import { applyCatch, normalizeFeature, blessingOf, forgeBonus } from '../data/feature.js'
+import { loadFeature, saveFeature } from '../api/featureApi.js'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -30,8 +36,26 @@ const profile = reactive({
   maxCatchWeight: 0,
   totalBait: 0,
   luckOwned: false,
+  skills: [],          // 已修炼功法 id 列表（功法阁）
   inventory: []
 })
+
+// ---------------- 天时灵汐 / 仙缘奇遇 / 本命法宝 ----------------
+// 天时按本地时间确定性刷新；抛竿后改用引擎返回的时辰+天象分量，保证画面与结算完全一致。
+const skyNow = ref(skyAt())
+const castSky = ref(null)
+const activeSky = computed(() => castSky.value || skyNow.value)
+const fortuneNow = computed(() => FORTUNE_MAP.get(encounter.value && encounter.value.fortuneId) || null)
+const featureState = ref(null)
+const blessing = computed(() => blessingOf(featureState.value))
+// 环境张力：天时 × 奇遇 × 本命法宝（三者都以倍率作用在搏鱼张力上升速度上）
+const envTensionMul = computed(() => {
+  const skyFx = activeSky.value.effects || {}
+  const f = fortuneNow.value || {}
+  return (skyFx.tensionMul || 1) * (f.tensionMul || 1) * forgeBonus(blessing.value).tensionMul
+})
+const envWaitMul = computed(() => (activeSky.value.effects || {}).waitMul || 1)
+let skyTimer = null
 
 // phases: idle | casting | waiting | bite | fight | result
 const phase = ref('idle')
@@ -54,6 +78,47 @@ const selectedMapId = ref(null)
 const showMap = ref(false)
 const showOdds = ref(false)
 const selectedMap = computed(() => maps.value.find((m) => m.id === selectedMapId.value) || null)
+// 视觉主题始终取本地完整配置：后端地图目录只提供数值，不含场景图
+const sceneMap = computed(() => MAP_MAP.get(selectedMapId.value) || MAP_MAP.get(profile.currentMap) || MAP_MAP.get(DEFAULT_MAP))
+const sceneImage = computed(() => (sceneMap.value && sceneMap.value.scene) || '')
+const sceneTheme = computed(() => (sceneMap.value && sceneMap.value.theme) || DEFAULT_MAP)
+const mapThumb = (m) => {
+  const local = MAP_MAP.get(m.id)
+  return icon((local && local.icon) || m.icon)
+}
+const mapSwitchName = ref('')
+let mapSwitchTimer = null
+
+// 水族箱：把玩家已钓到的鱼放进湖里巡游，收集得越多、湖里越热闹。
+// 未解锁任何鱼时用默认鱼影兜底；位置/大小由鱼名哈希决定，保证每次渲染稳定不跳动。
+const DEFAULT_AMBIENT = [
+  FISH_SPRITES.qingyu, FISH_SPRITES.shadingyu, FISH_SPRITES.hetun, FISH_SPRITES.xiaochouyu
+]
+function hashOf(s) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h
+}
+const ambientFish = computed(() => {
+  const caught = Array.isArray(profile.codex) ? profile.codex : []
+  const sprites = caught.map((name) => FISH_SPRITES[name]).filter(Boolean)
+  const pool = sprites.length ? sprites : DEFAULT_AMBIENT
+  // 最多 8 尾，避免画面过密；已钓鱼优先，不足再用默认鱼补足到至少 4 尾
+  const list = pool.slice(0, 8)
+  while (list.length < 4) list.push(DEFAULT_AMBIENT[list.length % DEFAULT_AMBIENT.length])
+  return list.map((sprite, i) => {
+    const h = hashOf((caught[i] || '') + i)
+    return {
+      sprite,
+      left: (8 + (h % 78)) + '%',
+      top: (64 + ((h >> 3) % 24)) + '%',
+      size: 40 + ((h >> 6) % 26),
+      delay: '-' + (h % 24) + 's',
+      dur: (15 + ((h >> 9) % 14)) + 's',
+      reverse: (h & 1) === 1
+    }
+  })
+})
 
 // 钓况预估：按在线后端 cast 算法实时计算各品质概率与可钓重量
 // 随地图 / 鱼饵 / 幸运物 / 装备变化即时刷新，与实际抛竿一致
@@ -92,9 +157,22 @@ async function loadMaps() {
 
 /** 选图：本地即时切换，并持久化到后端 / 本地引擎，供「当前所在」与抛竿默认地图使用 */
 async function selectMap(m) {
+  // 建议力量不足的钓场：给出明确风险提示（保留挑战自由，但不再"假锁"无反馈）
+  if (m.recommendPower && profile.power < m.recommendPower) {
+    const need = fmtWeight(m.recommendPower)
+    const go = window.confirm(
+      `「${m.name}」建议力量 ≥ ${need}，你当前仅 ${fmtWeight(profile.power)}。\n` +
+      `境界不足时巨物更易挣断鱼线、收线更吃力。仍要前往挑战吗？`
+    )
+    if (!go) return
+  }
   selectedMapId.value = m.id
   showMap.value = false
   profile.currentMap = m.id
+  showToast(`已抵达「${m.name}」，钓场画面已切换`)
+  mapSwitchName.value = m.name
+  clearTimeout(mapSwitchTimer)
+  mapSwitchTimer = setTimeout(() => { mapSwitchName.value = '' }, 1600)
   try {
     const res = await setMapApi(username, m.id)
     if (res.code === 200 && res.data) profile.currentMap = res.data.currentMap || m.id
@@ -232,7 +310,7 @@ const fishScale = computed(() => {
 const fishStyle = computed(() => ({
   left: (fishPos.x * 100).toFixed(2) + '%',
   top: (fishPos.y * 100).toFixed(2) + '%',
-  width: Math.round(110 * fishScale.value) + 'px',
+  width: Math.round(195 * fishScale.value) + 'px',
   transform: `translate(-50%, -50%) scaleX(${fishPos.face}) rotate(${fishPos.wig.toFixed(1)}deg)`
 }))
 
@@ -405,7 +483,7 @@ async function cast() {
   sfxCast()
 
   try {
-    const res = await castApi(username, selectedBaitId.value, selectedMapId.value)
+    const res = await castApi(username, selectedBaitId.value, selectedMapId.value, blessing.value)
     if (res.code !== 200) {
       showToast(res.message || '抛竿失败')
       phase.value = 'idle'
@@ -413,10 +491,15 @@ async function cast() {
       return
     }
     encounter.value = res.data
+    // 锁定这一竿的天时（用引擎返回值重建，跨时辰边界也不会与结算数值错位）
+    castSky.value = res.data.skyKey != null
+      ? skyFromParts(res.data.skyKey, res.data.shichenIndex)
+      : skyAt()
     profile.totalBait = res.data.totalBait
     profile.shells = res.data.shells
     profile.goldStones = res.data.goldStones
     loadBaits()
+    if (fortuneNow.value) showToast(`【仙缘·${fortuneNow.value.name}】${fortuneNow.value.desc}`)
     // 抛竿动画后进入等待
     waitTimer = setTimeout(() => {
       phase.value = 'waiting'
@@ -434,7 +517,7 @@ async function cast() {
 function scheduleBite() {
   const heavy = encounter.value ? encounter.value.difficulty : 0.2
   const sb = skillBonus.value
-  const delay = (1100 + Math.random() * 2200 + heavy * 300) * sb.waitMul
+  const delay = (1100 + Math.random() * 2200 + heavy * 300) * sb.waitMul * envWaitMul.value
   waitTimer = setTimeout(() => {
     if (phase.value !== 'waiting') return
     phase.value = 'bite'
@@ -496,7 +579,7 @@ function loop(ts) {
 
   const sb = skillBonus.value
   let reelSpeed = 30 / (0.75 + diff * 0.55) * (0.9 + power * 0.03) * sb.reelMul
-  let tensionRise = 16 * (0.6 + diff * 0.42) * sb.tensionMul
+  let tensionRise = 16 * (0.6 + diff * 0.42) * sb.tensionMul * envTensionMul.value
   let tensionDrop = 34
   let pullStrength = 7 * (0.5 + diff * 0.5)
 
@@ -667,6 +750,20 @@ async function settleOutcome(landed, breakType) {
       // 钓鱼协会播报：任务达成 / 比赛累计 / 徽章认证
       const assocMsgs = res.data.assocMessages || []
       assocMsgs.forEach((m, i) => setTimeout(() => showToast(m), 500 + i * 1800))
+      // 洞天福地：把这一竿写进当日悬赏手札，奇遇道行同步入账（在线 / 离线同构）
+      try {
+        const base = await loadFeature(username, true)
+        const st = applyCatch(base, {
+          tier: res.data.tier,
+          weight: res.data.weight,
+          mapId: enc.mapId || profile.currentMap || 'linghu',
+          coins: res.data.landed ? (res.data.rewardShells || 0) : 0,
+          landed: !!res.data.landed,
+          fortuneId: enc.fortuneId || null
+        })
+        featureState.value = st
+        await saveFeature(username, st)
+      } catch (e) { /* 统计写入失败不影响本次钓鱼结算 */ }
     } else {
       showToast(res.message || '结算失败')
     }
@@ -674,7 +771,7 @@ async function settleOutcome(landed, breakType) {
     showToast(e.message || '结算失败')
   }
   phase.value = 'result'
-  loadProfile()
+  await loadProfile()
 }
 
 function closeResult() {
@@ -689,14 +786,18 @@ function closeResult() {
   stopVibrate()
 }
 
-// 功法 / 修炼（已取消，成长体系改为「力量 + 地图」）
-
-// ---------------- 钓鱼功法（已取消，保留中性加成占位以避免战斗逻辑改动） ----------------
-// 功法系统已移除（取消功法与修炼）。这里仅保留一个中性加成对象，
-// 让抛竿 / 搏鱼相关逻辑无需改动即可照常运行。
-const skillBonus = {
-  value: { reelMul: 1, tensionMul: 1, waitMul: 1, biteAdd: 0 }
-}
+// ---------------- 钓鱼功法（功法阁修炼后在此生效） ----------------
+// 后端 cast/settle 已按 skills 计算稀有率与收益加成；这里补上搏鱼手感类加成，
+// 让静心诀 / 卸力诀 / 四季钓经 / 潮汐真诀在前端抛竿与拉扯时同样真实生效。
+const skillBonus = computed(() => {
+  const s = Array.isArray(profile.skills) ? profile.skills : []
+  return {
+    reelMul: s.includes('xieli') ? 1.18 : 1,     // 卸力诀：收线 +18%
+    tensionMul: s.includes('jingxin') ? 0.85 : 1, // 静心诀：张力上升 -15%
+    waitMul: s.includes('siji') ? 0.75 : 1,       // 四季钓经：等待 -25%
+    biteAdd: s.includes('chaoxi') ? 600 : 0       // 潮汐真诀：命中窗口 +0.6s
+  }
+})
 
 // ---------------- 展示辅助 ----------------
 function tierLabel(t) {
@@ -713,12 +814,18 @@ function fmtWeight(w) {
 onMounted(() => {
   loadProfile()
   loadMaps()
+  // 洞天状态（本命法宝等级 → 抛竿 blessing）；失败也不影响钓鱼
+  loadFeature(username).then((s) => { featureState.value = s }).catch(() => {})
+  // 天时每 30 秒刷新，跨时辰自动换象
+  skyTimer = setInterval(() => { skyNow.value = skyAt() }, 30000)
 })
 onBeforeUnmount(() => {
   clearTimers()
   stopLoop()
   stopSwim()
   clearTimeout(toastTimer)
+  clearTimeout(mapSwitchTimer)
+  clearInterval(skyTimer)
   stopVibrate()
 })
 </script>
@@ -727,10 +834,27 @@ onBeforeUnmount(() => {
   <div class="fishing-page" :class="{ 'is-berserk': berserk && phase === 'fight' }" :style="pageStyle">
     <TopBar :shells="profile.shells" :gold-stones="profile.goldStones" :power="profile.power" :cultivation="profile.cultivation" />
 
-    <!-- ================= 场景（写实：仙山 · 明月 · 灵湖） ================= -->
-    <div class="scene">
-      <div class="scene-photo"></div>
+    <!-- ================= 场景（写实钓场：随当前地图整页切换） ================= -->
+    <div class="scene" :class="`theme-${sceneTheme}`">
+      <div class="scene-photo" :key="sceneImage" :style="{ backgroundImage: `url(${sceneImage})` }"></div>
       <div class="scene-tint"></div>
+
+      <!-- 环境鱼影：湖面始终有鱼在游，不需要等到抛竿 -->
+      <div class="ambient-school" aria-hidden="true">
+        <img
+          v-for="(f, i) in ambientFish"
+          :key="i"
+          class="ambient-fish"
+          :class="{ rev: f.reverse }"
+          :src="f.sprite"
+          alt=""
+          draggable="false"
+          :style="{
+            left: f.left, top: f.top, width: f.size + 'px',
+            animationDuration: f.dur, animationDelay: f.delay
+          }"
+        />
+      </div>
 
       <!-- 水中的鱼：等待时巡游，咬钩时逼近浮漂，搏鱼时挣扎乱窜 -->
       <div
@@ -808,6 +932,11 @@ onBeforeUnmount(() => {
     <!-- ================= HUD ================= -->
     <div class="hud">
       <div class="hud-card">
+        <div class="row map-row">
+          <GameIcon :name="(sceneMap && sceneMap.icon) || 'map'" :size="18" />
+          <span class="nm">{{ (sceneMap && sceneMap.name) || '灵湖' }}</span>
+          <span class="badge">当前钓场</span>
+        </div>
         <div class="row">
           <GameIcon name="hook" :size="18" />
           <span class="nm">{{ profile.equippedRodName }}</span>
@@ -833,6 +962,19 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <!-- 天时罗盘：十二时辰 × 五天象，加成真实作用于这一竿 -->
+      <div class="sky-card" :style="{ '--sky': activeSky.color }">
+        <div class="sk-head">
+          <span class="sk-icon">{{ activeSky.icon }}</span>
+          <b>{{ activeSky.shichen }} · {{ activeSky.weather }}</b>
+          <span class="sk-span">{{ activeSky.span }}</span>
+        </div>
+        <div class="sk-omen">{{ activeSky.omen }}</div>
+        <div class="sk-hour">{{ activeSky.hourOmen }}</div>
+        <div class="sk-fx">{{ skyEffectText(activeSky.effects) }}</div>
+        <div class="sk-bless" v-if="blessing > 0">本命钓竿 {{ blessing }} 重 · 收益 +{{ Math.round((forgeBonus(blessing).coinMul - 1) * 100) }}%</div>
+      </div>
+
       <div class="recent" v-if="recent.length">
         <div class="recent-item" v-for="(r, i) in recent" :key="i" :class="tierClass(r.tier)">
           <GameIcon class="ri" :name="r.name" :size="16" />
@@ -852,8 +994,22 @@ onBeforeUnmount(() => {
       <span class="trealm" v-if="(encounter.realmBonusPct || 0) > 0"><GameIcon name="star" :size="14" /> 境界 +{{ encounter.realmBonusPct }}%</span>
     </div>
 
+    <!-- 切图提示 -->
+    <div class="map-switch-banner" :key="mapSwitchName" v-if="mapSwitchName">
+      <GameIcon name="map" :size="22" /> 抵达 {{ mapSwitchName }} · 已切换钓场
+    </div>
+
     <!-- 暴走横幅 -->
     <div class="berserk-banner" v-if="berserk && phase === 'fight'">灵兽暴走！稳住鱼竿！</div>
+
+    <!-- 仙缘奇遇横幅：这一竿触发的机缘 / 劫数 -->
+    <div class="fortune-banner" v-if="fortuneNow && ['waiting', 'bite', 'fight'].includes(phase)" :class="fortuneNow.tone">
+      <span class="fbi">{{ fortuneNow.icon }}</span>
+      <div class="fbt">
+        <b>仙缘 · {{ fortuneNow.name }}</b>
+        <small>{{ fortuneNow.desc }}</small>
+      </div>
+    </div>
 
     <!-- ================= 底部操作 ================= -->
     <div class="controls">
@@ -947,6 +1103,7 @@ onBeforeUnmount(() => {
           :class="{ active: m.id === selectedMapId, locked: m.recommendPower > profile.power }"
           @click="selectMap(m)"
         >
+          <img class="mc-thumb" :src="mapThumb(m)" :alt="m.name" />
           <span class="mc-name"><GameIcon :name="m.icon" :size="17" /> {{ m.name }}</span>
           <span class="mc-desc">{{ m.desc }}</span>
           <span class="mc-meta">专属鱼概率 {{ Math.round((m.exclusiveRate || 0) * 100) }}%</span>
@@ -1003,6 +1160,7 @@ onBeforeUnmount(() => {
           <span class="r-tier" :class="tierClass(result.tier)">{{ result.tierName }}</span>
           <span class="r-weight">{{ fmtWeight(result.weight) }}</span>
         </div>
+        <div class="r-fortune" v-if="fortuneNow"><span>{{ fortuneNow.icon }}</span> 仙缘·{{ fortuneNow.name }}：{{ fortuneNow.desc }}</div>
 
         <template v-if="result.landed">
           <div class="r-rewards">
@@ -1024,11 +1182,54 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <SignInDialog @signed="(shells) => profile.shells = shells" @toast="showToast" />
+
     <ToastMessage :message="toastMessage" :visible="toastVisible" />
   </div>
 </template>
 
 <style scoped>
+/* ---------- 天时灵汐罗盘 ---------- */
+.sky-card {
+  --sky: #ffca5f;
+  background: linear-gradient(150deg, rgba(20, 24, 48, .72), rgba(4, 22, 40, .78));
+  backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, var(--sky) 55%, transparent);
+  border-left: 3px solid var(--sky);
+  border-radius: 14px;
+  padding: 9px 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .3), inset 0 0 18px color-mix(in srgb, var(--sky) 10%, transparent);
+  max-width: 300px;
+}
+.sk-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff3d0; }
+.sk-icon { font-size: 18px; color: var(--sky); text-shadow: 0 0 10px var(--sky); }
+.sk-head b { letter-spacing: 1px; }
+.sk-span { font-size: 10px; opacity: .7; margin-left: auto; white-space: nowrap; }
+.sk-omen { font-size: 11px; color: var(--sky); margin-top: 5px; line-height: 1.5; }
+.sk-hour { font-size: 10px; color: #a9c7e6; margin-top: 2px; }
+.sk-fx { font-size: 11px; font-weight: 700; color: #ffe6a8; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, .16); }
+.sk-bless { font-size: 10px; color: #7ee7c7; margin-top: 3px; }
+
+/* ---------- 仙缘奇遇 ---------- */
+.fortune-banner {
+  position: absolute; z-index: 24; left: 50%; top: 84px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: min(520px, 88vw);
+  padding: 9px 16px; border-radius: 14px;
+  background: linear-gradient(120deg, rgba(52, 30, 78, .92), rgba(20, 18, 44, .92));
+  border: 1px solid rgba(255, 213, 79, .65);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 22px rgba(255, 213, 79, .2);
+  animation: fortuneIn .45s ease-out;
+}
+.fortune-banner.bad { border-color: rgba(255, 112, 67, .75); box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 22px rgba(255, 112, 67, .25); }
+.fbi { font-size: 26px; color: #ffd54f; text-shadow: 0 0 12px rgba(255, 213, 79, .8); }
+.fortune-banner.bad .fbi { color: #ff8a65; text-shadow: 0 0 12px rgba(255, 112, 67, .8); }
+.fbt { min-width: 0; }
+.fbt b { display: block; font-size: 13px; color: #ffe6a8; letter-spacing: 1px; }
+.fbt small { display: block; font-size: 11px; color: #cfe4ff; margin-top: 2px; line-height: 1.45; }
+@keyframes fortuneIn { from { opacity: 0; transform: translate(-50%, -14px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+.r-fortune { font-size: 11px; color: #ffe6a8; background: rgba(255, 213, 79, .1); border: 1px solid rgba(255, 213, 79, .3); border-radius: 9px; padding: 6px 9px; margin: 8px 0 2px; line-height: 1.5; }
+.r-fortune span { margin-right: 5px; }
+
 .fishing-page {
   position: relative;
   height: 100vh;
@@ -1042,15 +1243,15 @@ onBeforeUnmount(() => {
 .scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: #06121c; }
 .scene-photo {
   position: absolute; inset: 0;
-  background-image: url('../assets/scene_bg.png');
   background-size: cover;
   background-position: center 46%;
-  animation: sceneZoom 32s ease-in-out infinite alternate;
+  animation: sceneZoom 32s ease-in-out infinite alternate, sceneIn .65s ease-out;
 }
 @keyframes sceneZoom {
   0%   { transform: scale(1); }
   100% { transform: scale(1.07); }
 }
+@keyframes sceneIn { from { opacity: 0; } to { opacity: 1; } }
 /* 轻微压暗保证 HUD 与浮漂可读；暴走时转暖红 */
 .scene-tint {
   position: absolute; inset: 0;
@@ -1059,9 +1260,52 @@ onBeforeUnmount(() => {
     radial-gradient(ellipse 70% 70% at 50% 55%, rgba(0,0,0,0) 40%, rgba(0,0,0,.28) 100%);
   transition: background .5s;
 }
-.is-berserk .scene-photo { filter: saturate(1.2) hue-rotate(-18deg); }
-.is-berserk .scene-tint {
+/* 每张地图自己的光色，切图后整页氛围跟着变 */
+.scene.theme-beiyuan .scene-photo { background-position: center 42%; }
+.scene.theme-beiyuan .scene-tint {
+  background: linear-gradient(180deg, rgba(12, 34, 52, .18) 0%, rgba(12, 34, 52, 0) 32%, rgba(8, 28, 44, .3) 100%);
+}
+.scene.theme-jibei .scene-photo { background-position: center 48%; }
+.scene.theme-jibei .scene-tint {
+  background: linear-gradient(180deg, rgba(4, 16, 38, .3) 0%, rgba(4, 16, 38, .04) 36%, rgba(2, 12, 30, .38) 100%);
+}
+.scene.theme-shenyuan .scene-photo { background-position: center center; }
+.scene.theme-shenyuan .scene-tint {
+  background:
+    linear-gradient(180deg, rgba(0, 10, 20, .42) 0%, rgba(0, 12, 22, .08) 40%, rgba(0, 8, 18, .52) 100%),
+    radial-gradient(ellipse 60% 60% at 50% 45%, rgba(0,0,0,0) 30%, rgba(0, 0, 0, .5) 100%);
+}
+.scene.theme-penglai .scene-photo { background-position: center 44%; }
+.scene.theme-penglai .scene-tint {
+  background: linear-gradient(180deg, rgba(72, 40, 12, .16) 0%, rgba(72, 40, 12, 0) 34%, rgba(30, 24, 18, .28) 100%);
+}
+.fishing-page.is-berserk .scene-photo { filter: saturate(1.2) hue-rotate(-18deg); }
+.fishing-page.is-berserk .scene-tint {
   background: linear-gradient(180deg, rgba(90, 10, 10, .42) 0%, rgba(60, 8, 8, .18) 45%, rgba(40, 4, 4, .45) 100%);
+}
+
+/* ---------- 湖中常驻鱼影 ---------- */
+.ambient-school { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.ambient-fish {
+  position: absolute; display: block; opacity: .34;
+  filter: brightness(.62) saturate(.75) blur(.7px) drop-shadow(0 8px 12px rgba(0, 20, 40, .5));
+  animation-name: ambientSwim; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
+  will-change: transform;
+}
+.ambient-fish.rev { animation-name: ambientSwimRev; }
+@keyframes ambientSwim {
+  0%   { transform: translate(-24vw, 0) scaleX(1) rotate(-2deg); }
+  25%  { transform: translate(5vw, -12px) scaleX(1) rotate(3deg); }
+  50%  { transform: translate(35vw, 6px) scaleX(1) rotate(-3deg); }
+  75%  { transform: translate(65vw, -8px) scaleX(1) rotate(2deg); }
+  100% { transform: translate(100vw, 0) scaleX(1) rotate(-2deg); }
+}
+@keyframes ambientSwimRev {
+  0%   { transform: translate(100vw, 0) scaleX(-1) rotate(2deg); }
+  25%  { transform: translate(65vw, 8px) scaleX(-1) rotate(-3deg); }
+  50%  { transform: translate(35vw, -6px) scaleX(-1) rotate(3deg); }
+  75%  { transform: translate(5vw, 10px) scaleX(-1) rotate(-2deg); }
+  100% { transform: translate(-24vw, 0) scaleX(-1) rotate(2deg); }
 }
 
 .rig {
@@ -1078,20 +1322,21 @@ onBeforeUnmount(() => {
 }
 /* ---------- 水中可见的鱼 ---------- */
 .fish-sprite {
-  position: absolute; z-index: 2;
+  position: absolute; z-index: 3;
   pointer-events: none;
   will-change: transform, left, top;
+  filter: drop-shadow(0 10px 16px rgba(0, 12, 28, .5));
 }
 .fish-sprite img {
   width: 100%; display: block;
   transition: filter .35s, opacity .35s;
 }
-/* 等待：远远巡游，沉在水里较深处 */
-.fish-sprite.ph-waiting img { filter: brightness(.55) saturate(.65) blur(.6px); opacity: .55; }
+/* 等待：水下巡游，仍能看清轮廓 */
+.fish-sprite.ph-waiting img { filter: brightness(.88) saturate(.9) contrast(1.05) blur(.3px); opacity: .82; }
 /* 咬钩：逼近浮漂 */
-.fish-sprite.ph-bite img { filter: brightness(.72) saturate(.85); opacity: .8; }
+.fish-sprite.ph-bite img { filter: brightness(.96) saturate(1.02) contrast(1.05); opacity: .94; }
 /* 搏鱼：清晰可见地挣扎 */
-.fish-sprite.ph-fight img { filter: brightness(.82) saturate(.9); opacity: .95; }
+.fish-sprite.ph-fight img { filter: brightness(1) saturate(1.08) contrast(1.05); opacity: 1; }
 /* 暴走：发红光、更亮 */
 .fish-sprite.frantic img {
   filter: brightness(.95) saturate(1.15) drop-shadow(0 0 16px rgba(255, 96, 48, .85));
@@ -1157,6 +1402,8 @@ onBeforeUnmount(() => {
 }
 .hud-card .row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .hud-card .row.sub { opacity: .92; font-size: 13px; }
+.hud-card .map-row { padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,.16); }
+.hud-card .map-row .nm { color: #b3e5fc; letter-spacing: 1px; }
 .hud-card .row.cult .nm { color: #b9fff0; }
 .hud-card .row.cult .badge { color: #d7fff4; }
 .hud-card .ico { font-size: 18px; }
@@ -1211,6 +1458,21 @@ onBeforeUnmount(() => {
 .tier-legendary { background: #f9a825; color: #3e2723; }
 .tier-mythic { background: #e64a19; color: #fff; }
 .tier-shanhai { background: #b71c1c; color: #fff; box-shadow: 0 0 12px rgba(255,80,60,.7); }
+
+.map-switch-banner {
+  position: absolute; z-index: 24; top: 12%; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 22px; border-radius: 16px; white-space: nowrap;
+  background: rgba(2, 32, 58, .82); border: 1px solid rgba(79, 195, 247, .5);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #e1f5fe;
+  animation: mapSwitchIn 1.6s ease-out forwards;
+}
+@keyframes mapSwitchIn {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(.9); }
+  18%, 75% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(.98); }
+}
 
 .berserk-banner {
   position: absolute; z-index: 24; top: 18%; left: 50%; transform: translateX(-50%);
@@ -1358,6 +1620,11 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 12px rgba(79, 195, 247, .5);
 }
 .map-card.locked { opacity: .62; }
+.mc-thumb {
+  width: 100%; height: 66px; object-fit: contain; object-position: center;
+  border-radius: 9px; border: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.25);
+}
 .mc-name { font-weight: 800; font-size: 14px; color: #fff; }
 .mc-desc { font-size: 11px; line-height: 1.5; color: #d7c4ef; }
 .mc-meta { font-size: 11px; color: #ffd54f; }
@@ -1493,5 +1760,14 @@ onBeforeUnmount(() => {
   .assoc-fab { width: 50px; height: 50px; font-size: 20px; right: 70px; }
   .odds-fab { width: 50px; height: 50px; font-size: 20px; right: 128px; }
   .odds-panel { right: 12px; bottom: 78px; width: 88vw; max-width: 340px; }
+  /* 窄屏：天时罗盘收成两行，奇遇横幅压到顶部避免遮挡湖面 */
+  .sky-card { max-width: 210px; padding: 7px 9px; }
+  .sk-span, .sk-hour, .sk-bless { display: none; }
+  .sk-head { font-size: 11px; }
+  .sk-omen, .sk-fx { font-size: 10px; margin-top: 3px; }
+  .fortune-banner { top: 60px; padding: 6px 10px; max-width: 92vw; }
+  .fbt b { font-size: 12px; }
+  .fbt small { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fbi { font-size: 20px; }
 }
 </style>

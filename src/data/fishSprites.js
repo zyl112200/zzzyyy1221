@@ -74,3 +74,17 @@ export const FISH_SPRITES = {
   帝江: dijiang,
   狰: zheng
 }
+
+// 各地图的专属鱼同样使用写实立绘，避免水中/图鉴里退化成 emoji
+Object.assign(FISH_SPRITES, {
+  冰原王鲑: qingyu,
+  玄冰巨鲲: kun,
+  雪峰飞鲤: redaiyu,
+  幽冥龙王: zhulong,
+  九幽冥鲛: youlingsha,
+  蓬莱金鳌: xuanwu,
+  寒渊烛龙: zhulong,
+  冰魄银鳗: dianman,
+  霜甲巨蟹: diwangxie,
+  极光锦鲤: redaiyu
+})

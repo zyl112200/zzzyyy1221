@@ -34,9 +34,16 @@ public class AssociationController {
     /** 领取协会任务奖励：POST /api/assoc/task-claim { "username": "xxx", "taskId": 1 } */
     @PostMapping("/task-claim")
     public Result<Map<String, Object>> taskClaim(@RequestBody Map<String, Object> body) {
-        return associationService.claimTask(
-                (String) body.get("username"),
-                body.get("taskId") == null ? null : Integer.valueOf(String.valueOf(body.get("taskId"))));
+        Object usernameVal = body.get("username");
+        String username = usernameVal == null ? null : String.valueOf(usernameVal);
+        Integer taskId = null;
+        try {
+            Object tid = body.get("taskId");
+            if (tid != null) taskId = Integer.valueOf(String.valueOf(tid));
+        } catch (NumberFormatException ignored) {
+            return Result.error("任务编号无效");
+        }
+        return associationService.claimTask(username, taskId);
     }
 
     /** 在线报名钓鱼比赛（1 分钟匹配 → 100 人 → 1 小时）：POST /api/assoc/comp-start { "username": "xxx" } */

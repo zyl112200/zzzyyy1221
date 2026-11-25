@@ -73,6 +73,13 @@ public class CastResult {
 
     private String mapName;
 
+    /** 本次实际使用的鱼饵（与离线引擎同构，供前端展示） */
+    private Long baitId;
+
+    private String baitName;
+
+    private String baitIcon;
+
     /** 提示文案 */
     private String message;
 }

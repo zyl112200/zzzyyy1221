@@ -6,7 +6,7 @@ import ToastMessage from '../components/ToastMessage.vue'
 import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { meApi } from '../api/game'
-import { CODEX_GROUPS, CODEX_ALL, CODEX_TOTAL } from '../data/fishCodex'
+import { ALL_CODEX_GROUPS, CODEX_ALL, CODEX_TOTAL } from '../data/fishCodex'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -77,7 +77,7 @@ onMounted(load)
       </div>
 
       <!-- 按品级分组 -->
-      <section v-for="g in CODEX_GROUPS" :key="g.code" class="group">
+      <section v-for="g in ALL_CODEX_GROUPS" :key="g.code" class="group">
         <div class="group-head">
           <span class="tier-dot" :style="{ background: g.color, boxShadow: '0 0 10px ' + g.color }"></span>
           <h3>{{ g.label }}</h3>
