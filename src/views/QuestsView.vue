@@ -5,6 +5,7 @@ import ToastMessage from '../components/ToastMessage.vue'
 import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { loadFeature, saveFeature } from '../api/featureApi.js'
+import { meApi } from '../api/game.js'
 import { normalizeFeature, claimBounty, BOUNTY_TARGETS } from '../data/feature.js'
 
 const session = getSession()
@@ -43,8 +44,11 @@ function isClaimed(t) {
 async function load() {
   loading.value = true
   try {
-    const s = await loadFeature(username, true)
+    const [s, me] = await Promise.all([loadFeature(username, true), meApi(username)])
     if (s) state.value = s
+    if (me && me.code === 200 && me.data && me.data.shells != null) {
+      shells.value = me.data.shells
+    }
   } catch (e) {
     showToast(e.message || '悬赏令加载失败')
   } finally {
