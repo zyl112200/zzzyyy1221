@@ -39,6 +39,7 @@ function logout() {
       <router-link to="/leaderboard"><GameIcon name="chart" :size="17" /> 天榜</router-link>
       <router-link to="/shop"><GameIcon name="cart" :size="17" /> 仙市</router-link>
       <router-link to="/inventory"><GameIcon name="backpack" :size="17" /> 行囊</router-link>
+      <router-link to="/identity" class="identity-link"><GameIcon name="lock" :size="17" /> 实名</router-link>
       <router-link v-if="isAdmin" to="/admin" class="admin-link"><GameIcon name="tools" :size="17" /> 后台</router-link>
     </nav>
     <div class="right">
@@ -100,6 +101,11 @@ function logout() {
   color: #fff3c4;
 }
 .nav a.admin-link:hover { background: rgba(255, 213, 79, 0.45); }
+.nav a.identity-link {
+  background: rgba(124, 252, 0, 0.14);
+  color: #d6ffb0;
+}
+.nav a.identity-link:hover { background: rgba(124, 252, 0, 0.26); }
 .nav a.more-link {
   background: linear-gradient(135deg, rgba(129, 140, 248, 0.45), rgba(168, 85, 247, 0.45));
   color: #fff;
