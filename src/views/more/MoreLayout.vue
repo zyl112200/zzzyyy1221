@@ -1,9 +1,29 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getSession } from '../../store/session'
+import { meApi } from '../../api/game.js'
 
 const session = getSession()
 const username = session ? session.username : ''
+// 顶栏金币/力量/修为是全局账户状态：子页面架构下由布局统一加载，
+// 否则四个子页顶栏都显示 0（金币不同步）。
+const shells = ref(0)
+const power = ref(100)
+const cultivation = ref(0)
+
+onMounted(async () => {
+  if (!username) return
+  try {
+    const me = await meApi(username)
+    if (me && me.code === 200 && me.data) {
+      shells.value = me.data.shells == null ? 0 : me.data.shells
+      power.value = me.data.power == null ? 100 : me.data.power
+      cultivation.value = me.data.cultivation == null ? 0 : me.data.cultivation
+    }
+  } catch { /* 顶栏数值读取失败不影响玩法 */ }
+})
+
 const tabs = [
   { to: '/more/abyss', label: '无尽塔', icon: '⚔️', desc: '爬塔检定战力，冲层拿金币与道韵' },
   { to: '/more/vein', label: '灵脉', icon: '💎', desc: '离线挂机产金币与灵气，升级提产' },
@@ -14,7 +34,7 @@ const tabs = [
 
 <template>
   <div class="more-page">
-    <TopBar />
+    <TopBar :shells="shells" :power="power" :cultivation="cultivation" />
     <div class="wrap">
       <header class="more-head">
         <div>
