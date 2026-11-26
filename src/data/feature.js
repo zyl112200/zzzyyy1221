@@ -1,5 +1,10 @@
 // 洞天福地：灵池 / 悬赏令 / 本命法宝（统一状态）
 // ---------------------------------------------------------------
+import {
+  normalizeBonds, poolQiMul, contractFish, starUpFish, toggleActive,
+  expandSlots, upgradePool, FISH_TIER
+} from './bonds.js'
+
 // 状态惰性挂在用户 feature 字段上（见 localEngine.js / 后端 FeatureService），
 // 不提升存档版本号，避免影响旧存档迁移。金币发放按 earnedTotal 差额结算：
 // 重复提交同一状态不会重复入账，负数差额即扣费（扩建 / 淬炼）。
@@ -70,7 +75,9 @@ export function normalizeFeature(state) {
       landed: Math.max(0, Number(stats.landed) || 0),
       maxWeight: Math.max(0, Number(stats.maxWeight) || 0),
       byTier: stats.byTier && typeof stats.byTier === 'object' ? stats.byTier : {}
-    }
+    },
+    // 仙钓道途 · 灵契（惰性挂载，沿用洞天 feature 存档）
+    spiritBonds: normalizeBonds(s.spiritBonds)
   }
 }
 
@@ -119,9 +126,10 @@ export function applyCatch(base, info) {
   // 悬赏手札按天重置
   if (st.bounty.date !== todayKey()) st.bounty = emptyBounty(todayKey())
 
-  // 灵池：钓获入账（成功钓起才凝聚灵气）
+  // 灵池：钓获入账（成功钓起才凝聚灵气）；灵池扩建等级提升凝聚倍率
   if (landed) {
-    const gain = Math.max(1, Math.round(weight * 0.02 + coins * 0.01))
+    const qiMul = poolQiMul(st.spiritBonds.poolLevel)
+    const gain = Math.max(1, Math.round((weight * 0.02 + coins * 0.01) * qiMul))
     st.pool += gain
     if (st.bounty.tiers[tier] != null) st.bounty.tiers[tier] += 1
     st.bounty.weight += weight
@@ -162,6 +170,70 @@ export function forgeUp(state) {
   return st
 }
 
+// ============================================================
+//  仙钓道途 · 灵契操作（扣灵气 = 减 pool；扣金币 = 减 earnedTotal 负差额）
+//  返回新 state（规范化）；不可操作时返回 null。
+//  codex 为已解锁鱼名数组，用于「必须先钓到才能结契」校验。
+// ============================================================
+
+/** 结契一条已钓到的鱼 */
+export function bondContract(state, fishName, codex) {
+  const st = normalizeFeature(state)
+  const caught = Array.isArray(codex) ? codex : []
+  if (!fishName || !caught.includes(fishName)) return null // 必须先钓到
+  const cost = contractFish(st.spiritBonds, fishName, st.pool, Number.MAX_SAFE_INTEGER)
+  if (!cost) return null
+  st.spiritBonds = normalizeBonds(cost)
+  st.pool -= cost._cost.qi
+  st.earnedTotal -= cost._cost.coins // 金币差额由 save 层结算
+  return st
+}
+
+/** 升星 */
+export function bondStarUp(state, fishName) {
+  const st = normalizeFeature(state)
+  const up = starUpFish(st.spiritBonds, fishName, st.pool, Number.MAX_SAFE_INTEGER)
+  if (!up) return null
+  st.spiritBonds = normalizeBonds(up)
+  st.pool -= up._cost.qi
+  st.earnedTotal -= up._cost.coins
+  return st
+}
+
+/** 上阵 / 下阵 */
+export function bondToggleActive(state, fishName) {
+  const st = normalizeFeature(state)
+  const next = toggleActive(st.spiritBonds, fishName)
+  if (!next) return null
+  st.spiritBonds = normalizeBonds(next)
+  return st
+}
+
+/** 扩展出战位 */
+export function bondExpandSlots(state) {
+  const st = normalizeFeature(state)
+  const next = expandSlots(st.spiritBonds, Number.MAX_SAFE_INTEGER)
+  if (!next) return null
+  st.spiritBonds = normalizeBonds(next)
+  st.earnedTotal -= next._cost.coins
+  return st
+}
+
+/** 灵池扩建 */
+export function bondUpgradePool(state) {
+  const st = normalizeFeature(state)
+  const next = upgradePool(st.spiritBonds, Number.MAX_SAFE_INTEGER)
+  if (!next) return null
+  st.spiritBonds = normalizeBonds(next)
+  st.earnedTotal -= next._cost.coins
+  return st
+}
+
+/** 读取某鱼种品级（供 UI 展示） */
+export function fishTierOf(name) {
+  return FISH_TIER.get(name) || null
+}
+
 function clampInt(v, min, max) {
   const n = Math.round(Number(v) || 0)
   return Math.min(max, Math.max(min, n))
@@ -173,5 +245,6 @@ function round3(n) {
 
 export default {
   FORGE_MAX, BOUNTY_TARGETS, normalizeFeature, blessingOf, forgeBonus,
-  forgeCost, poolExpandCost, applyCatch, claimBounty, forgeUp
+  forgeCost, poolExpandCost, applyCatch, claimBounty, forgeUp,
+  bondContract, bondStarUp, bondToggleActive, bondExpandSlots, bondUpgradePool, fishTierOf
 }
