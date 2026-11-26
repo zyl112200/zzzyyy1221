@@ -213,6 +213,21 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 - 存档沿用洞天 `user.feature.spiritBonds`（无需新增数据库列）；金币差额按 `earnedTotal` 结算，灵气从 `pool` 扣除。
 - 回归测试：`node bond_smoke_test.mjs`（15 项）。
 
+## 更多 · 道途深处（四条长期养成主线）
+
+顶栏「🌌 更多」进入（`/more`，二级导航切换 4 个子页）。四线彼此联动，主打长期、耐肝的正循环：**钓鱼淬力量 → 爬塔攒道韵 → 轮回铸道印 → 战令每日修炼，永久加成反哺抛竿**。全部挂在 `user.feature.advance`（沿用洞天 feature JSON 存档，无数据库迁移；金币走 `earnedTotal` 差额、灵气走 `pool`）：
+
+| 玩法 | 路径 | 核心循环 | 肝点 |
+| --- | --- | --- | --- |
+| 🗼 无尽塔 | `/more/abyss` | 耗精力爬塔，战力 = 钓鱼力量，胜率随层数递减；通关得金币 + 道韵 | 指数难度（守卫战力 ×1.13/层），每 10 层里程碑 5~10 倍奖励，精力每日重置 |
+| 💎 灵脉 | `/more/vein` | 离线挂机按分钟产金币/灵气（12h 上限），升级提产 | 30 级升级成本指数增长，需定期上线收取 |
+| 🔄 轮回 | `/more/rebirth` | 耗道韵 + 塔层门槛轮回，得永久「道印」 | 无限轮，道韵成本 ×1.5/轮、塔层门槛 +12/轮；4 类道印可分配 |
+| 📜 战令 | `/more/pass` | 每日任务（钓 10 鱼 / 爬 3 层 / 收 1 次脉）攒经验升等级领奖 | 任务每日刷新，每 5 级一档永久加成，满级 50 级共 10 档 |
+
+- **永久加成**：无尽塔（每 10 层 +2% 金币/+0.5% 鱼重）、轮回道印（每级 +3% 金币/+0.4% 稀有/+2% 鱼重/−1% 张力）、战令（每 5 级各 +1%）汇总为 `advanceFx`，与 `bondFx` 合并后传入 `castApi`；本地引擎与后端同构 clamp（稀有 +50% / 鱼重 ×3 / 收益 ×5 / 张力最低 ×0.5）。
+- **资源联动**：钓鱼力量决定塔胜率；塔产道韵供轮回；道印加成提升钓鱼收益；灵脉产金币/灵气供升星扩建与消费；战令进度由钓鱼/爬塔/收脉自动推进。
+- 数据层 `src/data/advance.js`（Node 安全）+ `src/data/feature.js` 的 `adv*` wrapper；页面 `src/views/more/*`；回归测试 `node advance_smoke_test.mjs`（33 项）。
+
 ## 每日签到
 
 主页右下角礼物按钮打开签到面板，每天可签一次：
@@ -257,6 +272,11 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `/pond` | 洞天福地（本命法宝 / 灵池 / 悬赏） | 需登录 |
 | `/quests` | 每日悬赏令 | 需登录 |
 | `/bond` | 仙钓道途 · 灵契阁（结契 / 升星 / 出战 / 图鉴大成 / 灵池扩建） | 需登录 |
+| `/more` | 更多 · 道途深处（重定向到无尽塔） | 需登录 |
+| `/more/abyss` | 无尽塔（爬塔 / 战力检定 / 道韵） | 需登录 |
+| `/more/vein` | 灵脉（离线挂机 / 升级提产） | 需登录 |
+| `/more/rebirth` | 轮回（道韵转道印 / 永久加成） | 需登录 |
+| `/more/pass` | 战令（每日任务 / 等级奖励） | 需登录 |
 | `/leaderboard` | 仙钓天榜（财富 / 巨物 / 图鉴 / 综合 / 勤修） | 需登录 |
 | `/shop` | 渔具商店 | 需登录 |
 | `/inventory` | 我的背包 | 需登录 |
@@ -412,6 +432,8 @@ npm run online             # 构建 + 起局域网服务（推荐）
 ├── verify-features.mjs       # ★ 新功能端到端验证（地图 / 10 任务 / 100 人比赛报名）
 ├── feature_smoke_test.mjs    # ★ 新系统回归（功法阁 + 每日签到）
 ├── achievement_smoke_test.mjs # ★ 成就系统回归
+├── bond_smoke_test.mjs       # ★ 灵契系统回归（15 项）
+├── advance_smoke_test.mjs    # ★ 更多玩法回归（塔/脉/轮回/战令，33 项）
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
 ├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）
@@ -429,6 +451,7 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   ├── data/fortune.js          # ★ 仙缘奇遇：抛竿约 22% 触发的临时机缘
 │   ├── data/feature.js          # ★ 洞天福地：灵池 / 悬赏令 / 本命法宝状态与加成
 │   ├── data/bonds.js            # ★ 仙钓道途：灵契目录 / 升星 / 出战 / 图鉴大成 / 加成合成
+│   ├── data/advance.js          # ★ 更多玩法：无尽塔 / 灵脉 / 轮回 / 战令（Node 安全数据层）
 │   ├── api/featureApi.js        # ★ 洞天状态存取（/api/feature/*）
 │   ├── store/
 │   │   ├── session.js           # 登录会话
@@ -445,6 +468,12 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   │   ├── LeaderboardView.vue # ★ 仙钓天榜（财富 / 巨物 / 图鉴 / 综合 / 勤修）
 │   │   ├── PondView.vue        # ★ 洞天福地（本命法宝淬炼 / 灵池 / 战绩）
 │   │   ├── BondView.vue        # ★ 仙钓道途 · 灵契阁（结契 / 升星 / 出战 / 图鉴大成）
+│   │   ├── more/               # ★ 更多 · 道途深处（二级导航 + 四条长期养成线）
+│   │   │   ├── MoreLayout.vue  # 二级导航容器
+│   │   │   ├── AbyssView.vue   # 无尽塔
+│   │   │   ├── VeinView.vue    # 灵脉挂机
+│   │   │   ├── RebirthView.vue # 轮回 / 道印
+│   │   │   └── PassView.vue    # 战令
 │   │   └── QuestsView.vue      # ★ 每日悬赏令
 │   └── components/
 │       ├── ImmortalBackground.vue  # 修仙主题背景（仙山 / 明月 / 祥云 / 灵湖）
