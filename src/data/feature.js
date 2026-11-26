@@ -12,6 +12,8 @@ import {
 // 状态惰性挂在用户 feature 字段上（见 localEngine.js / 后端 FeatureService），
 // 不提升存档版本号，避免影响旧存档迁移。金币发放按 earnedTotal 差额结算：
 // 重复提交同一状态不会重复入账，负数差额即扣费（扩建 / 淬炼）。
+// 注意：钓鱼金币由 settle() 直接发放、不进 earnedTotal（避免双重发币）；
+//       earnedTotal 只记洞天内部收支（悬赏 / 淬炼 / 扩建 / 灵契 / 更多玩法）。
 //
 // 导出：
 //   · normalizeFeature(state) -> 补全默认字段、夹紧数值，返回规范化状态
@@ -51,7 +53,8 @@ function emptyBounty(date) {
 /** 规范化洞天状态：所有字段都有安全默认值 */
 export function normalizeFeature(state) {
   const s = state && typeof state === 'object' ? state : {}
-  // earnedTotal 是「累计结算净值」：钓获入账为正、淬炼/扩建消费为负，
+  // earnedTotal 是「洞天内部累计结算净值」：悬赏/更多玩法奖励为正、
+  // 淬炼/扩建/灵契消费为负；钓鱼金币不在此列（由 settle 直接发）。
   // 后端按新旧差额发放/扣回金币，因此这里允许为负，不能夹到 0。
   const earnedTotal = Number(s.earnedTotal) || 0
   const bounty = s.bounty && typeof s.bounty === 'object' && s.bounty.date === todayKey()
@@ -117,9 +120,11 @@ export function poolExpandCost(currentCapacity) {
 /**
  * 把一次钓获写入洞天状态。
  * info: { tier, weight, mapId, coins, landed, fortuneId }
- * 返回：新的规范化状态（其 earnedTotal 为「本次操作后累计应收」，
- *       调用方以 newState.earnedTotal 作为 saveFeature 的 earnedTotal 入参，
- *       localEngine / 后端按与旧值差额发放金币）。
+ * 注意：钓获金币已由 settle() 直接发放到 user.shells，
+ *       因此这里【不再】把 coins 累加进 earnedTotal，否则会双重发币。
+ *       earnedTotal 只承载「洞天内部收支」：悬赏奖励 / 淬炼 / 扩建 /
+ *       灵契 / 更多玩法的金币差额（见 claimBounty / forgeUp / adv*）。
+ * 返回：新的规范化状态（earnedTotal 保持不变）。
  */
 export function applyCatch(base, info) {
   const st = normalizeFeature(base)
@@ -146,8 +151,8 @@ export function applyCatch(base, info) {
   }
   st.stats.totalCatch += 1
 
-  // 累计收益：本次钓获金币 + 已领取悬赏奖励（claimed 在别处入账时同样累加）
-  st.earnedTotal += coins
+  // 钓获金币不走 earnedTotal：settle() 已直接发放，重复计入会导致双重发币。
+  // earnedTotal 仅记录洞天内部收支（悬赏奖励、淬炼/扩建/灵契/更多玩法消费）。
   return st
 }
 
