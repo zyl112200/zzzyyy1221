@@ -4,7 +4,8 @@
  */
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 
-const { localCall, resetLocalSave } = await import('file:///D:/workSpace/zzzyyy1221/src/api/localEngine.js')
+// 使用相对路径导入，保证在任意机器 / 工作目录下都能运行（原硬编码 D:/workSpace 路径在别的机器上必然失败）
+const { localCall, resetLocalSave } = await import('./src/api/localEngine.js')
 
 let pass = 0, fail = 0
 function check(name, cond, extra = '') {
