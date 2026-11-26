@@ -12,6 +12,11 @@ import LeaderboardView from '../views/LeaderboardView.vue'
 import PondView from '../views/PondView.vue'
 import QuestsView from '../views/QuestsView.vue'
 import BondView from '../views/BondView.vue'
+import MoreLayout from '../views/more/MoreLayout.vue'
+import AbyssView from '../views/more/AbyssView.vue'
+import VeinView from '../views/more/VeinView.vue'
+import RebirthView from '../views/more/RebirthView.vue'
+import PassView from '../views/more/PassView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
@@ -35,6 +40,16 @@ const router = createRouter({
     { path: '/pond', name: 'pond', component: PondView, meta: { auth: true } },
     { path: '/quests', name: 'quests', component: QuestsView, meta: { auth: true } },
     { path: '/bond', name: 'bond', component: BondView, meta: { auth: true } },
+    {
+      path: '/more', component: MoreLayout, meta: { auth: true },
+      redirect: '/more/abyss',
+      children: [
+        { path: 'abyss', name: 'more-abyss', component: AbyssView, meta: { auth: true } },
+        { path: 'vein', name: 'more-vein', component: VeinView, meta: { auth: true } },
+        { path: 'rebirth', name: 'more-rebirth', component: RebirthView, meta: { auth: true } },
+        { path: 'pass', name: 'more-pass', component: PassView, meta: { auth: true } }
+      ]
+    },
     { path: '/admin', name: 'admin-login', component: AdminLoginView },
     { path: '/admin/home', name: 'admin-home', component: AdminDashboardView, meta: { adminAuth: true } },
     { path: '/admin/users', name: 'admin-users', component: AdminUsersView, meta: { adminAuth: true } },
