@@ -5,6 +5,7 @@ import ToastMessage from '../components/ToastMessage.vue'
 import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { loadFeature, saveFeature } from '../api/featureApi.js'
+import { meApi } from '../api/game.js'
 import {
   normalizeFeature, blessingOf, forgeBonus, forgeCost, bondUpgradePool
 } from '../data/feature.js'
@@ -61,8 +62,13 @@ async function doUpgradePool() {
 async function load() {
   loading.value = true
   try {
-    const s = await loadFeature(username, true)
+    // 洞天状态与金币余额一起加载：金币是全局账户，不能只靠 save 返回
+    // （进页面时 shells 若为 0，会误判金币不足、且顶栏显示错误余额）
+    const [s, me] = await Promise.all([loadFeature(username, true), meApi(username)])
     if (s) state.value = s
+    if (me && me.code === 200 && me.data && me.data.shells != null) {
+      shells.value = me.data.shells
+    }
   } catch (e) {
     showToast(e.message || '洞天状态加载失败')
   } finally {
