@@ -6,9 +6,9 @@ import GameIcon from '../components/GameIcon.vue'
 import { getSession } from '../store/session'
 import { loadFeature, saveFeature } from '../api/featureApi.js'
 import {
-  normalizeFeature, blessingOf, forgeBonus, forgeCost,
-  FORGE_MAX, poolExpandCost
+  normalizeFeature, blessingOf, forgeBonus, forgeCost, bondUpgradePool
 } from '../data/feature.js'
+import { poolUpgradeCost, poolQiMul, MAX_POOL_LEVEL } from '../data/bonds.js'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -30,9 +30,33 @@ function showToast(msg) {
 const forgeLv = computed(() => blessingOf(state.value))
 const fx = computed(() => forgeBonus(forgeLv.value))
 const nextCost = computed(() => forgeCost(forgeLv.value))
-const canForge = computed(() => forgeLv.value < FORGE_MAX)
-const poolCost = computed(() => poolExpandCost(state.value.pool))
+const canForge = computed(() => forgeLv.value < 10)
+const poolLevel = computed(() => (state.value.spiritBonds && state.value.spiritBonds.poolLevel) || 0)
+const poolCost = computed(() => poolUpgradeCost(poolLevel.value))
+const canUpgradePool = computed(() => poolLevel.value < MAX_POOL_LEVEL)
 const stats = computed(() => state.value.stats || {})
+
+/** 灵池扩建：提升灵气凝聚倍率（导出到灵契阁共用同一状态） */
+async function doUpgradePool() {
+  if (!canUpgradePool.value || busy.value) return
+  if (shells.value < poolCost.value) {
+    showToast(`金币不足，扩建需 ${poolCost.value} 金币`)
+    return
+  }
+  busy.value = 'pool'
+  try {
+    const next = bondUpgradePool(state.value)
+    if (!next) throw new Error('灵池已圆满')
+    const res = await saveFeature(username, next)
+    state.value = normalizeFeature((res && res.state) || next)
+    if (res && res.shells != null) shells.value = res.shells
+    showToast(`💧 灵池扩建至 ${poolLevel.value + 1} 级 · 灵气凝聚 ×${poolQiMul(poolLevel.value + 1)}`)
+  } catch (e) {
+    showToast(e.message || '扩建失败')
+  } finally {
+    busy.value = ''
+  }
+}
 
 async function load() {
   loading.value = true
@@ -112,11 +136,13 @@ onMounted(load)
         <section class="card pool">
           <div class="card-head">
             <span class="ico">💧</span>
-            <div><b>聚灵池</b><small>每次成功钓获都会凝聚灵气，灵气越浓机缘越盛</small></div>
+            <div><b>聚灵池</b><small>每次成功钓获凝聚灵气，用于结契与升星灵契</small></div>
           </div>
           <div class="lv-big">灵气 <b>{{ state.pool }}</b></div>
-          <p class="hint">灵池灵气随钓获自动增长，无需手动操作。扩建功能即将开放（预留接口）。</p>
-          <div class="placeholder">扩建 · 🪙{{ poolCost }}（敬请期待）</div>
+          <p class="hint">当前 {{ poolLevel }} / {{ MAX_POOL_LEVEL }} 级 · 凝聚 ×{{ poolQiMul(poolLevel) }}，每级 +25%。扩建后灵气积累更快。</p>
+          <button class="btn" :disabled="!canUpgradePool || busy === 'pool'" @click="doUpgradePool">
+            {{ !canUpgradePool ? '灵池已圆满' : busy === 'pool' ? '扩建中…' : `扩建 · 🪙${poolCost}` }}
+          </button>
         </section>
 
         <!-- 钓获统计 -->
