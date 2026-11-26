@@ -33,6 +33,7 @@ function logout() {
       <router-link to="/skills"><GameIcon name="taiji" :size="17" /> 功法</router-link>
       <router-link to="/achievements"><GameIcon name="medals" :size="17" /> 成就</router-link>
       <router-link to="/pond"><GameIcon name="lotus" :size="17" /> 洞天</router-link>
+      <router-link to="/bond"><GameIcon name="star" :size="17" /> 灵契</router-link>
       <router-link to="/quests"><GameIcon name="scroll" :size="17" /> 悬赏</router-link>
       <router-link to="/leaderboard"><GameIcon name="chart" :size="17" /> 天榜</router-link>
       <router-link to="/shop"><GameIcon name="cart" :size="17" /> 仙市</router-link>
