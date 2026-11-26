@@ -1,5 +1,6 @@
 <script setup>
 import GameIcon from './GameIcon.vue'
+import CaptchaImage from './CaptchaImage.vue'
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { registerApi } from '../api/auth'
@@ -8,6 +9,8 @@ import { setSession } from '../store/session'
 const emit = defineEmits(['toast'])
 const router = useRouter()
 const loading = ref(false)
+const captchaInput = ref('')
+const captchaRef = ref(null)
 
 const form = reactive({
   username: '',
@@ -21,16 +24,24 @@ async function onSubmit() {
   if (form.password.length < 6) return emit('toast', '护道法印至少 6 位，莫让邪修轻易破译')
   if (form.password !== form.confirm) return emit('toast', '两次法印不一，道童都替你记下了')
   if (!form.agree) return emit('toast', '需先立誓遵《仙门弟子戒律》')
+  if (!captchaInput.value.trim()) return emit('toast', '请先填写仙符（验证码）')
+  if (!captchaRef.value || !captchaRef.value.verify(captchaInput.value)) {
+    emit('toast', '仙符不对，看仔细再填一次')
+    captchaInput.value = ''
+    return
+  }
 
   loading.value = true
   try {
     const res = await registerApi({
       username: form.username.trim(),
-      password: form.password
+      password: form.password,
+      captchaOk: true
     })
     if (res.code === 200) {
       setSession(res.data)
-      emit('toast', res.message || '入道成功！道童引你踏仙途 ')
+      emit('toast', (res.message || '入道成功！') + ' 请前往「实名认证」完善仙籍')
+      captchaInput.value = ''
       setTimeout(() => router.push('/home'), 1200)
     } else {
       emit('toast', res.message || '入道失败')
@@ -60,6 +71,18 @@ async function onSubmit() {
       <div class="field">
         <span class="icon"></span>
         <input v-model="form.confirm" type="password" placeholder="再塑一次法印" autocomplete="new-password">
+      </div>
+
+      <div class="field captcha-field">
+        <span class="icon"></span>
+        <input
+          v-model="captchaInput"
+          type="text"
+          maxlength="6"
+          placeholder="仙符（验证码）"
+          autocomplete="off"
+        >
+        <CaptchaImage ref="captchaRef" class="captcha-img" />
       </div>
 
       <div class="options">
@@ -150,6 +173,14 @@ h1 {
   transform: translateY(-50%);
   font-size: 17px;
   opacity: .9;
+}
+
+.captcha-field input { padding-right: 128px; }
+.captcha-img {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .options {
