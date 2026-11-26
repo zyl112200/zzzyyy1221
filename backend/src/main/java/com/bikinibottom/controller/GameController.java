@@ -59,7 +59,13 @@ public class GameController {
         try {
             if (body.get("blessing") != null) blessing = Integer.parseInt(String.valueOf(body.get("blessing")));
         } catch (NumberFormatException ignored) { /* 非法值视为 0 */ }
-        return gameService.cast(username, mapId, baitId, blessing);
+        // 仙钓道途「灵契 + 图鉴大成」加成（前端从 feature 状态计算），GameService 内同构 clamp
+        Map<String, Object> bondFx = null;
+        Object bondObj = body.get("bondFx");
+        if (bondObj instanceof Map) {
+            bondFx = new java.util.HashMap<>((Map<String, Object>) bondObj);
+        }
+        return gameService.cast(username, mapId, baitId, blessing, bondFx);
     }
 
     /** 地图目录：GET /api/game/maps —— 返回全部钓场配置（含专属鱼概率与建议力量） */
