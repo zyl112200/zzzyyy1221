@@ -24,6 +24,7 @@ CREATE TABLE user (
   last_sign_date VARCHAR(10),                           -- 最近签到日期 yyyy-MM-dd
   sign_streak  INT          NOT NULL DEFAULT 0,         -- 连续签到天数
   sign_total   INT          NOT NULL DEFAULT 0,         -- 累计签到天数
+  feature      CLOB,                                    -- 洞天福地统一状态 JSON（灵池/悬赏/本命法宝）
   create_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX uk_username ON user (username);
