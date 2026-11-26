@@ -33,6 +33,7 @@ CREATE TABLE `user` (
   `last_sign_date` VARCHAR(10) DEFAULT NULL              COMMENT '最近一次签到日期 yyyy-MM-dd',
   `sign_streak` INT          NOT NULL DEFAULT 0         COMMENT '当前连续签到天数',
   `sign_total`  INT          NOT NULL DEFAULT 0         COMMENT '累计签到天数',
+  `feature`     TEXT         DEFAULT NULL                COMMENT '洞天福地统一状态 JSON（灵池/悬赏/本命法宝）',
   `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
