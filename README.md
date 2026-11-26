@@ -228,6 +228,24 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 - **资源联动**：钓鱼力量决定塔胜率；塔产道韵供轮回；道印加成提升钓鱼收益；灵脉产金币/灵气供升星扩建与消费；战令进度由钓鱼/爬塔/收脉自动推进。
 - 数据层 `src/data/advance.js`（Node 安全）+ `src/data/feature.js` 的 `adv*` wrapper；页面 `src/views/more/*`；回归测试 `node advance_smoke_test.mjs`（33 项）。
 
+## 实名认证 · 防沉迷 · 验证码（合规演示）
+
+> **合规边界（务必先读）**：真正的实名核验必须对接公安权威二要素接口，个人开源项目无法也不应伪造；人脸识别属于敏感生物信息，受《个人信息保护法》约束。本模块是**本地演示实现**：身份证只做格式 + 校验位算法（GB 11643-1999）校验、**只持久化脱敏字段**（姓名掩码 + 证件掩码 + 成年标志），不落盘完整身份证号；人脸画面仅在本机 canvas 内计算，**不上传、不存储**。不能作为真实身份凭证。
+
+登录与注册页新增**图形验证码**（canvas 随机字符 + 旋转 + 干扰线 + 噪点，点击图片刷新，一次性校验）。实名认证中心（顶栏「🔒 实名」，`/identity`）包含：
+
+| 功能 | 说明 |
+| --- | --- |
+| 实名登记 | 姓名 + 18 位身份证，校验位算法验证；成年判定精确到生日；仅存脱敏信息 |
+| 人脸核身 | 可选，基于开源 **face-api.js**（MIT，TensorFlow.js）本地活体检测：正视 → 眨眼 → 张嘴（68 点关键点眼/嘴开合判定）；模型本地化在 `public/models`（约 280KB），动态 import 懒加载 |
+| 防沉迷门禁 | 未成年：22:00–次日 8:00 宵禁禁止登录；工作日 90 分钟 / 节假日 180 分钟时长上限，达限拒绝登录 |
+| 时长统计 | 游玩时每 30 秒累计，写入本地存档；跨天自动清零；成年不受限 |
+| 优雅降级 | 摄像头/模型不可用时可「以实名信息继续」，不阻断体验 |
+
+- 数据层 `src/data/captcha.js`、`src/data/identity.js`（均 Node 安全）；组件 `src/components/CaptchaImage.vue`、`FaceVerifyDialog.vue`；本地引擎接口 `/api/identity/*` 与后端同构。
+- 回归测试：`node identity_smoke_test.mjs`（52 项，覆盖验证码、身份证校验、年龄、脱敏、宵禁、时长）。
+- **开源来源**：验证码绘制思路参考 `vue3-captcha-canvas` / `fox-captcha`（GitHub）；人脸识别使用 `justadudewhohacks/face-api.js`（MIT）。
+
 ## 每日签到
 
 主页右下角礼物按钮打开签到面板，每天可签一次：
@@ -272,6 +290,7 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `/pond` | 洞天福地（本命法宝 / 灵池 / 悬赏） | 需登录 |
 | `/quests` | 每日悬赏令 | 需登录 |
 | `/bond` | 仙钓道途 · 灵契阁（结契 / 升星 / 出战 / 图鉴大成 / 灵池扩建） | 需登录 |
+| `/identity` | 实名认证 · 防沉迷（实名登记 / 人脸核身 / 时长守护） | 需登录 |
 | `/more` | 更多 · 道途深处（重定向到无尽塔） | 需登录 |
 | `/more/abyss` | 无尽塔（爬塔 / 战力检定 / 道韵） | 需登录 |
 | `/more/vein` | 灵脉（离线挂机 / 升级提产） | 需登录 |
@@ -434,6 +453,7 @@ npm run online             # 构建 + 起局域网服务（推荐）
 ├── achievement_smoke_test.mjs # ★ 成就系统回归
 ├── bond_smoke_test.mjs       # ★ 灵契系统回归（15 项）
 ├── advance_smoke_test.mjs    # ★ 更多玩法回归（塔/脉/轮回/战令，33 项）
+├── identity_smoke_test.mjs   # ★ 实名/防沉迷/验证码回归（52 项）
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
 ├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）
@@ -452,7 +472,10 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   ├── data/feature.js          # ★ 洞天福地：灵池 / 悬赏令 / 本命法宝状态与加成
 │   ├── data/bonds.js            # ★ 仙钓道途：灵契目录 / 升星 / 出战 / 图鉴大成 / 加成合成
 │   ├── data/advance.js          # ★ 更多玩法：无尽塔 / 灵脉 / 轮回 / 战令（Node 安全数据层）
+│   ├── data/captcha.js          # ★ 图形验证码：字符/干扰线/噪点绘制参数（Node 安全）
+│   ├── data/identity.js         # ★ 实名认证/防沉迷：身份证校验位/年龄/脱敏/宵禁门禁（Node 安全）
 │   ├── api/featureApi.js        # ★ 洞天状态存取（/api/feature/*）
+│   ├── api/identityApi.js       # ★ 实名/防沉迷/时长存取（/api/identity/*）
 │   ├── store/
 │   │   ├── session.js           # 登录会话
 │   │   └── aiAssistant.js       # 助手状态（离线问答）
@@ -468,6 +491,7 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   │   ├── LeaderboardView.vue # ★ 仙钓天榜（财富 / 巨物 / 图鉴 / 综合 / 勤修）
 │   │   ├── PondView.vue        # ★ 洞天福地（本命法宝淬炼 / 灵池 / 战绩）
 │   │   ├── BondView.vue        # ★ 仙钓道途 · 灵契阁（结契 / 升星 / 出战 / 图鉴大成）
+│   │   ├── IdentityView.vue    # ★ 实名认证 · 防沉迷中心
 │   │   ├── more/               # ★ 更多 · 道途深处（二级导航 + 四条长期养成线）
 │   │   │   ├── MoreLayout.vue  # 二级导航容器
 │   │   │   ├── AbyssView.vue   # 无尽塔
@@ -482,8 +506,11 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │       ├── Cultivator.vue      # 纯 CSS 绘制的修仙者 / 道童
 │       ├── AiAssistant.vue     # 钓鱼助手（右下角悬浮，离线可用）
 │       ├── SignInDialog.vue    # ★ 每日签到面板（右下角礼物按钮）
-│       ├── LoginCard.vue / RegisterCard.vue
+│       ├── CaptchaImage.vue    # ★ 图形验证码（canvas 绘制，点击刷新，一次性校验）
+│       ├── FaceVerifyDialog.vue# ★ 人脸核身（face-api.js 本地活体检测，抓帧不上传）
+│       ├── LoginCard.vue / RegisterCard.vue  # 登录/注册（含验证码）
 │       └── ToastMessage.vue
+│   ├── public/models/        # ★ face-api.js 本地模型（TinyFaceDetector + 68点，约280KB）
 └── backend/                  # Spring Boot 后端（绑定 0.0.0.0:8080，局域网可达）
     ├── pom.xml
     ├── mvnw / mvnw.cmd       # Maven Wrapper（首次运行自动下载 Maven）
