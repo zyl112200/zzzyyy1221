@@ -18,6 +18,8 @@ import com.bikinibottom.mapper.ItemMapper;
 import com.bikinibottom.mapper.UserItemMapper;
 import com.bikinibottom.mapper.UserMapper;
 import com.bikinibottom.service.DropRateService;
+import com.bikinibottom.util.FortuneUtil;
+import com.bikinibottom.util.SkyUtil;
 import lombok.Data;
 import org.springframework.stereotype.Service;
 
@@ -489,11 +491,20 @@ public class GameService {
 
     /** 抛竿钓鱼：使用默认鱼饵（保留旧调用兼容） */
     public Result<CastResult> cast(String username, String mapId) {
-        return cast(username, mapId, null);
+        return cast(username, mapId, null, 0);
     }
 
     /** 抛竿钓鱼：消耗 1 鱼饵，生成一条咬钩的鱼交给前端搏斗（baitId 可选，指定则优先使用） */
     public Result<CastResult> cast(String username, String mapId, Long baitId) {
+        return cast(username, mapId, baitId, 0);
+    }
+
+    /**
+     * 抛竿（含洞天「本命法宝」淬炼等级）。天时灵汐 / 仙缘奇遇 / 本命法宝三组倍率
+     * 在抛竿瞬间合成，与前端 localEngine.js 同构；结果锁定到遭遇与新字段，
+     * 前端据此还原画面，保证显示与结算一致。
+     */
+    public Result<CastResult> cast(String username, String mapId, Long baitId, int blessingRaw) {
         User u = getUser(username);
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
@@ -541,7 +552,21 @@ public class GameService {
             userMapper.updateById(u);
         }
 
-        // 专属鱼概率：地图基础值 + 高级饵 / 幸运物各 +5%
+        // ===== 新玩法：天时灵汐 / 仙缘奇遇 / 本命法宝，在抛竿瞬间合成三组倍率 =====
+        // 与前端 localEngine.js 同构；奇遇约 22% 触发；blessing 为洞天本命法宝等级 0~10。
+        SkyUtil.SkySnap sky = SkyUtil.now(java.time.LocalDateTime.now());
+        Map<String, Double> skyFx = sky.effects();
+        FortuneUtil.Fortune fortune = FortuneUtil.roll(random);
+        int blessing = Math.max(0, Math.min(10, blessingRaw));
+        // 本命法宝每重：稀有 +0.6% / 鱼重 +1.5% / 收益 +4% / 张力 +2%（张力作用于前端手感）
+        double forgeRare = blessing * 0.006;
+        double forgeWeight = 1 + blessing * 0.015;
+        double forgeCoin = 1 + blessing * 0.04;
+        double rareAdd = skyFx.get("rareBoost") + (fortune == null ? 0 : fortune.rareBoost()) + forgeRare;
+        double weightMul = skyFx.get("weightMul") * (fortune == null ? 1 : fortune.weightMul()) * forgeWeight;
+        double yieldMul = skyFx.get("coinMul") * (fortune == null ? 1 : fortune.coinMul()) * forgeCoin;
+
+        // 专属鱼概率：地图基础值 + 高级饵 / 幸运物各 +5% + 天时/奇遇/法宝稀有加成，封顶 98%
         double exRate = ((Number) map.get("exclusiveRate")).doubleValue();
         if (premiumBait) {
             exRate = Math.min(1, exRate + 0.05);
@@ -549,6 +574,7 @@ public class GameService {
         if (luck) {
             exRate = Math.min(1, exRate + 0.05);
         }
+        exRate = Math.min(0.98, exRate + rareAdd);
 
         String tier;
         double weight;
@@ -559,7 +585,7 @@ public class GameService {
             double exMin = ((Number) map.get("exMin")).doubleValue();
             double exMax = ((Number) map.get("exMax")).doubleValue();
             double mul = exMin + random.nextDouble() * (exMax - exMin);
-            weight = Math.round(strength * mul * 10) / 10.0;
+            weight = Math.round(strength * mul * weightMul * 10) / 10.0;
             if (weight > maxCatch) {
                 weight = maxCatch;
             }
@@ -569,12 +595,17 @@ public class GameService {
             // 普通鱼：按品级权重抽取（观水诀提升稀有及以上权重）
             tier = pickTier(maxCatch, rodPower, luck, premiumBait,
                     skills.contains("guanshui") ? GUANSHUI_BOOST : 1.0);
-            weight = sampleWeight(tier, maxCatch);
+            weight = sampleWeight(tier, maxCatch) * weightMul;
+            if (weight > maxCatch) {
+                weight = maxCatch;
+            }
         }
         TierDef td = TIERS.get(tier);
         // 货币统一为金币：原「金币口径奖励」与原「金石口径奖励」合并成一份金币
         int rewardGold = (int) Math.max(1, Math.round(td.goldMul() * Math.pow(weight, 0.45)));
         int rewardShells = (int) Math.round(td.shellMul() * (10 + 3 * Math.pow(weight, 0.75))) + rewardGold;
+        // 天时 / 奇遇 / 本命法宝收益倍率 + 奇遇额外金币（与前端同构）
+        rewardShells = (int) Math.round(rewardShells * yieldMul) + FortuneUtil.bonusShells(fortune);
 
         // 钓道境界加成：境界越高，钓到的金币越多（每重天 +5%）
         int realmLvl = realmOf(u);
@@ -644,7 +675,13 @@ public class GameService {
             r.setBaitName(usedBait.getName());
             r.setBaitIcon(usedBait.getIcon());
         }
-        r.setMessage("有东西咬钩了！这是" + map.get("name") + "的" + def.name() + "，握紧鱼竿，开始收线！");
+        // 天时 / 奇遇 / 本命法宝：锁定到本次遭遇，前端据此还原画面与手感
+        r.setSkyKey(sky.weatherKey());
+        r.setShichenIndex(sky.shichenIndex());
+        r.setFortuneId(fortune == null ? null : fortune.id());
+        r.setBlessing(blessing);
+        r.setMessage((fortune == null ? "" : "【仙缘·" + fortune.name() + "】")
+                + "有东西咬钩了！这是" + map.get("name") + "的" + def.name() + "，握紧鱼竿，开始收线！");
         return Result.success(r);
     }
 
