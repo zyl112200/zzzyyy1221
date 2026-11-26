@@ -75,6 +75,9 @@ public class User {
     /** 已解锁图鉴的鱼名列表（逗号分隔，钓起对应鱼后写入） */
     private String codex = "";
 
+    /** 洞天福地统一状态（灵池 / 悬赏令 / 本命法宝，JSON 字符串，惰性写入） */
+    private String feature;
+
     /** 注册时间（插入时自动填充） */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
