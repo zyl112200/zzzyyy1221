@@ -406,6 +406,10 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   │   ├── {auth,game,http}.js  # 接口封装 + 在线后端 / 本地引擎双通道（自动探测降级）
 │   │   └── localEngine.js       # 离线本地游戏引擎（localStorage 存档）
 │   ├── data/items.js            # 商店商品目录（与 SQL 保持一致）
+│   ├── data/sky.js              # ★ 天时灵汐：十二时辰 × 五天象（确定性天气与倍率）
+│   ├── data/fortune.js          # ★ 仙缘奇遇：抛竿约 22% 触发的临时机缘
+│   ├── data/feature.js          # ★ 洞天福地：灵池 / 悬赏令 / 本命法宝状态与加成
+│   ├── api/featureApi.js        # ★ 洞天状态存取（/api/feature/*）
 │   ├── store/
 │   │   ├── session.js           # 登录会话
 │   │   └── aiAssistant.js       # 助手状态（离线问答）
@@ -415,13 +419,19 @@ npm run online             # 构建 + 起局域网服务（推荐）
 │   │   ├── LoginView.vue / RegisterView.vue   # 仙门山门（修仙主题背景）
 │   │   ├── HomeView.vue        # 第一人称沉浸式钓鱼（张力 / 暴走 / 断线断竿）
 │   │   ├── ShopView.vue        # 商店（钓竿 / 鱼线 / 鱼饵 / 幸运物）
-│   │   └── InventoryView.vue   # 背包（装备钓竿与鱼线）
+│   │   ├── InventoryView.vue   # 背包（装备钓竿与鱼线）
+│   │   ├── SkillsView.vue      # ★ 钓道功法阁（8 部功法）
+│   │   ├── AchievementsView.vue# ★ 钓道成就（14 条里程碑 / 荣誉值）
+│   │   ├── LeaderboardView.vue # ★ 仙钓天榜（财富 / 巨物 / 图鉴 / 综合 / 勤修）
+│   │   ├── PondView.vue        # ★ 洞天福地（本命法宝淬炼 / 灵池 / 战绩）
+│   │   └── QuestsView.vue      # ★ 每日悬赏令
 │   └── components/
 │       ├── ImmortalBackground.vue  # 修仙主题背景（仙山 / 明月 / 祥云 / 灵湖）
 │       ├── OceanBackground.vue
-│       ├── TopBar.vue          # 顶栏（金币 / 根骨）
+│       ├── TopBar.vue          # 顶栏（金币 / 根骨 / 九宫格导航）
 │       ├── Cultivator.vue      # 纯 CSS 绘制的修仙者 / 道童
 │       ├── AiAssistant.vue     # 钓鱼助手（右下角悬浮，离线可用）
+│       ├── SignInDialog.vue    # ★ 每日签到面板（右下角礼物按钮）
 │       ├── LoginCard.vue / RegisterCard.vue
 │       └── ToastMessage.vue
 └── backend/                  # Spring Boot 后端（绑定 0.0.0.0:8080，局域网可达）
@@ -433,7 +443,15 @@ npm run online             # 构建 + 起局域网服务（推荐）
         │   ├── application-h2.yml     # h2 profile：H2 内存库
         │   ├── schema-h2.sql / data-h2.sql
         └── java/com/bikinibottom/
-            ├── controller/{Auth,Game,Shop}Controller.java
-            ├── service/{User,Game}Service.java   # 灵鱼池 / 搏鱼 / 金币 / 根骨
-            ├── mapper/ · entity/ · dto/ · config/ · common/
+            ├── controller/{Auth,Game,Shop,Feature}Controller.java
+            ├── service/{User,Game,Feature}Service.java   # 灵鱼池 / 搏鱼 / 金币 / 洞天
+            ├── config/GameMaps.java      # ★ 钓场地图目录（后端同构）
+            ├── util/{SkyUtil,FortuneUtil}.java  # ★ 天时 / 奇遇（与前端同构）
+            └── mapper/ · entity/ · dto/ · config/ · common/
 ```
+
+> **补全说明**：早期提交只更新了 `HomeView.vue` / `localEngine.js` / `router` 等调用方，却漏提交了它们依赖的
+> 「天时灵汐 / 仙缘奇遇 / 洞天福地」模块与页面文件，导致前端无法编译、后端缺 `GameMaps` 类。
+> 本次已补齐上述全部文件，并完成在线 / 离线双通道的同构实现；`assoc_smoke_test.mjs` 的硬编码
+> `D:/workSpace` 路径也已改为相对路径。数据库新增 `user.feature` 列（见 `sql/migrate_feature.sql`，
+> H2 脚本已内置）。
