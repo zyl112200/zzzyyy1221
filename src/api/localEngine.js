@@ -878,10 +878,13 @@ function featureSave(username, state, earnedTotal) {
   const st = normalizeFeature(state)
   const next = Number(earnedTotal) || 0
   const prev = Number(u.feature && u.feature.earnedTotal) || 0
-  const delta = Math.max(-200000, Math.min(200000, next - prev))
+  const rawDelta = next - prev
+  const delta = Math.max(-200000, Math.min(200000, rawDelta))
   const balance = (u.shells == null ? 0 : u.shells) + delta
   if (balance < 0) return err('金币不足，无法完成本次洞天操作')
-  st.earnedTotal = next
+  // 关键：存回 prev + delta（实际入账值），而非未截断的 next。
+  // 否则单次收益超过 ±20万 时，存档净值与实际余额永久错位。
+  st.earnedTotal = prev + delta
   u.shells = balance
   u.feature = st
   persist()
