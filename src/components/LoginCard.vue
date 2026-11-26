@@ -1,15 +1,19 @@
 <script setup>
 import GameIcon from './GameIcon.vue'
+import CaptchaImage from './CaptchaImage.vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { loginApi } from '../api/auth'
 import { setSession } from '../store/session'
+import { checkLoginGate } from '../api/identityApi.js'
 
 const emit = defineEmits(['toast'])
 const router = useRouter()
 
 const username = ref('')
 const password = ref('')
+const captchaInput = ref('')
+const captchaRef = ref(null)
 const remember = ref(true)
 const loading = ref(false)
 
@@ -22,16 +26,38 @@ async function onSubmit() {
     emit('toast', '护道法印不可为空，仙尊会失望的️')
     return
   }
+  if (!captchaInput.value.trim()) {
+    emit('toast', '请先填写仙符（验证码）')
+    return
+  }
+  // 校验图形验证码（一次性，校验后自动刷新）
+  if (!captchaRef.value || !captchaRef.value.verify(captchaInput.value)) {
+    emit('toast', '仙符不对，看仔细再填一次')
+    captchaInput.value = ''
+    return
+  }
   loading.value = true
   try {
-    const res = await loginApi({ username: username.value.trim(), password: password.value })
-    if (res.code === 200) {
-      setSession(res.data)
-      emit('toast', res.message || ('欢迎回到仙钓大陆，' + username.value.trim() + '！'))
-      setTimeout(() => router.push('/home'), 700)
-    } else {
+    const res = await loginApi({ username: username.value.trim(), password: password.value, captchaOk: true })
+    if (res.code !== 200) {
       emit('toast', res.message || '登录失败')
+      return
     }
+    // 防沉迷门禁：未实名提示引导，未成年严格限制
+    const gate = await checkLoginGate()
+    if (gate.code === 403 || (gate.data && gate.data.allowed === false)) {
+      emit('toast', gate.message || '当前时段不可登录')
+      return
+    }
+    captchaInput.value = ''
+    if (gate.data && gate.data.realname && !gate.data.realname.verified) {
+      // 未实名：允许体验，但提示尽快认证
+      emit('toast', (res.message || '欢迎回来') + ' · 请前往实名认证完善仙籍')
+    } else {
+      emit('toast', res.message || ('欢迎回到仙钓大陆，' + username.value.trim() + '！'))
+    }
+    setSession(res.data)
+    setTimeout(() => router.push('/home'), 700)
   } catch (e) {
     emit('toast', e.message || '连不上仙门中枢，请确认后端已开启️')
   } finally {
@@ -67,6 +93,18 @@ function forgot() {
           placeholder="护道法印（密码）"
           autocomplete="current-password"
         >
+      </div>
+
+      <div class="field captcha-field">
+        <GameIcon class="icon" name="taiji" :size="20" />
+        <input
+          v-model="captchaInput"
+          type="text"
+          maxlength="6"
+          placeholder="仙符（验证码）"
+          autocomplete="off"
+        >
+        <CaptchaImage ref="captchaRef" class="captcha-img" />
       </div>
 
       <div class="options">
@@ -159,6 +197,15 @@ h1 {
   transform: translateY(-50%);
   font-size: 17px;
   opacity: .9;
+}
+
+/* 验证码：输入框留出右侧图片空间 */
+.captcha-field input { padding-right: 128px; }
+.captcha-img {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .options {
