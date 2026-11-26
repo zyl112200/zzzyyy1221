@@ -17,6 +17,7 @@ import { FORTUNE_MAP } from '../data/fortune.js'
 import { applyCatch, normalizeFeature, blessingOf, forgeBonus } from '../data/feature.js'
 import { loadFeature, saveFeature } from '../api/featureApi.js'
 import { totalBondFx as computeTotalBondFx } from '../data/bonds.js'
+import { advanceFx as computeAdvanceFx, mergeBondFx, progressPassCatch } from '../data/advance.js'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -49,8 +50,11 @@ const activeSky = computed(() => castSky.value || skyNow.value)
 const fortuneNow = computed(() => FORTUNE_MAP.get(encounter.value && encounter.value.fortuneId) || null)
 const featureState = ref(null)
 const blessing = computed(() => blessingOf(featureState.value))
-// 仙钓道途：出战灵契 + 图鉴大成加成（随 feature/codex 变化实时重算）
-const bondFx = computed(() => computeTotalBondFx(featureState.value, profile.codex))
+// 仙钓道途：出战灵契 + 图鉴大成加成 + 更多玩法（塔/道印/战令）永久加成，实时重算
+const bondFx = computed(() => mergeBondFx(
+  computeTotalBondFx(featureState.value, profile.codex),
+  computeAdvanceFx(featureState.value)
+))
 // 环境张力：天时 × 奇遇 × 本命法宝 × 灵契（都以倍率作用在搏鱼张力上升速度上）
 const envTensionMul = computed(() => {
   const skyFx = activeSky.value.effects || {}
@@ -765,6 +769,10 @@ async function settleOutcome(landed, breakType) {
           landed: !!res.data.landed,
           fortuneId: enc.fortuneId || null
         })
+        // 战令每日「钓起灵鱼」进度（仅在成功上岸且同日计数）
+        if (res.data.landed) {
+          st.advance = progressPassCatch(st.advance, 1)
+        }
         featureState.value = st
         await saveFeature(username, st)
       } catch (e) { /* 统计写入失败不影响本次钓鱼结算 */ }
