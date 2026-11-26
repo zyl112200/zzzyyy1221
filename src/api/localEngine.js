@@ -21,6 +21,10 @@ import { MAPS, MAP_MAP, DEFAULT_MAP, EXCLUSIVE_FISH } from '../data/maps.js'
 import { skyAt, skyEffects } from '../data/sky.js'
 import { rollFortune, fortuneBonusShells } from '../data/fortune.js'
 import { forgeBonus, normalizeFeature } from '../data/feature.js'
+import {
+  normalizeRealname, checkPlayGate,
+  addPlayTime as addPlayTimeToState, localDateKey
+} from '../data/identity.js'
 
 const DB_KEY = 'bikini_local_db_v3'
 
@@ -985,14 +989,78 @@ function register({ username, email, password }) {
   )
 }
 
-function login({ username, password }) {
+function login({ username, password, captchaOk }) {
   const u = userByName(String(username || '').trim())
-  if (!u) return err('查无此道号，仙门名录上没有此人️')
-  if (u.password !== password) return err('护道法印不对，心魔可趁机而入️')
+  if (!u) return err('查无此道号，仙门名录上没有此人了')
+  if (u.password !== password) return err('护道法印不对，心魔可趁机而入了')
+  // 验证码校验：前端组件校验后传入 captchaOk=true；缺省时也允许（兼容测试/老存档）
+  if (captchaOk === false) return err('仙符不对，请重新辨认')
+  // 防沉迷门禁：仅当账号已实名且为未成年时严格限制
+  const rn = normalizeRealname(u.realname)
+  if (rn.verified && !rn.adult) {
+    const gate = checkPlayGate(rn, u.playState)
+    if (!gate.allowed) return { code: 403, message: gate.reason, data: null }
+  }
   return ok(
     { id: u.id, username: u.username, email: u.email, permission: u.permission, shells: u.shells, goldStones: u.goldStones, power: powerOf(u), basePower: basePowerOf(u), cultivation: cultivationOf(u), currentMap: u.currentMap || DEFAULT_MAP },
     `登仙成功，欢迎回到仙钓大陆`
   )
+}
+
+// ============================================================
+//  实名认证 / 防沉迷（本地引擎同构）
+// ============================================================
+/** 读取实名状态（脱敏数据，直接在用户存档上） */
+function getRealname(username) {
+  const u = userByName(String(username || '').trim())
+  return ok(normalizeRealname(u && u.realname))
+}
+
+/** 保存实名状态（只存脱敏字段） */
+function saveRealname(username, data) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('用户不存在，无法登记仙籍')
+  const rn = normalizeRealname(data)
+  // 再次兜底：绝不落盘完整姓名/身份证，只保留脱敏字段
+  u.realname = {
+    verified: rn.verified,
+    nameMasked: rn.nameMasked,
+    idMasked: rn.idMasked,
+    adult: rn.adult,
+    birthYear: rn.birthYear,
+    age: rn.age,
+    method: rn.method,
+    faceVerified: rn.faceVerified,
+    verifiedAt: rn.verifiedAt
+  }
+  persist()
+  return ok(u.realname, '实名信息已登记')
+}
+
+/** 读取当日游玩时长 */
+function getPlayState(username) {
+  const u = userByName(String(username || '').trim())
+  const ps = u && u.playState
+  if (!ps || ps.date !== localDateKey()) return ok({ date: localDateKey(), minutes: 0 })
+  return ok({ date: ps.date, minutes: Number(ps.minutes) || 0 })
+}
+
+/** 累计游玩时长（秒） */
+function addPlayTime(username, seconds) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('用户不存在')
+  u.playState = addPlayTimeToState(u.playState, seconds)
+  persist()
+  return ok(u.playState)
+}
+
+/** 登录门禁校验 */
+function identityGate(username) {
+  const u = userByName(String(username || '').trim())
+  if (!u) return err('用户不存在')
+  const rn = normalizeRealname(u.realname)
+  const gate = checkPlayGate(rn, u.playState)
+  return { code: gate.allowed ? 200 : 403, message: gate.reason || '校验通过', data: { allowed: gate.allowed, code: gate.code, realname: rn } }
 }
 
 // ============================================================
@@ -1631,6 +1699,12 @@ export function localCall(method, url, body) {
       return register(b)
     case '/api/auth/login':
       return login(b)
+    case '/api/identity/realname':
+      return M === 'GET' ? getRealname(params.username) : saveRealname(b.username, b.data)
+    case '/api/identity/playtime':
+      return M === 'GET' ? getPlayState(params.username) : addPlayTime(b.username, b.seconds)
+    case '/api/identity/gate':
+      return identityGate(b.username)
     case '/api/game/me': {
       const u = userByName(params.username)
       if (!u) return err('仙门名录上没有此人️')
