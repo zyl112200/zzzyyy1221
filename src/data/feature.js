@@ -4,6 +4,10 @@ import {
   normalizeBonds, poolQiMul, contractFish, starUpFish, toggleActive,
   expandSlots, upgradePool, FISH_TIER
 } from './bonds.js'
+import {
+  normalizeAdvance, abyssChallenge, buyStamina, collectVein, upgradeVein,
+  reincarnate, allocateSeal, claimPassDaily, settleVein
+} from './advance.js'
 
 // 状态惰性挂在用户 feature 字段上（见 localEngine.js / 后端 FeatureService），
 // 不提升存档版本号，避免影响旧存档迁移。金币发放按 earnedTotal 差额结算：
@@ -77,7 +81,9 @@ export function normalizeFeature(state) {
       byTier: stats.byTier && typeof stats.byTier === 'object' ? stats.byTier : {}
     },
     // 仙钓道途 · 灵契（惰性挂载，沿用洞天 feature 存档）
-    spiritBonds: normalizeBonds(s.spiritBonds)
+    spiritBonds: normalizeBonds(s.spiritBonds),
+    // 更多玩法（无尽塔 / 灵脉 / 轮回 / 战令），惰性挂载、无 DB 迁移
+    advance: normalizeAdvance(s.advance)
   }
 }
 
@@ -234,6 +240,56 @@ export function fishTierOf(name) {
   return FISH_TIER.get(name) || null
 }
 
+// ============================================================
+//  更多玩法操作（无尽塔 / 灵脉 / 轮回 / 战令）
+//  advance 子模块返回 { next, coins, qi, msg }，这里把 coins 折进
+//  earnedTotal（差额结算金币）、qi 折进 pool；返回新 state（规范化）。
+//  opts 由调用方透传（power / now / rng / bought / type / id）。
+// ============================================================
+function applyAdvanceOp(state, op) {
+  if (!op) return null
+  const st = normalizeFeature(state)
+  st.advance = op.next
+  st.earnedTotal += op.coins || 0
+  st.pool = Math.max(0, st.pool + (op.qi || 0))
+  return st
+}
+
+/** 无尽塔挑战 */
+export function advAbyssChallenge(state, opts) {
+  return applyAdvanceOp(state, abyssChallenge(state && state.advance, opts))
+}
+/** 购买精力 */
+export function advBuyStamina(state, opts) {
+  return applyAdvanceOp(state, buyStamina(state && state.advance, opts))
+}
+/** 收取灵脉 */
+export function advCollectVein(state, now) {
+  return applyAdvanceOp(state, collectVein(state && state.advance, now))
+}
+/** 升级灵脉 */
+export function advUpgradeVein(state, now) {
+  return applyAdvanceOp(state, upgradeVein(state && state.advance, now))
+}
+/** 轮回 */
+export function advReincarnate(state, now) {
+  return applyAdvanceOp(state, reincarnate(state && state.advance, now))
+}
+/** 分配道印 */
+export function advAllocateSeal(state, type, now) {
+  return applyAdvanceOp(state, allocateSeal(state && state.advance, type, now))
+}
+/** 战令每日任务领奖 */
+export function advClaimPassDaily(state, id, now) {
+  return applyAdvanceOp(state, claimPassDaily(state && state.advance, id, now))
+}
+/** 仅推进灵脉结算（不改金币/灵气），用于进入页面时刷新累积量 */
+export function advSettleVein(state, now) {
+  const st = normalizeFeature(state)
+  st.advance = settleVein(state && state.advance, now)
+  return st
+}
+
 function clampInt(v, min, max) {
   const n = Math.round(Number(v) || 0)
   return Math.min(max, Math.max(min, n))
@@ -246,5 +302,7 @@ function round3(n) {
 export default {
   FORGE_MAX, BOUNTY_TARGETS, normalizeFeature, blessingOf, forgeBonus,
   forgeCost, poolExpandCost, applyCatch, claimBounty, forgeUp,
-  bondContract, bondStarUp, bondToggleActive, bondExpandSlots, bondUpgradePool, fishTierOf
+  bondContract, bondStarUp, bondToggleActive, bondExpandSlots, bondUpgradePool, fishTierOf,
+  advAbyssChallenge, advBuyStamina, advCollectVein, advUpgradeVein,
+  advReincarnate, advAllocateSeal, advClaimPassDaily, advSettleVein
 }
