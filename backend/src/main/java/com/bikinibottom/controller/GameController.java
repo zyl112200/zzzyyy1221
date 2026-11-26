@@ -54,7 +54,12 @@ public class GameController {
         try {
             if (body.get("baitId") != null) baitId = Long.valueOf(String.valueOf(body.get("baitId")));
         } catch (NumberFormatException ignored) { /* 非法 baitId 视为未指定，回退默认饵 */ }
-        return gameService.cast(username, mapId, baitId);
+        // 本命法宝淬炼等级（洞天福地），clamp 0~10 后作用于稀有率 / 鱼重 / 收益
+        int blessing = 0;
+        try {
+            if (body.get("blessing") != null) blessing = Integer.parseInt(String.valueOf(body.get("blessing")));
+        } catch (NumberFormatException ignored) { /* 非法值视为 0 */ }
+        return gameService.cast(username, mapId, baitId, blessing);
     }
 
     /** 地图目录：GET /api/game/maps —— 返回全部钓场配置（含专属鱼概率与建议力量） */
