@@ -23,7 +23,14 @@ export async function loadFeature(username, reload = false) {
 export async function saveFeature(username, state) {
   const st = normalizeFeature(state)
   const res = await featureSaveApi(username, st, st.earnedTotal)
-  if (res && res.code === 200 && res.data) return res.data
+  if (res && res.code === 200 && res.data) {
+    // 金币余额可能因差额结算变化，广播给所有顶栏组件刷新，
+    // 避免父子页面各自持有 shells 副本导致显示不一致。
+    try {
+      window.dispatchEvent(new CustomEvent('bikini:coins-changed', { detail: { shells: res.data.shells } }))
+    } catch { /* 非浏览器环境忽略 */ }
+    return res.data
+  }
   return null
 }
 
