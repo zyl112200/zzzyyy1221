@@ -34,6 +34,7 @@ function logout() {
       <router-link to="/achievements"><GameIcon name="medals" :size="17" /> 成就</router-link>
       <router-link to="/pond"><GameIcon name="lotus" :size="17" /> 洞天</router-link>
       <router-link to="/bond"><GameIcon name="star" :size="17" /> 灵契</router-link>
+      <router-link to="/more" class="more-link"><span class="more-emoji">🌌</span> 更多</router-link>
       <router-link to="/quests"><GameIcon name="scroll" :size="17" /> 悬赏</router-link>
       <router-link to="/leaderboard"><GameIcon name="chart" :size="17" /> 天榜</router-link>
       <router-link to="/shop"><GameIcon name="cart" :size="17" /> 仙市</router-link>
@@ -99,6 +100,15 @@ function logout() {
   color: #fff3c4;
 }
 .nav a.admin-link:hover { background: rgba(255, 213, 79, 0.45); }
+.nav a.more-link {
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.45), rgba(168, 85, 247, 0.45));
+  color: #fff;
+  border: 1px solid rgba(196, 181, 253, 0.6);
+}
+.nav a.more-link:hover, .nav a.more-link.router-link-active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.7), rgba(147, 51, 234, 0.7));
+}
+.more-emoji { font-size: 15px; line-height: 1; }
 .right {
   display: flex;
   align-items: center;
