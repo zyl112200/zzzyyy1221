@@ -452,7 +452,7 @@ const RARE_CHEERS = [
   ' 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！'
 ]
 
-function cast(username, baitId, mapId, blessing) {
+function cast(username, baitId, mapId, blessing, bondFxRaw) {
   const u = userByName(username)
   if (!u) return err('仙门名录上没有此人️')
   ensureStarterRod(u.id)
@@ -502,9 +502,18 @@ function cast(username, baitId, mapId, blessing) {
   const fx = fortune || {}
   const lv = Math.max(0, Math.min(10, Number(blessing) || 0))
   const forgeFx = forgeBonus(lv)
-  const rareAdd = skyFx.rareBoost + (fx.rareBoost || 0) + forgeFx.rareBoost
-  const weightMul = skyFx.weightMul * (fx.weightMul || 1) * forgeFx.weightMul
-  const yieldMul = skyFx.coinMul * (fx.coinMul || 1) * forgeFx.coinMul
+  // 仙钓道途 · 灵契 + 图鉴大成加成（bondFx 由前端从 feature 状态计算后传入），
+  // 与后端 GameService 同构 clamp，防止异常值破坏平衡。
+  const bf = bondFxRaw && typeof bondFxRaw === 'object' ? bondFxRaw : {}
+  const bondFx = {
+    rareBoost: Math.max(0, Math.min(0.5, Number(bf.rareBoost) || 0)),
+    weightMul: Math.max(1, Math.min(3, Number(bf.weightMul) || 1)),
+    coinMul: Math.max(1, Math.min(5, Number(bf.coinMul) || 1)),
+    tensionMul: Math.max(0.5, Math.min(1, Number(bf.tensionMul) || 1))
+  }
+  const rareAdd = skyFx.rareBoost + (fx.rareBoost || 0) + forgeFx.rareBoost + bondFx.rareBoost
+  const weightMul = skyFx.weightMul * (fx.weightMul || 1) * forgeFx.weightMul * bondFx.weightMul
+  const yieldMul = skyFx.coinMul * (fx.coinMul || 1) * forgeFx.coinMul * bondFx.coinMul
   const extraShells = fortuneBonusShells(fortune ? fortune.id : null)
 
   // 鱼饵 / 幸运草小幅提升专属鱼概率；天时 / 奇遇 / 法宝叠加后封顶 98%
@@ -1629,7 +1638,7 @@ export function localCall(method, url, body) {
       return ok(buildProfile(u))
     }
     case '/api/game/cast':
-      return cast(b.username, b.baitId, b.mapId, b.blessing)
+      return cast(b.username, b.baitId, b.mapId, b.blessing, b.bondFx)
     case '/api/game/baits':
       return listBaits(b.username)
     case '/api/game/settle':
