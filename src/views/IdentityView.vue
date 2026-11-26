@@ -9,6 +9,7 @@ import { ref, computed, onMounted } from 'vue'
 import GameIcon from '../components/GameIcon.vue'
 import FaceVerifyDialog from '../components/FaceVerifyDialog.vue'
 import TopBar from '../components/TopBar.vue'
+import { meApi } from '../api/game.js'
 import {
   buildRealnameRecord, normalizeRealname, validateIdCard,
   ANTI_ADDICTION, remainingMinutes, isWeekend, localDateKey
@@ -20,6 +21,9 @@ import {
 const emit = defineEmits(['toast'])
 
 const realname = ref(normalizeRealname(null))
+const shells = ref(0)
+const power = ref(100)
+const cultivation = ref(0)
 const playState = ref({ date: localDateKey(), minutes: 0 })
 const form = ref({ name: '', idCard: '' })
 const faceOpen = ref(false)
@@ -35,6 +39,18 @@ onMounted(async () => {
   try {
     realname.value = normalizeRealname(await loadRealname())
     playState.value = await loadPlayState()
+  } catch { /* 读取失败不影响展示 */ }
+  // 顶栏金币/力量/修为：进场加载全局账户状态，避免显示 0
+  try {
+    const s = JSON.parse(localStorage.getItem('bikini_session') || 'null')
+    if (s && s.username) {
+      const me = await meApi(s.username)
+      if (me && me.code === 200 && me.data) {
+        shells.value = me.data.shells == null ? 0 : me.data.shells
+        power.value = me.data.power == null ? 100 : me.data.power
+        cultivation.value = me.data.cultivation == null ? 0 : me.data.cultivation
+      }
+    }
   } catch { /* 读取失败不影响展示 */ }
 })
 
@@ -88,7 +104,7 @@ const idHint = computed(() => {
 
 <template>
   <div class="identity-page">
-    <TopBar @toast="(m) => emit('toast', m)" />
+    <TopBar :shells="shells" :power="power" :cultivation="cultivation" @toast="(m) => emit('toast', m)" />
     <section class="wrap">
       <header class="page-head">
         <h1>实名认证 · 防沉迷</h1>
