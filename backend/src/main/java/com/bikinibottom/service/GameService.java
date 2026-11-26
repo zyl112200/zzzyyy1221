@@ -505,6 +505,15 @@ public class GameService {
      * 前端据此还原画面，保证显示与结算一致。
      */
     public Result<CastResult> cast(String username, String mapId, Long baitId, int blessingRaw) {
+        return cast(username, mapId, baitId, blessingRaw, null);
+    }
+
+    /**
+     * 抛竿（含仙钓道途「灵契 + 图鉴大成」加成）。bondFx 由前端从 feature 状态计算后传入，
+     * 与前端 localEngine.js 同构 clamp，防止异常值破坏平衡。
+     */
+    public Result<CastResult> cast(String username, String mapId, Long baitId, int blessingRaw,
+                                   Map<String, Object> bondFx) {
         User u = getUser(username);
         if (u == null) {
             return Result.error("仙门名录上没有此人 🌫️");
@@ -562,9 +571,16 @@ public class GameService {
         double forgeRare = blessing * 0.006;
         double forgeWeight = 1 + blessing * 0.015;
         double forgeCoin = 1 + blessing * 0.04;
-        double rareAdd = skyFx.get("rareBoost") + (fortune == null ? 0 : fortune.rareBoost()) + forgeRare;
-        double weightMul = skyFx.get("weightMul") * (fortune == null ? 1 : fortune.weightMul()) * forgeWeight;
-        double yieldMul = skyFx.get("coinMul") * (fortune == null ? 1 : fortune.coinMul()) * forgeCoin;
+        // 仙钓道途 · 灵契 + 图鉴大成加成（bondFx 由前端计算后传入，同构 clamp）
+        double bondRare = 0, bondWeight = 1, bondCoin = 1;
+        if (bondFx != null) {
+            bondRare = clamp(num(bondFx.get("rareBoost")), 0, 0.5);
+            bondWeight = clamp(num(bondFx.get("weightMul")), 1, 3);
+            bondCoin = clamp(num(bondFx.get("coinMul")), 1, 5);
+        }
+        double rareAdd = skyFx.get("rareBoost") + (fortune == null ? 0 : fortune.rareBoost()) + forgeRare + bondRare;
+        double weightMul = skyFx.get("weightMul") * (fortune == null ? 1 : fortune.weightMul()) * forgeWeight * bondWeight;
+        double yieldMul = skyFx.get("coinMul") * (fortune == null ? 1 : fortune.coinMul()) * forgeCoin * bondCoin;
 
         // 专属鱼概率：地图基础值 + 高级饵 / 幸运物各 +5% + 天时/奇遇/法宝稀有加成，封顶 98%
         double exRate = ((Number) map.get("exclusiveRate")).doubleValue();
@@ -1206,6 +1222,15 @@ public class GameService {
 
     private static double clamp(double v, double lo, double hi) {
         return Math.max(lo, Math.min(hi, v));
+    }
+
+    /** Object → double（bondFx 数值安全转换，非法值视为 0） */
+    private static double num(Object v) {
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        if (v != null) {
+            try { return Double.parseDouble(String.valueOf(v)); } catch (NumberFormatException ignored) { }
+        }
+        return 0;
     }
 
     private static double round2(double v) {
