@@ -1,4 +1,5 @@
 <script setup>
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearSession, getSession } from '../store/session'
 import GameIcon from './GameIcon.vue'
@@ -16,6 +17,20 @@ const session = getSession()
 const username = session ? session.username : ''
 // 仅「管理员权限」（permission === 0）的用户才能在首页看到后台入口
 const isAdmin = !!(session && session.permission === 0)
+
+// 内部金币镜像：监听全局差额结算事件，保证任何页面操作后顶栏立即同步。
+// props.shells 仍是主要数据源，本镜像只在事件触发后覆盖显示。
+const liveShells = ref(props.shells)
+watch(() => props.shells, (v) => { liveShells.value = v })
+function onCoinsChanged(e) {
+  if (e && e.detail && typeof e.detail.shells === 'number') liveShells.value = e.detail.shells
+}
+onMounted(() => {
+  try { window.addEventListener('bikini:coins-changed', onCoinsChanged) } catch { /* 忽略 */ }
+})
+onBeforeUnmount(() => {
+  try { window.removeEventListener('bikini:coins-changed', onCoinsChanged) } catch { /* 忽略 */ }
+})
 
 function logout() {
   clearSession()
@@ -43,7 +58,7 @@ function logout() {
       <router-link v-if="isAdmin" to="/admin" class="admin-link"><GameIcon name="tools" :size="17" /> 后台</router-link>
     </nav>
     <div class="right">
-      <span class="chip gold"><GameIcon name="coin" :size="19" /> {{ shells }}</span>
+      <span class="chip gold"><GameIcon name="coin" :size="19" /> {{ liveShells }}</span>
       <span class="chip str" :title="`基础力量 × (1 + 修为 ${cultivation}%)`"><GameIcon name="power" :size="19" /> {{ power }}</span>
       <span class="chip cul" title="修为：单独加成在基础力量上，无上限"><GameIcon name="cultivation" :size="19" /> 修为 {{ cultivation }}%</span>
       <span class="user">{{ username }}</span>
