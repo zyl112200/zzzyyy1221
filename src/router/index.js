@@ -11,6 +11,7 @@ import AchievementsView from '../views/AchievementsView.vue'
 import LeaderboardView from '../views/LeaderboardView.vue'
 import PondView from '../views/PondView.vue'
 import QuestsView from '../views/QuestsView.vue'
+import BondView from '../views/BondView.vue'
 import AdminLoginView from '../views/AdminLoginView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
@@ -33,6 +34,7 @@ const router = createRouter({
     { path: '/leaderboard', name: 'leaderboard', component: LeaderboardView, meta: { auth: true } },
     { path: '/pond', name: 'pond', component: PondView, meta: { auth: true } },
     { path: '/quests', name: 'quests', component: QuestsView, meta: { auth: true } },
+    { path: '/bond', name: 'bond', component: BondView, meta: { auth: true } },
     { path: '/admin', name: 'admin-login', component: AdminLoginView },
     { path: '/admin/home', name: 'admin-home', component: AdminDashboardView, meta: { adminAuth: true } },
     { path: '/admin/users', name: 'admin-users', component: AdminUsersView, meta: { adminAuth: true } },
