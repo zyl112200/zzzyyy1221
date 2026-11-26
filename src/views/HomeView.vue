@@ -16,6 +16,7 @@ import { skyAt, skyFromParts, skyEffectText } from '../data/sky.js'
 import { FORTUNE_MAP } from '../data/fortune.js'
 import { applyCatch, normalizeFeature, blessingOf, forgeBonus } from '../data/feature.js'
 import { loadFeature, saveFeature } from '../api/featureApi.js'
+import { totalBondFx as computeTotalBondFx } from '../data/bonds.js'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -48,11 +49,14 @@ const activeSky = computed(() => castSky.value || skyNow.value)
 const fortuneNow = computed(() => FORTUNE_MAP.get(encounter.value && encounter.value.fortuneId) || null)
 const featureState = ref(null)
 const blessing = computed(() => blessingOf(featureState.value))
-// 环境张力：天时 × 奇遇 × 本命法宝（三者都以倍率作用在搏鱼张力上升速度上）
+// 仙钓道途：出战灵契 + 图鉴大成加成（随 feature/codex 变化实时重算）
+const bondFx = computed(() => computeTotalBondFx(featureState.value, profile.codex))
+// 环境张力：天时 × 奇遇 × 本命法宝 × 灵契（都以倍率作用在搏鱼张力上升速度上）
 const envTensionMul = computed(() => {
   const skyFx = activeSky.value.effects || {}
   const f = fortuneNow.value || {}
-  return (skyFx.tensionMul || 1) * (f.tensionMul || 1) * forgeBonus(blessing.value).tensionMul
+  return (skyFx.tensionMul || 1) * (f.tensionMul || 1)
+    * forgeBonus(blessing.value).tensionMul * (bondFx.value.tensionMul || 1)
 })
 const envWaitMul = computed(() => (activeSky.value.effects || {}).waitMul || 1)
 let skyTimer = null
@@ -483,7 +487,7 @@ async function cast() {
   sfxCast()
 
   try {
-    const res = await castApi(username, selectedBaitId.value, selectedMapId.value, blessing.value)
+    const res = await castApi(username, selectedBaitId.value, selectedMapId.value, blessing.value, bondFx.value)
     if (res.code !== 200) {
       showToast(res.message || '抛竿失败')
       phase.value = 'idle'
