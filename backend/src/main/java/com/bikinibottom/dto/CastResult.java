@@ -82,4 +82,16 @@ public class CastResult {
 
     /** 提示文案 */
     private String message;
+
+    /** 本次锁定的天象 key（前端据此还原画面，与结算加成一致） */
+    private String skyKey;
+
+    /** 本次锁定的时辰 index（0~11） */
+    private Integer shichenIndex;
+
+    /** 本次触发的仙缘奇遇 id（未触发为 null） */
+    private String fortuneId;
+
+    /** 本次本命法宝淬炼等级（0~10，clamp 后的值） */
+    private Integer blessing;
 }
