@@ -12,6 +12,7 @@ import LeaderboardView from '../views/LeaderboardView.vue'
 import PondView from '../views/PondView.vue'
 import QuestsView from '../views/QuestsView.vue'
 import BondView from '../views/BondView.vue'
+import IdentityView from '../views/IdentityView.vue'
 import MoreLayout from '../views/more/MoreLayout.vue'
 import AbyssView from '../views/more/AbyssView.vue'
 import VeinView from '../views/more/VeinView.vue'
@@ -40,6 +41,7 @@ const router = createRouter({
     { path: '/pond', name: 'pond', component: PondView, meta: { auth: true } },
     { path: '/quests', name: 'quests', component: QuestsView, meta: { auth: true } },
     { path: '/bond', name: 'bond', component: BondView, meta: { auth: true } },
+    { path: '/identity', name: 'identity', component: IdentityView, meta: { auth: true } },
     {
       path: '/more', component: MoreLayout, meta: { auth: true },
       redirect: '/more/abyss',
