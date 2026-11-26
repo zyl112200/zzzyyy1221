@@ -18,6 +18,7 @@ import { applyCatch, normalizeFeature, blessingOf, forgeBonus } from '../data/fe
 import { loadFeature, saveFeature } from '../api/featureApi.js'
 import { totalBondFx as computeTotalBondFx } from '../data/bonds.js'
 import { advanceFx as computeAdvanceFx, mergeBondFx, progressPassCatch } from '../data/advance.js'
+import { addPlayTime } from '../api/identityApi.js'
 
 const session = getSession()
 const username = session ? session.username : ''
@@ -64,6 +65,9 @@ const envTensionMul = computed(() => {
 })
 const envWaitMul = computed(() => (activeSky.value.effects || {}).waitMul || 1)
 let skyTimer = null
+// 防沉迷：在线时长统计（每 60 秒累计 1 分钟，卸载时结算零头）
+let playTimer = null
+let playSeconds = 0
 
 // phases: idle | casting | waiting | bite | fight | result
 const phase = ref('idle')
@@ -830,6 +834,17 @@ onMounted(() => {
   loadFeature(username).then((s) => { featureState.value = s }).catch(() => {})
   // 天时每 30 秒刷新，跨时辰自动换象
   skyTimer = setInterval(() => { skyNow.value = skyAt() }, 30000)
+  // 防沉迷：在线时长统计（本地引擎模式，写回当日累计分钟）
+  if (username) {
+    playTimer = setInterval(() => {
+      playSeconds += 30
+      if (playSeconds >= 60) {
+        const mins = Math.floor(playSeconds / 60)
+        playSeconds -= mins * 60
+        addPlayTime(mins * 60).catch(() => {})
+      }
+    }, 30000)
+  }
 })
 onBeforeUnmount(() => {
   clearTimers()
@@ -838,6 +853,9 @@ onBeforeUnmount(() => {
   clearTimeout(toastTimer)
   clearTimeout(mapSwitchTimer)
   clearInterval(skyTimer)
+  // 结算在线时长零头
+  if (playTimer) { clearInterval(playTimer); playTimer = null }
+  if (username && playSeconds > 0) addPlayTime(playSeconds).catch(() => {})
   stopVibrate()
 })
 </script>
