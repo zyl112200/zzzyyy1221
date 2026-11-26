@@ -12,6 +12,7 @@
     "check": "node check-lan.mjs"
   },
   "dependencies": {
+    "face-api.js": "^0.22.2",
     "vue": "^3.4.0",
     "vue-router": "^4.6.4"
   },
