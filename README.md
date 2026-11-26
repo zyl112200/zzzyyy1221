@@ -409,7 +409,24 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 > 经济回归测试：`node coin_smoke_test.mjs`（单一货币 / 旧存档迁移）；爆率回归：`node odds_smoke_test.mjs`。
 > 新系统回归测试：`node feature_smoke_test.mjs`（功法阁 + 每日签到，24 项）、`node achievement_smoke_test.mjs`（成就，18 项）。
 > 仙钓道途回归测试：`node bond_smoke_test.mjs`（灵契目录 / 结契升星 / 出战位 / 灵池扩建 / 图鉴大成 / bondFx，15 项）。
+> 实名/防沉迷回归测试：`node identity_smoke_test.mjs`（验证码 / 身份证校验位 / 成年判定 / 脱敏 / 宵禁 / 时长，52 项）。
+> **金币同步回归测试：`node sync_smoke_test.mjs`（13 项，固化双重发币 / 差额 clamp / 幂等修复）**。
 > 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.68:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
+
+### 已修复的金币一致性问题
+
+一次全面排查修复了以下真实 bug（均含回归测试）：
+
+| # | 问题 | 修复 |
+| - | ---- | ---- |
+| 1 | 钓鱼双重发币：`settle()` 已发金币，洞天 `applyCatch` 又把 `coins` 计入 `earnedTotal`，经 `saveFeature` 差额再发一次 | `applyCatch` 不再把钓获金币计入 `earnedTotal`；`earnedTotal` 只记洞天内部收支（悬赏/淬炼/扩建/灵契/更多玩法） |
+| 2 | 洞天页进场金币显示 0（与主页不一致） | `PondView.load()` 增加 `meApi` 加载全局金币余额 |
+| 3 | 更多/实名/悬赏等页面顶栏金币显示 0 | `MoreLayout`、`IdentityView`、`QuestsView` 进场加载金币；`TopBar` 监听全局 `bikini:coins-changed` 事件实时同步 |
+| 4 | 后端 `FeatureService.normalize()` 丢弃 `spiritBonds`/`advance`，在线模式灵契/更多玩法进度每次保存都归零 | 先整体透传 raw 字段再规范化已知字段 |
+| 5 | 差额 `delta` 被 clamp 到 ±20万，但存入的 `earnedTotal` 是未截断值，导致净值错位 | 存回 `prev + delta`（实际入账值） |
+| 6 | 后端金币 `Integer` 溢出风险 | 保存时夹到 `Integer.MAX_VALUE`（与协会奖励一致） |
+
+> 金币数据流：`settle()` 发放钓鱼收益 → 洞天/更多玩法内部收支走 `earnedTotal` 差额 → `saveFeature` 广播 `bikini:coins-changed` → 所有 `TopBar` 即时刷新。任意页面金币余额始终一致。
 
 ---
 
@@ -454,6 +471,7 @@ npm run online             # 构建 + 起局域网服务（推荐）
 ├── bond_smoke_test.mjs       # ★ 灵契系统回归（15 项）
 ├── advance_smoke_test.mjs    # ★ 更多玩法回归（塔/脉/轮回/战令，33 项）
 ├── identity_smoke_test.mjs   # ★ 实名/防沉迷/验证码回归（52 项）
+├── sync_smoke_test.mjs       # ★ 金币同步/双重发币回归（13 项）
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
 ├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）
