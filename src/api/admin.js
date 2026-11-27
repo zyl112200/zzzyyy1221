@@ -6,6 +6,16 @@
  */
 import { request, get } from './http'
 
+/** 管理员登录：POST /api/admin/login { username, password } -> { token, username, ... } */
+export function adminLoginApi(data) {
+  return request('/api/admin/login', data)
+}
+
+/** 校验 token：GET /api/admin/verify（请求层会自动带 token） */
+export function adminVerifyApi() {
+  return get('/api/admin/verify')
+}
+
 /** 用户列表（关键词 / 角色 / 分页）：GET /api/admin/users */
 export function listUsers(params = {}) {
   const qs = new URLSearchParams()

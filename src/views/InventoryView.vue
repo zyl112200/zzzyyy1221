@@ -156,7 +156,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.page { min-height: 100vh; position: relative; overflow: hidden; }
+.page { min-height: 100vh; position: relative; overflow: hidden; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/scene_bg.png') center center / cover fixed no-repeat; }
 .inv {
   position: relative;
   z-index: 10;

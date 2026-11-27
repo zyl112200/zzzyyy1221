@@ -82,7 +82,7 @@ onMounted(load)
     <TopBar :shells="shells" />
     <div class="wrap">
       <header class="head">
-        <h1>🏆 仙钓天榜</h1>
+        <h1><GameIcon name="trophy" :size="22" /> 仙钓天榜</h1>
         <p>各路钓修同台论道，测一测你在仙钓大陆的名次。</p>
       </header>
 
@@ -129,7 +129,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.lb-page { min-height: 100vh; background: linear-gradient(160deg, #fff8e1, #fdeee0); padding-bottom: 40px; }
+.lb-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/login_bg.jpg') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px; }
 .head { text-align: center; margin: 12px 0 20px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #8a4b00; }

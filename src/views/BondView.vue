@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from '../components/GameIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import ToastMessage from '../components/ToastMessage.vue'
@@ -139,7 +140,7 @@ onMounted(load)
     <div class="wrap">
       <header class="head">
         <div>
-          <h1>🐉 仙钓道途 · 灵契阁</h1>
+          <h1><GameIcon name="star" :size="22" /> 仙钓道途 · 灵契阁</h1>
           <p>将钓获的灵鱼结为道途灵契，耗灵气淬炼升星，择有限出战位并肩垂钓。集齐图鉴更能激活大成加成，永久增益每一次抛竿。</p>
         </div>
         <div class="purse">
@@ -251,7 +252,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.bond-page { min-height: 100vh; background: linear-gradient(160deg, #f3ecff, #eef3ff 60%, #e8f7f4); padding-bottom: 40px; }
+.bond-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/maps/scenes/scene_jibei.png') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: 12px 0 22px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #5b2c83; }

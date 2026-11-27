@@ -18,6 +18,7 @@
  */
 import { localCall } from './localEngine.js'
 import { BACKEND_ORIGIN, DEV_PORT, WEB_PORT } from '../config/lan.js'
+import { getAdminToken } from '../admin/store.js'
 
 const MODE_KEY = 'bikini_api_mode'
 const BASE_KEY = 'bikini_api_base'
@@ -140,8 +141,19 @@ function callServer(method, url, body) {
     init.headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(body || {})
   }
+  // 后台管理接口自动携带管理员 token（登录接口本身不需要，且此时通常还没有 token）
+  if (url.startsWith('/api/admin/') && !url.endsWith('/login')) {
+    const token = getAdminToken()
+    if (token) init.headers['Authorization'] = 'Bearer ' + token
+  }
   return fetch(base + url, init)
     .then((res) => {
+      if (res.status === 401 && url.startsWith('/api/admin/')) {
+        // 管理员 token 失效：清会话并回登录页，避免死循环
+        try { localStorage.removeItem('bikini_admin_session') } catch { /* ignore */ }
+        if (location.hash !== '#/admin') location.hash = '#/admin'
+        throw new Error('管理员登录已过期，请重新登录')
+      }
       if (!res.ok) throw new Error(`后端返回 ${res.status}，请查看后端日志️`)
       return res.json()
     })

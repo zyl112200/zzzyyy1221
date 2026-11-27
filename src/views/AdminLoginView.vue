@@ -3,8 +3,9 @@ import GameIcon from '../components/GameIcon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminLogin } from '../api/localEngine.js'
-import { loginApi } from '../api/auth.js'
-import { setAdminSession, getAdminSession } from '../admin/store.js'
+import { adminLoginApi } from '../api/admin.js'
+import { isLocalMode } from '../api/http.js'
+import { setAdminSession, getAdminSession, clearAdminSession } from '../admin/store.js'
 
 const router = useRouter()
 const username = ref('')
@@ -13,29 +14,36 @@ const loading = ref(false)
 const error = ref('')
 
 onMounted(() => {
-  // 已是管理员则直接进后台
-  if (getAdminSession()) router.replace('/admin/home')
+  // 已是管理员则直接进后台。
+  // 在线模式要求会话带 token（旧会话无 token 会让后台接口 401 死循环），强制重新登录；
+  // 本地模式由本地引擎自鉴权，有会话即可放行。
+  const s = getAdminSession()
+  if (s && (isLocalMode() || s.token)) router.replace('/admin/home')
+  else if (s && !isLocalMode()) clearAdminSession() // 清掉无 token 的旧会话
 })
 
 /**
  * 管理员登录：
- * · 在线模式 → 后端 /api/auth/login 校验，再判断 permission === 0
- * · 本地模式 / 后端不可达 → 退回本地引擎的管理员校验
+ * · 在线模式 → 后端 /api/admin/login 校验管理员身份并签发 token
+ * · 本地模式 → 本地引擎的管理员校验（无 token，本地引擎自己鉴权）
  */
 async function doLogin(cred) {
+  if (isLocalMode()) return adminLogin(cred)
   try {
-    const res = await loginApi(cred)
+    const res = await adminLoginApi(cred)
     if (res.code !== 200) return { code: res.code, message: res.message }
-    const user = res.data || {}
-    if (user.permission !== 0) {
-      return { code: 403, message: '无权限访问后台系统（当前账号不是管理员）' }
-    }
     return {
       code: 200,
       message: '管理员登录成功',
-      data: { username: user.username, permission: user.permission, loginAt: Date.now() }
+      data: {
+        username: res.data.username,
+        permission: res.data.permission,
+        token: res.data.token,
+        loginAt: Date.now()
+      }
     }
   } catch (e) {
+    // 后端不可达时退回本地引擎，保证离线可用
     return adminLogin(cred)
   }
 }

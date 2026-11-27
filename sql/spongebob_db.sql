@@ -123,11 +123,12 @@ CREATE TABLE `catch_rate` (
   COLLATE = utf8mb4_general_ci
   COMMENT ='钓鱼爆率配置';
 
--- 示例数据（密码均为 BCrypt 加密后的 123456）
--- spongebob 为体验号：20.02 万金币，可直接体验巨物玩法；patrick 为纯新号
-INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `cultivation`, `gold_stones`) VALUES
-  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0, 0),
-  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0, 0);
+-- 示例数据（密码均为 BCrypt 加密）
+-- admin 为后台管理员（permission=0，密码 admin123）；spongebob 为体验号：20.02 万金币；patrick 为纯新号
+INSERT INTO `user` (`username`, `email`, `password`, `shells`, `strength`, `cultivation`, `gold_stones`, `permission`) VALUES
+  ('admin',     'admin@bikini.bottom',     '$2a$10$q6HqKEmIivgt8nQkx2hOOORGYsOynu23W2utrsqcO87.cMu2JF5j2', 0, 10, 0, 0, 0),
+  ('spongebob', 'spongebob@bikini.bottom', '$2a$10$6abzJLWM0DkWMUz/U0jTLeJgDVZvWlyNv9zeGx0vqMEh6RhEaIndC', 200200, 10, 0, 0, 1),
+  ('patrick',   'patrick@bikini.bottom',   '$2a$10$dKiaOy1ff6HO3SvKQnAlUOVK8nmrcLhYAxdzVM02MYvDL6wXAjoTy', 50, 10, 0, 0, 1);
 
 -- 商店商品目录（id 固定，便于逻辑引用）
 INSERT INTO `item` (`id`, `name`, `type`, `price`, `power`, `icon`, `description`, `sort`, `line_strength`, `max_catch_weight`) VALUES
@@ -157,11 +158,14 @@ INSERT INTO `catch_rate` (`tier_code`, `tier_name`, `base_weight`, `enabled`) VA
   ('SHANHAI',   '山海',  1, 1);
 
 -- AI 助手预设问答（触发词 -> 回复，玩家消息包含触发词即命中）
+-- 9 条预设，与前端 src/api/localEngine.js 的 AI_DIALOGS 保持同构（金币已统一货币，移除旧「金石」条目）
 INSERT INTO `ai_dialog` (`scene`, `reply`, `enabled`, `sort_order`) VALUES
-  ('你好', '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦 🍃', 1, 1),
-  ('怎么玩', '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦 🎣', 1, 2),
-  ('断线', '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断 🧵', 1, 3),
-  ('根骨', '根骨越高，收线越稳、能抗衡的灵鱼越重。用金石淬炼，每次 +5；金币可突破钓道境界，每重天永久 +5% 钓鱼收益 💪', 1, 4),
-  ('金石', '金石靠钓稀有 / 巨物获得，越稀有越重给得越多。钓到 1000 斤以上基本能攒出一大把 🪙', 1, 5),
-  ('巨物', '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重 🌊', 1, 6),
-  ('鱼饵', '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香 🪱', 1, 7);
+  ('你好', '嗨～我是仙钓大陆的小仙童！有什么想知道的尽管问，钓巨物的秘诀我最懂啦', 1, 1),
+  ('怎么玩', '先抛竿 → 浮漂点头出现「咬钩了！」时 2.2 秒内提竿 → 按住屏幕收线、松手泄力，让张力停在绿色安全区，收满 100% 就上岸啦', 1, 2),
+  ('断线', '张力冲到 100% 鱼线就断啦。松手泄力比一直按住更稳，暴走阶段（进度 78%）尤其要小心，鱼竿可能会被拽断', 1, 3),
+  ('根骨', '根骨越高，收线越稳、能抗衡的灵鱼越重。用金币淬炼，每次 +5；金币还能买装备、突破钓道境界', 1, 4),
+  ('金币', '金币是仙钓大陆唯一的货币：钓稀有鱼和巨物给得最多，买装备、淬炼根骨、突破境界全靠它', 1, 5),
+  ('巨物', '想钓十万斤、百万斤的山海巨兽，需要「螺纹钢航母阻拦索」（十万斤内不挣断）+「深渊海神竿」，两件同时装备取最大承重', 1, 6),
+  ('鱼饵', '每次抛竿消耗 1 个鱼饵。豪华鱼饵 / 深海秘饵能显著提升稀有鱼概率，配合幸运四叶草更香', 1, 7),
+  ('存档', '在线模式下存档在服务器数据库，多设备共享；断网时自动切到本地引擎，存档在浏览器 localStorage，注意别清缓存', 1, 8),
+  ('协会', '钓鱼协会每波发布 10 条任务（至少 1 条山海鱼、3 条神话鱼）；比赛在线报名 1 分钟匹配后与 100 名玩家比 1 小时总重，真人不足由人机补齐。参赛保底 100 万金币，前三名 1 亿 / 5000 万 / 1000 万！单尾 1000 斤以上还有 1~9 星认证徽章', 1, 9);

@@ -98,3 +98,10 @@ export function clearAdminSession() {
     /* ignore */
   }
 }
+
+/** 管理员 token：供请求层给 /api/admin/* 自动附加 Authorization 头。
+ *  本地引擎模式的会话没有 token，返回空串即可（本地引擎自己鉴权）。 */
+export function getAdminToken() {
+  const s = getAdminSession()
+  return (s && s.token) ? s.token : ''
+}

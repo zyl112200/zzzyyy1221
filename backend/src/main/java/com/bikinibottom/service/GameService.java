@@ -65,10 +65,10 @@ public class GameService {
 
     /** 钓到神话 / 山海级稀有鱼时，AI 助手的随机祝贺台词（{fish} 占位鱼名，仙侠风） */
     private static final String[] RARE_CHEERS = {
-            "🎉 哇哦！你竟把「{fish}」这等灵物钓了上来，整个仙钓界都要为你轰动啦！",
-            "🌟 不得了！「{fish}」成功上岸，这可是能写进钓道传奇的鱼！",
-            "🐠 稀世珍宝「{fish}」被你收入囊中，仙人见了都惊叹！",
-            "👑 神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！"
+            "哇哦！你竟把「{fish}」这等灵物钓了上来，整个仙钓界都要为你轰动啦！",
+            "不得了！「{fish}」成功上岸，这可是能写进钓道传奇的鱼！",
+            "稀世珍宝「{fish}」被你收入囊中，仙人见了都惊叹！",
+            "神话 / 山海级的「{fish}」！你这钓技，连钓圣都得拜你为师！"
     };
 
     /** 钓鱼功法定义（与前端 src/data/skills.js 一一对应，字段含义见该文件注释） */
@@ -175,7 +175,7 @@ public class GameService {
     public Result<GameProfile> me(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         ensureStarterRod(u.getId());
         return Result.success(buildProfile(u));
@@ -355,7 +355,7 @@ public class GameService {
     public Result<GameProfile> setMap(String username, String mapId) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         if (GameMaps.get(mapId) == null) {
             return Result.error("未知地图：" + mapId);
@@ -380,7 +380,7 @@ public class GameService {
     public Result<List<Map<String, Object>>> listBaits(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         List<Item> baits = itemMapper.selectList(
                 Wrappers.<Item>lambdaQuery().eq(Item::getType, "BAIT"));
@@ -417,7 +417,7 @@ public class GameService {
         }
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         Item item = itemMapper.selectById(itemId);
         if (item == null) {
@@ -429,7 +429,7 @@ public class GameService {
         }
         int cost = (int) costL;
         if ((u.getShells() == null ? 0 : u.getShells()) < cost) {
-            return Result.error("金币不够啦，先去钓鱼赚点 🪙");
+            return Result.error("金币不够啦，先去钓鱼赚点");
         }
 
         u.setShells(u.getShells() - cost);
@@ -451,14 +451,14 @@ public class GameService {
             ui.setEquipped(autoEquip ? 1 : 0);
             userItemMapper.insert(ui);
         }
-        return Result.success("购买成功 🎉", buildProfile(u));
+        return Result.success("购买成功", buildProfile(u));
     }
 
     /** 装备钓竿 / 鱼线工具 */
     public Result<GameProfile> equip(String username, Long userItemId) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         UserItem target = userItemMapper.selectById(userItemId);
         if (target == null || !target.getUserId().equals(u.getId())) {
@@ -516,14 +516,14 @@ public class GameService {
                                    Map<String, Object> bondFx) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         // 钓竿是刚需兜底（断了就补一把，避免卡死）；鱼饵不白送，只在“没饵且买不起饵”时救济 3 个
         ensureStarterRod(u.getId());
 
         GameProfile profile = buildProfile(u);
         if (profile.getEquippedRodPower() == 0) {
-            return Result.error("你还没有钓竿，先去商店看看 🎣");
+            return Result.error("你还没有钓竿，先去商店看看");
         }
         if (profile.getTotalBait() <= 0) {
             int shells = u.getShells() == null ? 0 : u.getShells();
@@ -533,7 +533,7 @@ public class GameService {
                 profile = buildProfile(getUser(username));
             }
             if (profile.getTotalBait() <= 0) {
-                return Result.error("没有鱼饵了，去商店买点 🪱");
+                return Result.error("没有鱼饵了，去商店买点");
             }
         }
 
@@ -711,7 +711,7 @@ public class GameService {
         }
         User u = getUser(req.getUsername());
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         // 原子抢占结算权：computeIfPresent 保证并发请求下只有一个线程拿到遭遇，
         // 其余线程得到 null，从根本上杜绝同一条鱼被重复入账（P0）
@@ -726,7 +726,7 @@ public class GameService {
         });
         PendingEncounter pe = claimed[0];
         if (pe == null) {
-            return Result.error("这条鱼已经结算过了，或这次咬钩不属于你 🐟");
+            return Result.error("这条鱼已经结算过了，或这次咬钩不属于你");
         }
 
         boolean landed = Boolean.TRUE.equals(req.getLanded());
@@ -753,7 +753,7 @@ public class GameService {
             r.setRewardShells(pe.getRewardShells());
             r.setRewardGold(pe.getRewardGold());
             r.setMessage("钓起来了！" + pe.getFishName() + " " + pe.getWeight() + " 斤，"
-                    + "获得 " + pe.getRewardShells() + " 金币 🪙");
+                    + "获得 " + pe.getRewardShells() + " 金币");
             // 神话 / 山海级稀有鱼上岸：给 AI 助手一句随机祝贺台词（前端自动唤起播报）
             if ("MYTHIC".equals(pe.getTier()) || "SHANHAI".equals(pe.getTier())) {
                 r.setCelebrateMessage(RARE_CHEERS[random.nextInt(RARE_CHEERS.length)]
@@ -800,10 +800,10 @@ public class GameService {
                 case "ROD" -> {
                     breakEquippedRod(u);
                     rodBroken = true;
-                    message = "啪！鱼竿被暴走的巨物生生拽断，鱼跑了…快去背包换一根 🎣";
+                    message = "啪！鱼竿被暴走的巨物生生拽断，鱼跑了…快去背包换一根";
                 }
-                case "LINE" -> message = "啪！鱼线被 " + pe.getWeight() + " 斤的力道挣断，鱼跑了…换更结实的线吧 🧵";
-                case "ESCAPE" -> message = "提竿太慢，鱼儿脱钩溜走了 🐟";
+                case "LINE" -> message = "啪！鱼线被 " + pe.getWeight() + " 斤的力道挣断，鱼跑了…换更结实的线吧";
+                case "ESCAPE" -> message = "提竿太慢，鱼儿脱钩溜走了";
                 case "TIMEOUT" -> message = "收线太久，鱼儿沉底逃走了…";
                 default -> message = "这条鱼还是跑掉了…";
             }
@@ -853,16 +853,16 @@ public class GameService {
     public Result<TrainResult> train(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         int strength = strengthOf(u);
         if (strength >= STRENGTH_MAX) {
-            return Result.error("根骨已臻至上限，无法再淬炼 💪");
+            return Result.error("根骨已臻至上限，无法再淬炼");
         }
         int coins = u.getShells() == null ? 0 : u.getShells();
         int cost = 20 + strength * 2;
         if (coins < cost) {
-            return Result.error("金币不足，升级需要 " + cost + " 金币 🪙（多钓稀有巨物能拿到更多）");
+            return Result.error("金币不足，升级需要 " + cost + " 金币（多钓稀有巨物能拿到更多）");
         }
         int gained = 5;
         u.setShells(coins - cost);
@@ -874,7 +874,7 @@ public class GameService {
         r.setCost(cost);
         r.setGoldStones(0); // 兼容字段
         r.setGained(gained);
-        r.setMessage("💪 根骨 +" + gained + "！现在能更稳地拉起巨物了");
+        r.setMessage("根骨 +" + gained + "！现在能更稳地拉起巨物了");
         return Result.success(r);
     }
 
@@ -889,11 +889,11 @@ public class GameService {
     public Result<RealmUpResult> realmUp(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         int realm = realmOf(u);
         if (realm >= REALM_MAX) {
-            return Result.error("钓道境界已臻至 999 重天巅峰，无需再突破 ✨");
+            return Result.error("钓道境界已臻至 999 重天巅峰，无需再突破");
         }
         long cost = realmNextCost(realm);
         if (cost > 0 && cost < SAFE_MAX && userSkills(u).contains("wugou")) {
@@ -901,7 +901,7 @@ public class GameService {
         }
         int shells = u.getShells() == null ? 0 : u.getShells();
         if (shells < cost) {
-            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + cost + " 🪙");
+            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + cost + "");
         }
         u.setShells(shells - (int) cost);
         u.setPowerRealm(realm + 1);
@@ -918,7 +918,7 @@ public class GameService {
             nextCost = Math.round(nextCost * WUGOU_DISCOUNT);
         }
         r.setNextRealmCost(nextCost > 0 ? nextCost : null);
-        r.setMessage("🌟 突破！钓道境界升至 " + u.getPowerRealm() + " 重天，钓鱼收益 +" + r.getRealmBonusPct() + "%");
+        r.setMessage("突破！钓道境界升至 " + u.getPowerRealm() + " 重天，钓鱼收益 +" + r.getRealmBonusPct() + "%");
         return Result.success(r);
     }
 
@@ -928,7 +928,7 @@ public class GameService {
     public Result<TrainResult> trainAll(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         int strength = strengthOf(u);
         int coins = u.getShells() == null ? 0 : u.getShells();
@@ -946,7 +946,7 @@ public class GameService {
             times++;
         }
         if (times == 0) {
-            return Result.error("金币不足，至少需 " + (20 + strength * 2) + " 金币才能修炼 🪙");
+            return Result.error("金币不足，至少需 " + (20 + strength * 2) + " 金币才能修炼");
         }
         u.setShells(coins);
         u.setStrength(strength);
@@ -957,7 +957,7 @@ public class GameService {
         r.setCost((int) Math.min(Integer.MAX_VALUE, totalCost));
         r.setGoldStones(0); // 兼容字段
         r.setGained(times * 5);
-        r.setMessage("💪 连修 " + times + " 次！根骨 +" + (times * 5) + "，金币耗尽");
+        r.setMessage("连修 " + times + " 次！根骨 +" + (times * 5) + "，金币耗尽");
         return Result.success(r);
     }
 
@@ -967,11 +967,11 @@ public class GameService {
     public Result<RealmUpResult> realmUpAll(String username) {
         User u = getUser(username);
         if (u == null) {
-            return Result.error("仙门名录上没有此人 🌫️");
+            return Result.error("仙门名录上没有此人");
         }
         int realm = realmOf(u);
         if (realm >= REALM_MAX) {
-            return Result.error("钓道境界已臻至 999 重天巅峰，无需再突破 ✨");
+            return Result.error("钓道境界已臻至 999 重天巅峰，无需再突破");
         }
         int shells = u.getShells() == null ? 0 : u.getShells();
         List<String> skills = userSkills(u);
@@ -995,7 +995,7 @@ public class GameService {
             if (need > 0 && need < SAFE_MAX && skills.contains("wugou")) {
                 need = Math.round(need * WUGOU_DISCOUNT);
             }
-            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + need + " 🪙");
+            return Result.error("金币不足，突破到 " + (realm + 1) + " 重天需要 " + need + "");
         }
         u.setShells(shells);
         u.setPowerRealm(realm);
@@ -1012,7 +1012,7 @@ public class GameService {
             nextCost = Math.round(nextCost * WUGOU_DISCOUNT);
         }
         r.setNextRealmCost(nextCost > 0 ? nextCost : null);
-        r.setMessage("🌟 连破 " + times + " 重天！钓道境界升至 " + u.getPowerRealm() + " 重天，收益 +" + r.getRealmBonusPct() + "%");
+        r.setMessage("连破 " + times + " 重天！钓道境界升至 " + u.getPowerRealm() + " 重天，收益 +" + r.getRealmBonusPct() + "%");
         return Result.success(r);
     }
 
@@ -1044,7 +1044,7 @@ public class GameService {
         }
         int coins = u.getShells() == null ? 0 : u.getShells();
         if (coins < def.cost()) {
-            return Result.error("金币不足，修炼《" + def.name() + "》需要 " + def.cost() + " 金币 🪙");
+            return Result.error("金币不足，修炼《" + def.name() + "》需要 " + def.cost() + " 金币");
         }
         u.setShells(coins - def.cost());
         skills.add(skillId);
@@ -1055,7 +1055,7 @@ public class GameService {
         r.setShells(u.getShells());
         r.setGoldStones(0); // 兼容字段
         r.setSkills(skills);
-        return Result.success("📜 成功修炼《" + def.name() + "》！", r);
+        return Result.success("成功修炼《" + def.name() + "》！", r);
     }
 
     // ==========================================================

@@ -33,7 +33,7 @@ echo ============================================================
 echo [i] Two windows will open. Keep both of them running.
 echo.
 
-start "XianDiao Backend" cmd /k call "%~dp0start-backend.bat"
+start "XianDiao Backend (MySQL)" cmd /k call "%~dp0start-backend-mysql.bat"
 echo [i] Waiting for the backend to come up (about 25s on first run) ...
 timeout /t 25 >nul
 

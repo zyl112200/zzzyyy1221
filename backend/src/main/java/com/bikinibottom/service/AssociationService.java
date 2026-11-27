@@ -194,7 +194,7 @@ public class AssociationService {
     /** 协会主页数据（任务 / 徽章 / 比赛战况） */
     public synchronized Result<Map<String, Object>> info(String username) {
         User u = getUser(username);
-        if (u == null) return Result.error("仙门名录上没有此人 🌫️");
+        if (u == null) return Result.error("仙门名录上没有此人");
         long now = System.currentTimeMillis();
         ensureTasks(now);
         advanceComp(now);
@@ -204,17 +204,17 @@ public class AssociationService {
     /** 领取协会任务奖励 */
     public synchronized Result<Map<String, Object>> claimTask(String username, Integer taskId) {
         User u = getUser(username);
-        if (u == null) return Result.error("仙门名录上没有此人 🌫️");
+        if (u == null) return Result.error("仙门名录上没有此人");
         long now = System.currentTimeMillis();
         ensureTasks(now);
         AssocTask t = null;
         for (AssocTask x : tasks) if (x.id == (taskId == null ? -1 : taskId)) { t = x; break; }
-        if (t == null) return Result.error("任务不存在或已下架 📋");
+        if (t == null) return Result.error("任务不存在或已下架");
         if (now >= t.expiresAt) return Result.error("任务已过期，奖励无法领取");
         if (!t.progress.containsKey(u.getUsername())) {
-            return Result.error("还没钓起「" + t.fishName + "」，先去灵湖完成它吧 🎣");
+            return Result.error("还没钓起「" + t.fishName + "」，先去灵湖完成它吧");
         }
-        if (t.claimedBy.containsKey(u.getUsername())) return Result.error("奖励已经领过啦，下一次任务加油 🍃");
+        if (t.claimedBy.containsKey(u.getUsername())) return Result.error("奖励已经领过啦，下一次任务加油");
         t.claimedBy.put(u.getUsername(), true);
         u.setShells(shellOf(u) + t.rewardShells);
         userMapper.updateById(u);
@@ -222,13 +222,13 @@ public class AssociationService {
         data.put("shells", u.getShells());
         data.put("goldStones", 0); // 兼容字段
         data.put("taskId", t.id);
-        return Result.success("任务奖励到账：" + t.rewardShells + " 金币 🪙", data);
+        return Result.success("任务奖励到账：" + t.rewardShells + " 金币", data);
     }
 
     /** 报名钓鱼比赛：匹配中加入本场；比赛进行中登记下一场；空闲则开一场新匹配 */
     public synchronized Result<Map<String, Object>> compStart(String username) {
         User u = getUser(username);
-        if (u == null) return Result.error("仙门名录上没有此人 🌫️");
+        if (u == null) return Result.error("仙门名录上没有此人");
         long now = System.currentTimeMillis();
         advanceComp(now);
         Competition c = competition;
@@ -237,7 +237,7 @@ public class AssociationService {
                 return Result.success("你已报名本场，等待匹配结束…", compSignupData(c));
             }
             c.signups.add(u.getUsername());
-            return Result.success("⚔️ 报名成功！匹配中…已有 " + c.signups.size()
+            return Result.success("报名成功！匹配中…已有 " + c.signups.size()
                     + " 名真人在线报名，1 分钟后开赛（不足 100 人由人机补齐）", compSignupData(c));
         }
         if (c != null && "RUNNING".equals(c.phase)) {
@@ -246,13 +246,13 @@ public class AssociationService {
             data.put("phase", "RUNNING");
             data.put("endsAt", c.endsAt);
             data.put("remaining", Math.max(0, c.endsAt - now));
-            return Result.success("比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配 🐟", data);
+            return Result.success("比赛正在进行，已为你登记下一场：本场结束后自动进入 1 分钟匹配", data);
         }
         // 空闲 / 上一场已结束：开新匹配
         List<String> signups = new ArrayList<>(nextSignups);
         if (!signups.contains(u.getUsername())) signups.add(u.getUsername());
         int count = openMatch(now, signups);
-        return Result.success("⚔️ 报名成功！1 分钟匹配中，已有 " + count
+        return Result.success("报名成功！1 分钟匹配中，已有 " + count
                 + " 名真人在线报名；不足 100 人由人机补齐", compSignupData(competition));
     }
 
@@ -268,7 +268,7 @@ public class AssociationService {
     /** 查询比赛实时战况（到点自动结算并发放奖励） */
     public synchronized Result<Map<String, Object>> compState(String username) {
         User u = getUser(username);
-        if (u == null) return Result.error("仙门名录上没有此人 🌫️");
+        if (u == null) return Result.error("仙门名录上没有此人");
         long now = System.currentTimeMillis();
         ensureTasks(now);
         advanceComp(now);
@@ -294,7 +294,7 @@ public class AssociationService {
                 boolean firstDone = best == null;
                 t.progress.put(uname, weight);
                 if (firstDone) {
-                    msgs.add("📋 协会任务达成：「钓起一条" + t.fishName + "」完成！记得去协会领奖");
+                    msgs.add("协会任务达成：「钓起一条" + t.fishName + "」完成！记得去协会领奖");
                 }
             }
         }
@@ -306,7 +306,7 @@ public class AssociationService {
             for (CompEntry e : c.entries) {
                 if (e.player && e.name.equals(uname)) {
                     e.total = round1(e.total + weight);
-                    msgs.add("⚔️ 比赛中！你已累计 " + fmtWeight(e.total) + " 斤");
+                    msgs.add("比赛中！你已累计 " + fmtWeight(e.total) + " 斤");
                     break;
                 }
             }
@@ -327,7 +327,7 @@ public class AssociationService {
         int curBadge = u.getAssocBadge() == null ? 0 : u.getAssocBadge();
         if (star > curBadge) {
             u.setAssocBadge(star);
-            msgs.add("🏆 钓鱼协会认证：单尾 " + fmtWeight(weight) + " 斤，授予 " + star + " 星专属徽章！");
+            msgs.add("钓鱼协会认证：单尾 " + fmtWeight(weight) + " 斤，授予 " + star + " 星专属徽章！");
             changed = true;
         }
         if (changed) userMapper.updateById(u);

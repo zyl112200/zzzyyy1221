@@ -690,7 +690,7 @@ function signIn(username) {
   u.lastSignDate = today
   u.shells = (u.shells == null ? 0 : u.shells) + reward
   persist()
-  const milestone = streak % 7 === 0 ? ' 🎉 连签 7 日里程碑！额外奖励已发放' : ''
+  const milestone = streak % 7 === 0 ? ' · 连签 7 日里程碑！额外奖励已发放' : ''
   const msg = `签到成功！连签 ${streak} 天，获得 ${reward} 金币${milestone}`
   return ok(signStateOf(u, true, reward, msg).data)
 }
@@ -766,7 +766,7 @@ function cultivate(username, skillId) {
   u.shells = shells - def.cost
   u.skills = [...skills, def.id]
   persist()
-  return ok({ shells: u.shells, goldStones: 0, skills: u.skills }, `📜 成功修炼《${def.name}》！`)
+  return ok({ shells: u.shells, goldStones: 0, skills: u.skills }, `成功修炼《${def.name}》！`)
 }
 
 function settle({ username, encounterId, landed, breakType }) {

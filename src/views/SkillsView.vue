@@ -85,7 +85,7 @@ onMounted(load)
     <div class="wrap">
       <header class="head">
         <div>
-          <h1>☯ 钓道功法阁</h1>
+          <h1><GameIcon name="taiji" :size="22" /> 钓道功法阁</h1>
           <p>以金币参悟钓鱼功法，被动加成真实作用于搏鱼手感与收益，在线 / 离线皆生效。</p>
         </div>
         <div class="purse">🪙 {{ shells }}</div>
@@ -126,7 +126,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.skills-page { min-height: 100vh; background: linear-gradient(160deg, #eef5ff, #f7ecff); padding-bottom: 40px; }
+.skills-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/login_bg.jpg') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: 12px 0 24px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #4a2e7a; }

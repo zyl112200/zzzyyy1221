@@ -78,7 +78,7 @@ onMounted(load)
     <div class="wrap">
       <header class="head">
         <div>
-          <h1>🎖 钓道成就</h1>
+          <h1><GameIcon name="medals" :size="22" /> 钓道成就</h1>
           <p>十四道里程碑，见证你的钓道修行。进度实时派生，荣誉值自动累计，无需领取。</p>
         </div>
         <div class="honor">
@@ -107,7 +107,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.ach-page { min-height: 100vh; background: linear-gradient(160deg, #f0f7ff, #eefaf3); padding-bottom: 40px; }
+.ach-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/scene_bg.png') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: 12px 0 24px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #1b5e20; }

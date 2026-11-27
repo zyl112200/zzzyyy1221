@@ -109,7 +109,7 @@ onMounted(load)
     <div class="wrap">
       <header class="head">
         <div>
-          <h1>🏞 洞天福地</h1>
+          <h1><GameIcon name="mountain" :size="22" /> 洞天福地</h1>
           <p>聚灵池、淬本命法宝，潜移默化提升每一次抛竿的机缘与收益。</p>
         </div>
         <div class="purse">🪙 {{ shells }}</div>
@@ -170,7 +170,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.pond-page { min-height: 100vh; background: linear-gradient(160deg, #e8f7f4, #eef3ff); padding-bottom: 40px; }
+.pond-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/ocean_bg.png') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: 12px 0 24px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #00695c; }

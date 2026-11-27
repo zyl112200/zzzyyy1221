@@ -82,7 +82,7 @@ onMounted(load)
     <div class="wrap">
       <header class="head">
         <div>
-          <h1>📜 每日悬赏令</h1>
+          <h1><GameIcon name="scroll" :size="22" /> 每日悬赏令</h1>
           <p>悬赏每日重置。钓起指定品级或凑足重量，即可领取金币赏赐。</p>
         </div>
         <div class="purse">🪙 {{ shells }}</div>
@@ -122,7 +122,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.quests-page { min-height: 100vh; background: linear-gradient(160deg, #fff8ec, #f7f0ff); padding-bottom: 40px; }
+.quests-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../assets/maps/scenes/scene_beiyuan.png') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: 12px 0 24px; }
 .head h1 { margin: 0 0 6px; font-size: 26px; color: #7a4b00; }

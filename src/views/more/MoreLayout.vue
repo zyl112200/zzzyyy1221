@@ -1,4 +1,5 @@
 <script setup>
+import GameIcon from '../../components/GameIcon.vue'
 import { ref, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getSession } from '../../store/session'
@@ -38,7 +39,7 @@ const tabs = [
     <div class="wrap">
       <header class="more-head">
         <div>
-          <h1>🌌 更多 · 道途深处</h1>
+          <h1><GameIcon name="map" :size="22" /> 更多 · 道途深处</h1>
           <p>四条长期养成主线彼此联动：钓鱼淬力量 → 爬塔攒道韵 → 轮回铸道印 → 战令每日修炼，永久加成反哺每一次抛竿。</p>
         </div>
       </header>
@@ -56,7 +57,7 @@ const tabs = [
 </template>
 
 <style scoped>
-.more-page { min-height: 100vh; background: linear-gradient(160deg, #eef2ff, #f3ecff 55%, #eafaf5); padding-bottom: 40px; }
+.more-page { min-height: 100vh; background: linear-gradient(180deg, rgba(7,15,30,.52), rgba(5,11,24,.74)), url('../../assets/maps/scenes/scene_shenyuan.png') center center / cover fixed no-repeat; padding-bottom: 40px; }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 16px; }
 .more-head { margin: 8px 0 18px; }
 .more-head h1 { margin: 0 0 6px; font-size: 26px; color: #3730a3; }

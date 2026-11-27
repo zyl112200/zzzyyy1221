@@ -4,7 +4,7 @@ import { BACKEND_ORIGIN, DEV_PORT } from './src/config/lan.js'
 
 // 说明：
 // - 本项目已改为「在线浏览」形态：由 HTTP 服务（dev / 静态站点）提供页面，
-//   局域网内任意设备可通过 http://192.168.68.68:<端口> 访问。
+//   局域网内任意设备可通过 http://192.168.68.9:<端口> 访问。
 // - server.host / preview.host = 0.0.0.0：监听所有网卡，手机、其他电脑都能连。
 // - proxy 把前端的 /api 转发到局域网后端（地址取自 src/config/lan.js）。
 //   浏览器侧始终同源请求，天然没有跨域问题。
@@ -16,9 +16,22 @@ const proxy = {
 }
 
 export default defineConfig({
-  // 在线浏览使用站点根路径（history / hash 路由均可用）
-  base: '/',
-  plugins: [vue()],
+  // 相对路径：同时兼容 HTTP 站点访问与 file:// 双击打开（hash 路由下均正常）
+  base: './',
+  plugins: [
+    vue(),
+    // 构建产物用普通 script 加载：IIFE 产物不依赖 ES Module，
+    // 且 file:// 直接双击打开时 type="module" 会被浏览器 CORS 拦截导致白屏。
+    {
+      name: 'plain-script-for-file-open',
+      transformIndexHtml(html) {
+        return html.replace(
+          /<script type="module" crossorigin src="([^"]+)"><\/script>/g,
+          '<script defer src="$1"></script>'
+        )
+      }
+    }
+  ],
   server: {
     host: '0.0.0.0',
     port: DEV_PORT,

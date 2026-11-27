@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import GameIcon from './GameIcon.vue'
 import { getSession } from '../store/session'
 import { signInInfoApi, signInApi } from '../api/game.js'
 
@@ -71,7 +72,7 @@ onMounted(load)
       @click="toggle"
       :title="info.todaySigned ? '今日已签到' : '每日签到领金币'"
     >
-      <span class="gift">🎁</span>
+      <GameIcon name="gift" :size="24" class="gift" />
       <span v-if="!info.todaySigned" class="dot"></span>
     </button>
 
@@ -80,7 +81,7 @@ onMounted(load)
       <div class="signin-panel" v-if="open">
         <div class="si-head">
           <div>
-            <b>📜 每日签到</b>
+            <b><GameIcon name="scroll" :size="18" /> 每日签到</b>
             <span class="si-sub">连签越长，赏赐越厚</span>
           </div>
           <button class="si-close" @click="open = false" aria-label="关闭">×</button>
@@ -99,7 +100,7 @@ onMounted(load)
             :class="{ today: i === (info.streak - 1) % 7, got: i < info.streak % 7, milestone: i === 6 }"
           >
             <span class="d">第{{ i + 1 }}天</span>
-            <span class="r">🪙{{ reward }}</span>
+            <span class="r"><GameIcon name="coin" :size="14" /> {{ reward }}</span>
             <span v-if="i === 6" class="m">里程碑</span>
           </div>
         </div>

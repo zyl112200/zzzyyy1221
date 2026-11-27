@@ -37,7 +37,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     public Result<User> register(RegisterRequest req) {
         boolean usernameExists = lambdaQuery().eq(User::getUsername, req.getUsername()).exists();
         if (usernameExists) {
-            return Result.error("此道号已被先人占用，另择一名号吧 🍃");
+            return Result.error("此道号已被先人占用，另择一名号吧");
         }
         String mail = req.getEmail() == null || req.getEmail().trim().isEmpty()
                 ? req.getUsername() + "@xiandao.world"
@@ -45,7 +45,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         if (req.getEmail() != null && !req.getEmail().trim().isEmpty()) {
             boolean emailExists = lambdaQuery().eq(User::getEmail, mail).exists();
             if (emailExists) {
-                return Result.error("该仙讯邮箱已注册过，直接回山门登录吧 🕊️");
+                return Result.error("该仙讯邮箱已注册过，直接回山门登录吧");
             }
         }
 
@@ -58,7 +58,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         // 与离线引擎 localEngine.js（register 第 844–846 行）及 README「注册新道号（50 金币 + 5 鱼饵）」契约一致。
         // 原实现只建 user、不建 user_item，导致新用户 totalBait=0、cast 直接报「没有鱼饵了」而无法游玩。
         grantStarterPack(user.getId());
-        return Result.success("入道成功，欢迎踏入仙钓大陆 🎉", user);
+        return Result.success("入道成功，欢迎踏入仙钓大陆", user);
     }
 
     /**
@@ -87,12 +87,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     public Result<User> login(LoginRequest req) {
         User user = lambdaQuery().eq(User::getUsername, req.getUsername()).one();
         if (user == null) {
-            return Result.error("查无此道号，仙门名录上没有此人 🌫️");
+            return Result.error("查无此道号，仙门名录上没有此人");
         }
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
-            return Result.error("护道法印不对，心魔可趁机而入 🗝️");
+            return Result.error("护道法印不对，心魔可趁机而入");
         }
-        return Result.success("登仙成功，欢迎回到仙钓大陆 🎉", user);
+        return Result.success("登仙成功，欢迎回到仙钓大陆", user);
     }
 
     // ============================================================

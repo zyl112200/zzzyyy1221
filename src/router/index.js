@@ -23,6 +23,13 @@ import AdminDashboardView from '../views/AdminDashboardView.vue'
 import AdminUsersView from '../views/AdminUsersView.vue'
 import { getSession } from '../store/session'
 import { getAdminSession } from '../admin/store'
+import { getApiMode } from '../api/http'
+
+/** 后台会话是否有效：本地模式有会话即可；在线/自动模式需带 token（后端拦截器校验） */
+function validAdminSession(s) {
+  if (!s) return false
+  return getApiMode() === 'local' || !!s.token
+}
 
 const router = createRouter({
   // 使用 hash 路由，保证直接双击 index.html（file:// 协议）时也能正常切换页面
@@ -71,11 +78,11 @@ router.beforeEach((to) => {
     return { path: '/home' }
   }
   // 已是管理员再访问后台登录页，直接进后台主页
-  if (to.path === '/admin' && adminSession) {
+  if (to.path === '/admin' && validAdminSession(adminSession)) {
     return { path: '/admin/home' }
   }
   // 需要管理员权限的后台页面
-  if (to.meta.adminAuth && !adminSession) {
+  if (to.meta.adminAuth && !validAdminSession(adminSession)) {
     return { path: '/admin' }
   }
   return true

@@ -31,7 +31,7 @@
 | 运行形态 | **在线浏览（HTTP 站点，局域网内任意设备可访问）** |
 | 离线引擎 | 浏览器内本地游戏引擎（`localStorage` 存档），后端不可用时自动降级 |
 | 后端 | Spring Boot 3 + MyBatis-Plus + BCrypt（绑定 `0.0.0.0:8080`，局域网可达） |
-| 数据库 | MySQL 8 / H2 内存库 |
+| 数据库 | 本机 MySQL 8（默认，持久化）/ H2 内存库（兜底） |
 | 分发（可选） | 单文件 HTML（JS / CSS / 数据全内联，零外部请求） |
 
 ---
@@ -42,12 +42,12 @@
 
 | 项 | 当前值 |
 | --- | --- |
-| 局域网 IP | `192.168.68.68` |
-| 前端在线站点 | `http://192.168.68.68:8081` |
-| 前端开发服务器 | `http://192.168.68.68:5173` |
-| 后端 API | `http://192.168.68.68:8080` |
-| 后端健康检查 | `http://192.168.68.68:8080/api/health` |
-| H2 控制台（h2 profile） | `http://192.168.68.68:8080/h2-console` |
+| 局域网 IP | `192.168.68.9` |
+| 前端在线站点 | `http://192.168.68.9:8081` |
+| 前端开发服务器 | `http://192.168.68.9:5173` |
+| 后端 API | `http://192.168.68.9:8080` |
+| 后端健康检查 | `http://192.168.68.9:8080/api/health` |
+| H2 控制台（h2 profile） | `http://192.168.68.9:8080/h2-console` |
 
 ## 一键启动（在线浏览，局域网可访问）
 
@@ -58,14 +58,15 @@
 | Windows（推荐） | 双击 `start-all.bat`：起后端 + 起网页服务 + 自检 + 打开浏览器 |
 | Windows（只要前端） | 双击 `start.bat`：构建 → 起网页服务 → 打开浏览器 |
 | Linux / macOS | `chmod +x start.sh` 后运行 `./start.sh` |
-| 只起后端 | 双击 `start-backend.bat`（Spring Boot + H2，自带示例数据） |
+| 只起后端（MySQL） | 双击 `start-backend-mysql.bat`（Spring Boot + 本机 MySQL，数据持久化） |
+| 只起后端（H2 兜底） | 双击 `start-backend.bat`（Spring Boot + H2 内存库，无 MySQL 时用，重启数据清空） |
 
 启动后：
 
-- 本机访问 `http://localhost:8081`，局域网访问 `http://192.168.68.68:8081`
-- 前端的 `/api` 请求由网页服务反向代理到 `http://192.168.68.68:8080`，浏览器侧同源，**不涉及跨域**
+- 本机访问 `http://localhost:8081`，局域网访问 `http://192.168.68.9:8081`
+- 前端的 `/api` 请求由网页服务反向代理到 `http://192.168.68.9:8080`，浏览器侧同源，**不涉及跨域**
 - **后端没启动也不影响打开**：页面会先探测 `/api/health`，探测不到就自动降级到浏览器内本地引擎（`localStorage` 存档）
-- 默认账号：`spongebob` / `123456`（后端 H2 与本地引擎都预置；本地引擎另有 20.02 万金币）
+- 默认账号：`spongebob` / `123456`（MySQL 库、H2 与本地引擎都预置；MySQL 中 spongebob 有 20.02 万金币）
 
 **连通性自检**：`npm run check`（或 `node check-lan.mjs`）会打印四项检查结果——本机是否真的持有配置里的 IP、后端 8080、前端 8081、`/api` 代理是否打通，失败时直接给出处理建议。别的设备连不上时先跑它。
 
@@ -75,10 +76,10 @@
 
 ```bash
 npm install      # 仅首次需要网络
-npm run dev      # 本机 http://localhost:5173 ／ 局域网 http://192.168.68.68:5173
+npm run dev      # 本机 http://localhost:5173 ／ 局域网 http://192.168.68.9:5173
 ```
 
-开发服务器已绑定 `0.0.0.0` 并把 `/api` 代理到 `http://192.168.68.68:8080`，所以：
+开发服务器已绑定 `0.0.0.0` 并把 `/api` 代理到 `http://192.168.68.9:8080`，所以：
 
 - 后端在跑 → 页面走真实后端（在线）
 - 后端没跑 → 自动降级到本地引擎，照样能调试
@@ -91,40 +92,36 @@ npm run online    # 等价于 npm run build + node serve-lan.mjs
 npm run serve     # 用已有 dist 直接起服务
 ```
 
-- 服务监听 `0.0.0.0:8081`，局域网访问 `http://192.168.68.68:8081`
-- `/api` 由该服务反向代理到 `http://192.168.68.68:8080`（同源，无需 CORS）
+- 服务监听 `0.0.0.0:8081`，局域网访问 `http://192.168.68.9:8081`
+- `/api` 由该服务反向代理到 `http://192.168.68.9:8080`（同源，无需 CORS）
 - 换端口：`node serve-lan.mjs --port 8082`
 - 也支持 `npm run preview`（Vite 预览，`0.0.0.0:4173`，同样带 `/api` 代理）
 
 ## 后端：Spring Boot（在线模式的服务端）
 
 后端目录 `backend/` 是完整的 Spring Boot 3 工程（Controller / Service / Mapper / DTO / H2 脚本齐全），
-使用 H2 内存库，**无需安装 MySQL**，无需单独装 Maven（项目自带 `mvnw` / `mvnw.cmd` 即 Maven Wrapper，首次运行会自动下载并缓存 Maven 到 `~/.m2/wrapper/dists`）。
+默认用 **本机 MySQL 持久化**（数据落库、多设备共享），无需单独装 Maven（项目自带 `mvnw` / `mvnw.cmd` 即 Maven Wrapper，首次运行会自动下载并缓存 Maven 到 `~/.m2/wrapper/dists`）。
 
 ```bash
-# Windows：双击 start-backend.bat
+# 首次：初始化数据库（见下方「初始化数据库」一节）
+mysql -uroot -p123456 < sql/spongebob_db.sql
+
+# Windows：双击 start-backend-mysql.bat（一键启动走的就是它）
 # 命令行：
 cd backend
 unset SERVER__PORT              # Windows: set SERVER__PORT=
-mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
+mvnw spring-boot:run
 ```
 
-- 后端地址 `http://192.168.68.68:8080`，已绑定 `0.0.0.0`，局域网可达
-- 连通性自检：浏览器打开 `http://192.168.68.68:8080/api/health`，返回 `code: 200` 即正常
-- H2 控制台：`http://192.168.68.68:8080/h2-console`（已开启 `web-allow-others`，局域网可访问）
+- 后端地址 `http://192.168.68.9:8080`，已绑定 `0.0.0.0`，局域网可达
+- 连通性自检：浏览器打开 `http://192.168.68.9:8080/api/health`，返回 `code: 200` 即正常
 - 跨域：`CorsConfig` 用 `allowedOriginPatterns` 放行 `192.168.*.*` / `10.*.*.*` / `172.*.*.*` / `localhost` 的任意端口
-- 前端连后端无需配置：开发服务器与在线站点都自带 `/api` 代理；直连后端时前端会自己拼 `http://192.168.68.68:8080`
-- **MySQL 持久化模式（推荐，数据落库、多设备共享）**：
-  ```bash
-  # 1) 初始化一次（root/123456，只建 spongebob_db，不影响其它库）
-  mysql -uroot -p123456 < sql/spongebob_db.sql
-  # 2) Windows 双击 start-backend-mysql.bat；或命令行：
-  cd backend && java -jar target/spongebob-backend-1.0.0.jar --server.port=8080
-  ```
-  默认数据源 `127.0.0.1:3306/spongebob_db`（root/123456）。若后端跑在别的机器上连本机 MySQL，
-  用环境变量 `MYSQL_URL` 覆盖即可，例如 `MYSQL_URL=jdbc:mysql://192.168.68.68:3306/spongebob_db`，
-  并需在 MySQL 里给 root 授权该来源 IP。
-- H2 内存库模式：`start-backend.bat`（无 MySQL 时兜底，重启数据清空）
+- 前端连后端无需配置：开发服务器与在线站点都自带 `/api` 代理；直连后端时前端会自己拼 `http://192.168.68.9:8080`
+- **MySQL 持久化模式（默认，数据落库、多设备共享）**：
+  - 默认数据源 `127.0.0.1:3306/spongebob_db`（root/123456），见 `application.yml`
+  - 若后端跑在别的机器上连本机 MySQL，用环境变量 `MYSQL_URL` 覆盖即可，例如 `MYSQL_URL=jdbc:mysql://192.168.68.9:3306/spongebob_db`，并需在 MySQL 里给 root 授权该来源 IP
+  - 账号密码可用 `MYSQL_USER` / `MYSQL_PASSWORD` 覆盖
+- **H2 内存库模式（兜底，无 MySQL 时用，重启数据清空）**：双击 `start-backend.bat`，或命令行 `mvnw -Dspring-boot.run.profiles=h2 spring-boot:run`；H2 控制台 `http://192.168.68.9:8080/h2-console`（已开启 `web-allow-others`）
 - 商店目录 / 爆率配置（`catch_rate` 表）/ AI 预设问答（`ai_dialog` 表）在 H2 与 MySQL 两套初始化脚本里都已写入
 - 后端没启动时前端自动降级到本地引擎，两套模式的接口契约一致
 
@@ -307,7 +304,7 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 前端所有 `/api/*` 请求由 `src/api/http.js` 分发：
 
-- **在线后端**（默认）：页面经 HTTP 打开 → 先探测 `/api/health` → 通则全部请求打到后端（`http://192.168.68.68:8080`），数据落库、多设备共享
+- **在线后端**（默认）：页面经 HTTP 打开 → 先探测 `/api/health` → 通则全部请求打到后端（`http://192.168.68.9:8080`），数据落库、多设备共享
 - **本地引擎**（降级）：后端探测失败，或显式 `?api=local` → 由 `src/api/localEngine.js` 在浏览器内处理，存档在 `localStorage`
 
 两种通道的请求 / 返回结构与下表完全一致，所以页面代码在两者之间可以无缝切换。
@@ -344,12 +341,21 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 | `POST /api/admin/users/delete` | 删除用户 | `{ "id" }` |
 | `POST /api/admin/users/reset-password` | 重置用户密码 | `{ "id", "newPassword" }` |
 
-统一返回：`{ "code": 200/400, "message": "...", "data": {...} }`。
-> 说明：本项目为演示用途，未引入鉴权框架，接口通过 `username` 定位玩家（前端会话存于 `localStorage`）。
+统一返回：`{ "code": 200/400/401, "message": "...", "data": {...} }`。
+> 说明：普通游戏接口（`/api/game/*`、`/api/auth/*` 等）为演示用途不做鉴权，通过 `username` 定位玩家。
 > 「AI 助手」是预设问答（后端 `ai_dialog` 表 / 本地引擎 `AI_DIALOGS`），不调用任何大模型接口。
-> 后台登录已按模式自适应：在线模式走 `/api/auth/login` 校验并判断 `permission === 0`，
-> 本地模式 / 后端不可达时退回本地引擎的管理员校验（预置 `admin` / `admin123`）。
-> 后台用户管理接口（`/api/admin/*`）由后台「用户管理」页面调用，两种模式契约一致。
+>
+> **后台管理鉴权（`/api/admin/*`）**：用户管理接口已受 token 保护，未带/过期/伪造 token 均返回 401。
+> - 管理员账号：`admin` / `admin123`（`user` 表 `permission=0`，`sql/spongebob_db.sql` 已预置）。
+> - 登录：`POST /api/admin/login { username, password }` → 返回 `{ token, username, permission, expiresIn }`，
+>   token 为 HMAC-SHA256 签名（含 12 小时有效期），密钥默认 `xiandiao-admin-secret-change-me`，
+>   可用环境变量 `ADMIN_TOKEN_SECRET` 覆盖（**正式部署务必修改**）。
+> - 调用用户管理接口时带请求头 `Authorization: Bearer <token>`（前端请求层自动附加）。
+> - 校验接口：`GET /api/admin/verify`（同样带 token）。
+> - 后台登录按模式自适应：在线模式走 `/api/admin/login` 拿 token；本地模式 / 后端不可达时退回本地引擎校验（同样预置 `admin`/`admin123`）。
+> - 若已有 MySQL 库缺少管理员，执行：
+>   `INSERT INTO user (username,email,password,shells,permission) VALUES ('admin','admin@bikini.bottom','<bcrypt(admin123)>',0,0);`
+>   （直接重跑 `sql/spongebob_db.sql` 会清库，注意备份）
 > 后端 `user` 表新增 `permission` 字段（0=管理员，1=普通玩家）；若已有 MySQL 库，请先执行
 > `ALTER TABLE user ADD COLUMN permission INT NOT NULL DEFAULT 1;` 再启动后端。
 > 另新增 `skills` 字段（已修炼功法 id 列表，逗号分隔）：`ALTER TABLE user ADD COLUMN skills VARCHAR(255);`
@@ -411,7 +417,7 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 > 仙钓道途回归测试：`node bond_smoke_test.mjs`（灵契目录 / 结契升星 / 出战位 / 灵池扩建 / 图鉴大成 / bondFx，15 项）。
 > 实名/防沉迷回归测试：`node identity_smoke_test.mjs`（验证码 / 身份证校验位 / 成年判定 / 脱敏 / 宵禁 / 时长，52 项）。
 > **金币同步回归测试：`node sync_smoke_test.mjs`（13 项，固化双重发币 / 差额 clamp / 幂等修复）**。
-> 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.68:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
+> 新功能端到端验证：`node verify-features.mjs`（经 `192.168.68.9:8081` 代理实测后端地图、选图持久化、10 任务、真人报名匹配）。
 
 ### 已修复的金币一致性问题
 
@@ -430,13 +436,13 @@ mvnw -Dspring-boot.run.profiles=h2 spring-boot:run
 
 ---
 
-## 初始化数据库（可选 / MySQL 模式）
+## 初始化数据库（MySQL 模式，首次必做一次）
 
 ```bash
 mysql -uroot -p123456 < sql/spongebob_db.sql
 ```
 
-脚本创建 `spongebob_db` 库、`user` / `item` / `user_item` 三张表，并写入示例账号与商店目录。
+脚本创建 `spongebob_db` 库与 6 张表（`user` / `item` / `user_item` / `admin_account` / `ai_dialog` / `catch_rate`），并写入示例账号（`spongebob` / `patrick`）、商店目录、爆率与 AI 预设问答。已建库后重复执行会先删表再重建，**会清空已有数据**，请勿随意重跑。若用 H2 兜底模式则不需要执行本脚本。
 
 ## 前端打包 / 在线部署
 
@@ -449,8 +455,8 @@ npm run online             # 构建 + 起局域网服务（推荐）
 
 | 现象 | 处理 |
 | --- | --- |
-| 其它设备打不开 `http://192.168.68.68:8081` | Windows 防火墙放行 Node / 8081、8080 端口（首次运行会弹窗，选「允许专用网络」） |
-| 页面能开但一直提示连不上后端 | 确认后端在跑：浏览器打开 `http://192.168.68.68:8080/api/health` 应返回 200 |
+| 其它设备打不开 `http://192.168.68.9:8081` | Windows 防火墙放行 Node / 8081、8080 端口（首次运行会弹窗，选「允许专用网络」） |
+| 页面能开但一直提示连不上后端 | 确认后端在跑：浏览器打开 `http://192.168.68.9:8080/api/health` 应返回 200 |
 | 后端在跑，前端却进了本地存档 | 浏览器里可能留了 `bikini_api_mode=local`，执行 `localStorage.removeItem('bikini_api_mode')` 后刷新 |
 | 端口被占用 | 网页服务：`node serve-lan.mjs --port 8082`；后端：`application.yml` 里改 `server.port` |
 | 本机 IP 变了（换 WiFi / DHCP） | 只改 `src/config/lan.js` 的 `LAN_IP`，然后重启服务与后端、重新 `npm run build` |
@@ -474,10 +480,11 @@ npm run online             # 构建 + 起局域网服务（推荐）
 ├── sync_smoke_test.mjs       # ★ 金币同步/双重发币回归（13 项）
 ├── start-all.bat             # 一键：后端 + 前端 + 自检 + 打开浏览器
 ├── start.bat / start.sh      # 一键构建并启动在线站点（局域网可访问）
-├── start-backend.bat         # 一键启动 Spring Boot 后端（H2 profile，0.0.0.0:8080）
+├── start-backend-mysql.bat   # 一键启动 Spring Boot 后端（本机 MySQL，默认，0.0.0.0:8080）
+├── start-backend.bat         # 启动 Spring Boot 后端（H2 兜底，0.0.0.0:8080）
 ├── dev.bat                   # 开发服务器（Vite HMR，局域网可访问）
 ├── .env.example              # 可选：直连后端时使用 VITE_API_BASE
-├── sql/spongebob_db.sql      # MySQL 初始化脚本（可选）
+├── sql/spongebob_db.sql      # MySQL 初始化脚本（首次必做一次）
 ├── src/                      # 前端源码
 │   ├── main.js / App.vue
 │   ├── config/lan.js            # ★ 局域网 IP / 端口唯一配置点
